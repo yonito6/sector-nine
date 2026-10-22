@@ -75,7 +75,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);overflow:hi
 #vig{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,transparent 62%,rgba(200,20,15,.42) 100%)}
 #dmgdir{position:absolute;left:50%;top:50%;width:240px;height:240px;margin:-120px 0 0 -120px;opacity:0}
 #dmgdir::before{content:"";position:absolute;left:50%;top:0;width:70px;height:20px;margin-left:-35px;border-radius:50% 50% 0 0/100% 100% 0 0;border-top:5px solid var(--alert);filter:drop-shadow(0 0 6px var(--alert))}
-#callout{position:absolute;left:0;right:0;top:calc(50% + 46px);text-align:center;font-family:var(--display);font-weight:900;font-size:30px;letter-spacing:.08em;opacity:0;color:var(--ink)}
+#callout{position:absolute;left:0;right:0;top:calc(50% - 96px);text-align:center;font-family:var(--display);font-weight:900;font-size:30px;letter-spacing:.08em;opacity:0;color:var(--ink)}
 #callout.crit{color:#ffd27a} #callout.multi{color:var(--sodium);font-size:40px}
 #reloadbar{position:absolute;left:50%;top:calc(50% + 26px);width:64px;height:3px;margin-left:-32px;background:rgba(236,230,216,.15);opacity:0}
 #reloadbar i{display:block;height:100%;background:var(--sodium);transform-origin:left}
@@ -156,6 +156,34 @@ table{width:100%;border-collapse:collapse;font-size:13px} th{font-size:10px;lett
 td{padding:6px 8px;border-top:1px solid rgba(236,230,216,.08)} td i{display:inline-block;width:8px;height:8px;margin-right:8px;vertical-align:middle}
 tr.me td{color:#ffd27a;background:rgba(255,154,60,.08)} td:nth-child(n+3),th:nth-child(n+3){text-align:right}
 .mystats{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;margin-top:14px;background:var(--line);border:1px solid var(--line)}.mystats div{background:var(--bg);padding:9px 10px;display:grid;gap:2px}.mystats b{font-family:var(--display);font-size:22px;font-weight:900}.mystats span{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+#killbadge{position:absolute;left:50%;top:calc(50% + 58px);transform:translateX(-50%);display:flex;align-items:center;gap:12px;opacity:0;pointer-events:none}
+#killbadge.show{animation:kbIn 2.4s cubic-bezier(.2,1.4,.4,1) forwards}
+@keyframes kbIn{0%{opacity:0;transform:translateX(-50%) scale(1.8)}12%{opacity:1;transform:translateX(-50%) scale(.94)}20%{transform:translateX(-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translateX(-50%) scale(1)}}
+.kb-emblem svg{filter:drop-shadow(0 0 14px rgba(255,150,60,.75))}
+.kb-text{display:grid;gap:1px}.kb-text b{font-family:var(--display);font-size:30px;letter-spacing:.08em;color:#ffd27a;text-shadow:0 0 18px rgba(255,140,40,.6)}
+.kb-text span{font-size:13px;letter-spacing:.12em;color:var(--ink)}.kb-text em{font-style:normal;font-family:var(--display);font-size:20px;color:var(--sodium)}
+#medals{position:absolute;left:50%;top:calc(50% + 160px);transform:translateX(-50%);display:flex;gap:14px;pointer-events:none}
+.medal{display:grid;justify-items:center;gap:2px;opacity:0;animation:mdIn 2.4s ease-out forwards}
+.medal span{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;text-shadow:0 1px 4px #000}
+@keyframes mdIn{0%{opacity:0;transform:translateY(10px) scale(.6)}15%{opacity:1;transform:translateY(0) scale(1.12)}25%{transform:scale(1)}80%{opacity:1}100%{opacity:0}}
+#killflash{position:absolute;inset:0;opacity:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(255,170,70,.28) 100%)}
+#killflash.on{animation:kf .45s ease-out}
+@keyframes kf{0%{opacity:1}100%{opacity:0}}
+#arsenal{z-index:30;background:#0b0d10}
+#arsenal .sheet{width:min(1100px,100%);justify-self:center;margin:0}
+#arsSlots{display:flex;gap:10px;flex-wrap:wrap}
+.aslot{font-family:var(--mono);background:rgba(236,230,216,.04);border:1px solid var(--line);color:var(--ink);padding:10px 14px;display:grid;gap:3px;text-align:left;cursor:pointer;min-width:170px}
+.aslot span{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}.aslot b{font-family:var(--display);font-size:22px}
+.aslot.sel{border-color:var(--sodium);box-shadow:0 0 0 1px var(--sodium) inset}.aslot.fixed{cursor:default;opacity:.6}
+#arsGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.wcard{font-family:var(--mono);text-align:left;background:linear-gradient(160deg,#171a1f,#111317);border:1px solid var(--line);color:var(--ink);padding:12px;display:grid;gap:6px;cursor:pointer}
+.wcard:hover{border-color:rgba(255,154,60,.6)}.wcard.on{border-color:var(--sodium)}
+.wcard:focus-visible{outline:2px solid var(--sodium);outline-offset:2px}
+.wtop{display:flex;justify-content:space-between;align-items:baseline}.wtop b{font-family:var(--display);font-size:22px}.wtop em{font-style:normal;font-size:10px;color:var(--sodium);letter-spacing:.14em}
+.wcls{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.wsil{height:26px;color:var(--ink);opacity:.85}.wsil svg{width:auto;height:22px}
+.st{display:grid;grid-template-columns:70px 1fr;align-items:center;gap:8px;font-size:10px;color:var(--dim)}.st i{height:4px;background:rgba(236,230,216,.12)}.st s{display:block;height:100%;background:var(--sodium);transform-origin:left}
+.wcard p{margin:2px 0 0;font-size:11px;line-height:1.45;color:var(--dim)}
 #odvig{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,transparent 55%,rgba(255,110,30,.35) 100%);transition:opacity .3s}
 #shieldNote{position:absolute;left:0;right:0;top:calc(50% + 70px);text-align:center;font-size:11px;letter-spacing:.3em;color:var(--cyan);opacity:0}
 </style>
@@ -189,6 +217,9 @@ tr.me td{color:#ffd27a;background:rgba(255,154,60,.08)} td:nth-child(n+3),th:nth
     <div class="pips" id="pips"></div>
   </div>
   <div id="tags"></div>
+  <div id="killflash"></div>
+  <div id="killbadge"></div>
+  <div id="medals"></div>
   <div id="odvig"></div>
   <div id="shieldNote">Spawn shield</div>
   <div id="abil">
@@ -229,11 +260,12 @@ tr.me td{color:#ffd27a;background:rgba(255,154,60,.08)} td:nth-child(n+3),th:nth
       <kbd>E</kbd><span>Dash</span>
       <kbd>G</kbd><span>Plasma grenade (hold to throw far)</span>
       <kbd>F</kbd><span>Overdrive (charge with kills)</span>
-      <kbd>1 · 2 · 3</kbd><span>Carbine · sniper · knife</span>
+      <kbd>1 · 2 · 3</kbd><span>Your two guns · knife (wheel cycles)</span>
       <kbd>Tab</kbd><span>Scoreboard</span>
     </div>
     <div class="row">
       <button class="go" id="btnPlay">Find match</button>
+      <button class="ghost" id="btnArsenal">Arsenal</button>
       <button class="ghost" id="btnOnline">Online 1v1</button>
       <span class="note" id="bestLine">No runs yet</span>
     </div>
@@ -255,6 +287,7 @@ tr.me td{color:#ffd27a;background:rgba(255,154,60,.08)} td:nth-child(n+3),th:nth
     <h2>Holding<br>position</h2>
     <div class="row">
       <button class="go" id="btnResume">Resume</button>
+      <button class="ghost" id="btnArsenal2">Arsenal</button>
       <button class="ghost" id="btnQuit">Abandon run</button>
     </div>
     <div class="settings" id="setPause"></div>
@@ -272,6 +305,16 @@ tr.me td{color:#ffd27a;background:rgba(255,154,60,.08)} td:nth-child(n+3),th:nth
       <button class="ghost" id="btnMenu">Main menu</button>
       <span class="note" id="mendT"></span>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="arsenal" hidden>
+  <div class="sheet">
+    <div class="kicker">Arsenal · pick two guns, the knife is always on 3</div>
+    <h2>Loadout</h2>
+    <div id="arsSlots"></div>
+    <div id="arsGrid"></div>
+    <div class="row"><button class="go" id="btnArsClose">Done</button><span class="note" id="arsNote">Click a slot, then a weapon.</span></div>
   </div>
 </div>
 
@@ -866,8 +909,10 @@ function loadAssets(onProgress) {
   const world = WORLD_TEX.map(n => Promise.all([img(n + '_diff.jpg', true), img(n + '_nor_gl.jpg'), img(n + '_arm.jpg')]));
   const gunT = ['gun_paint', 'gun_metal'].map(n => Promise.all([img(n + '_diff.jpg', true, false), img(n + '_nor.jpg', false, false), img(n + '_orm.jpg', false, false), img(n + '_emi.jpg', true, false)]));
   const paint2 = img('gun_paint2_diff.jpg', true, false);
+  const skinT = Promise.all(['wasp', 'breach', 'helix', 'nova', 'pistol'].map(n => img('gun_' + n + '_diff.jpg', true, false)));
   const soldierT = Promise.all([img('soldier_diff.jpg', true, false), img('soldier_nor.jpg', false, false)]);
-  return Promise.all([glb('soldier.js', 'soldier'), glb('rifle.js', 'rifle'), script('anims.js', 'anims'), glb('rifle_lod.js', 'rifleLod'), Promise.all(world), Promise.all(gunT), paint2, soldierT]).then(([soldier, rifle, anims, lod, w, g, p2, sT]) => {
+  return Promise.all([glb('soldier.js', 'soldier'), glb('rifle.js', 'rifle'), script('anims.js', 'anims'), glb('rifle_lod.js', 'rifleLod'), Promise.all(world), Promise.all(gunT), paint2, soldierT, skinT]).then(([soldier, rifle, anims, lod, w, g, p2, sT, sk]) => {
+    ASSET.skins = { carbine: p2, wasp: sk[0], breach: sk[1], helix: sk[2], nova: sk[3], pistol: sk[4] };
     ASSET.rifleLod = lod;
     ASSET.soldier = soldier; ASSET.rifle = rifle; ASSET.anims = anims;
     ASSET.missing = [!soldier && 'soldier', !rifle && 'rifle', !anims && 'animations'].filter(Boolean);
@@ -1279,8 +1324,9 @@ const sfx = {
   pickup() { if (!AU.ctx) return; const t = AU.ctx.currentTime; osc(AU.dry, t, .09, 'triangle', 660, 990, .16); osc(AU.dry, t + .07, .12, 'triangle', 990, 1320, .16); },
   wave() { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ verb: .6, echo: .4 }); osc(d, t, 1.4, 'sawtooth', 110, 108, .09, .5); osc(d, t, 1.4, 'sawtooth', 110.8, 109, .09, .5); osc(d, t + .7, 1.2, 'sawtooth', 82.4, 82, .09, .4); },
   clear() { if (!AU.ctx) return; const t = AU.ctx.currentTime; [523, 659, 784, 1046].forEach((f, i) => osc(AU.dry, t + i * .09, .4, 'triangle', f, f, .12)); },
-  botShot(pos, sniper) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, verb: .3, echo: .22, ref: 5, vol: sniper ? 1.1 : .6 });
-    nz(d, t, .025, 'highpass', 3600, .7, .5); nz(d, t, sniper ? .4 : .16, 'bandpass', sniper ? 620 : 1100 * rand(.94, 1.06), .8, .95, .001, sniper ? 220 : 430); osc(d, t, sniper ? .32 : .1, 'sine', sniper ? 105 : 165, 38, sniper ? 1.2 : .55); },
+  botShot(pos, kind) { if (!AU.ctx) return; const sniper = kind === true || kind === 'sniper' || kind === 'helix', sg = kind === 'breacher', smg = kind === 'wasp' || kind === 'pistol';
+    const t = AU.ctx.currentTime, d = bus({ pos, verb: .3, echo: .22, ref: 5, vol: sniper || sg ? 1.1 : smg ? .45 : .6 });
+    nz(d, t, .025, 'highpass', 3600, .7, .5); nz(d, t, sniper ? .4 : sg ? .35 : .14, 'bandpass', sniper ? 620 : sg ? 700 : (smg ? 1500 : 1100) * rand(.94, 1.06), .8, .95, .001, sniper ? 220 : 430); osc(d, t, sniper || sg ? .32 : .1, 'sine', sniper || sg ? 100 : 165, 38, sniper || sg ? 1.2 : .55); },
   botStep(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 2.5, vol: .5 }); nz(d, t, .07, 'lowpass', 260, 1, .7); nz(d, t + .01, .04, 'bandpass', 2200, 1.5, .25); },
   botDeath(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, verb: .4, ref: 5, vol: .7 }); nz(d, t, .5, 'lowpass', 700, .7, .8, .004, 120); osc(d, t, .4, 'sawtooth', 500, 60, .1); },
   thrust() { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, .32, 'bandpass', 900, .8, .55, .01, 2600); osc(AU.dry, t, .25, 'sine', 90, 160, .35); },
@@ -1296,6 +1342,17 @@ const sfx = {
   spawnMe() { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ verb: .4 }); osc(d, t, .5, 'sine', 300, 900, .14, .1); nz(d, t + .3, .3, 'highpass', 2500, 1, .2); },
   knifeSwing(heavy) { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, heavy ? .3 : .2, 'bandpass', heavy ? 1300 : 2200, 1.2, .5, .03, heavy ? 500 : 900); osc(AU.dry, t, .12, 'sine', 900, 1800, .04); },
   knifeHit() { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, .12, 'bandpass', 3200, 3, .6); osc(AU.dry, t, .18, 'sawtooth', 1400, 300, .12); osc(AU.dry, t, .25, 'sine', 120, 50, .5); },
+  smg() { if (!AU.ctx) return; const t = AU.ctx.currentTime, p = rand(.95, 1.08), d = bus({ verb: .3, echo: .2, vol: .75 }); nz(d, t, .02, 'highpass', 4200, .7, .5); nz(d, t, .1, 'bandpass', 1500 * p, 1, .8, .001, 700); osc(d, t, .07, 'sine', 210 * p, 70, .7); osc(d, t, .03, 'square', 3200, 2000, .04); },
+  shotgun() { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ verb: .55, echo: .4, vol: 1.2 }); nz(d, t, .04, 'highpass', 2600, .7, .9); nz(d, t, .45, 'lowpass', 700, .7, 1.4, .002, 120); osc(d, t, .35, 'sine', 95, 30, 1.6); osc(d, t, .12, 'sawtooth', 900, 120, .2); nz(d, t + .28, .05, 'bandpass', 2600, 4, .25); nz(d, t + .38, .06, 'bandpass', 1900, 4, .25); },
+  rail() { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ verb: .7, echo: .5, vol: 1.1 }); osc(d, t, .5, 'sawtooth', 2400, 90, .3, .001); osc(d, t, .5, 'sine', 5200, 300, .12); nz(d, t, .3, 'bandpass', 3800, 2, .7, .001, 600); osc(d, t, .4, 'sine', 70, 30, 1.3); osc(d, t + .05, .8, 'sine', 880, 870, .06, .05); },
+  pistol() { if (!AU.ctx) return; const t = AU.ctx.currentTime, p = rand(.96, 1.05), d = bus({ verb: .4, echo: .3, vol: .85 }); nz(d, t, .025, 'highpass', 3600, .7, .55); nz(d, t, .14, 'bandpass', 1300 * p, .9, .9, .001, 500); osc(d, t, .1, 'sine', 180 * p, 50, .9); osc(d, t, .04, 'triangle', 2400, 1800, .08); },
+  launch(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos: pos || null, verb: .5, echo: .35, ref: 5, vol: 1.1 }); nz(d, t, .5, 'bandpass', 600, .8, .9, .02, 2400); osc(d, t, .3, 'sine', 140, 50, 1.1); nz(d, t, .9, 'lowpass', 900, .7, .4, .05, 200); },
+  killConfirm(crit, multi) { if (!AU.ctx) return; const t = AU.ctx.currentTime;
+    osc(AU.dry, t, .22, 'sine', 120, 40, .9); nz(AU.dry, t, .12, 'lowpass', 600, 1, .5, .002);
+    const base = crit ? 1568 : 1318; osc(AU.dry, t + .01, .35, 'triangle', base, base, .16); osc(AU.dry, t + .07, .45, 'triangle', base * 1.5, base * 1.5, .13); osc(AU.dry, t + .07, .6, 'sine', base * 3, base * 3, .05);
+    if (crit) { nz(AU.dry, t, .06, 'highpass', 6000, 1, .35); osc(AU.dry, t, .9, 'sine', 3136, 3120, .08); }
+    const d = bus({ verb: .8 }); osc(d, t + .05, .8, 'sine', base * 2, base * 2.02, .05, .1); },
+  medal(i) { if (!AU.ctx) return; const t = AU.ctx.currentTime, f = [988, 1175, 1319, 1568, 1760][i % 5]; osc(AU.dry, t, .3, 'triangle', f, f, .1); osc(AU.dry, t + .03, .4, 'sine', f * 2, f * 2, .05); },
   heart() { if (!AU.ctx) return; const t = AU.ctx.currentTime; osc(AU.dry, t, .12, 'sine', 70, 45, .5); osc(AU.dry, t + .17, .12, 'sine', 62, 40, .35); },
 };
 const camFwd = V3(), camUp = V3();
@@ -1471,8 +1528,10 @@ const BOT_NAMES = ['Viper', 'NovaKid', 'xRaze', 'Kairo', 'Mirage_7', 'Hexen', 'D
 const BOT_COLORS = [[1, .22, .16], [.2, .78, 1], [.35, 1, .45], [1, .3, .85], [1, .68, .15], [.6, .42, 1], [.92, .92, .95], [1, .45, .25]];
 const BOT_COUNT = 7, MATCH_TIME = 600; let KILL_LIMIT = 30;
 const BOTW = {
-  rifle:  { dmg: 9,  head: 2.2, limb: .75, gap: .1,  burst: [3, 7], pause: [.22, .55], mag: 28, reload: 2.1 },
+  carbine:  { dmg: 9,  head: 2.2, limb: .75, gap: .1,  burst: [3, 7], pause: [.22, .55], mag: 28, reload: 2.1 },
   sniper: { dmg: 70, head: 2,   limb: .8,  gap: 1.5, burst: [1, 1], pause: [1.1, 1.6], mag: 6,  reload: 2.6 },
+  wasp:   { dmg: 6,  head: 2,   limb: .75, gap: .056, burst: [6, 12], pause: [.2, .45], mag: 40, reload: 1.6 },
+  breacher: { dmg: 7, head: 1.5, limb: .8, gap: .9, burst: [1, 1], pause: [.8, 1.1], mag: 6, reload: 2.4, pellets: 8, spreadP: .06 },
 };
 let CLIPS = null;
 const LOWER = /(Hips|UpLeg|Leg|Foot|ToeBase)\./;
@@ -1488,11 +1547,14 @@ function buildClips() {
 // third-person rifle: grip at the origin, muzzle along +Z
 const TPMAT = {};
 function rifleTP(kind) {
-  const inner = (ASSET.rifleLod || ASSET.rifle).scene.clone(true);
-  if (!TPMAT[kind]) TPMAT[kind] = { paint: ASSET.gunMat(kind, true), metal: ASSET.gunMat('metal', true) };
-  inner.traverse(o => { if (o.isMesh) { o.material = o.material.name.startsWith('paint') ? TPMAT[kind].paint : TPMAT[kind].metal; o.castShadow = false; if (kind !== 'sniper' && /scope|View_Finder|^Body$/.test(o.name)) o.visible = false; } });
-  const k = .3; inner.rotation.y = -Math.PI / 2; inner.scale.setScalar(k); inner.position.set(-.27 * k, -1.15 * k, 1.0 * k);
-  return inner;
+  const id = kind === 'rifle' ? 'carbine' : kind, w = WEAPONS[id] || WEAPONS.carbine;
+  if (id === 'pistol') { const g = new THREE.Group(); const hw = buildPistolParts(g, id, true); g.userData.muzzle = hw.muzzle; return g; }
+  if (!TPMAT[id]) TPMAT[id] = { paint: skinMat(id, true), metal: ASSET.gunMat('metal', true) };
+  const outer = new THREE.Group(), inner = (ASSET.rifleLod || ASSET.rifle).scene.clone(true), geo = gunGeom(w.shape || [1, 1, 1], .3, true);
+  inner.traverse(o => { if (o.isMesh) { o.material = o.material.name.startsWith('paint') ? TPMAT[id].paint : TPMAT[id].metal; o.castShadow = false; if (id !== 'sniper' && /scope|View_Finder|^Body$/.test(o.name)) o.visible = false; } });
+  inner.rotation.y = -Math.PI / 2; inner.scale.copy(geo.scale); inner.position.copy(geo.pos); outer.add(inner);
+  const hw = addWeaponHardware(id, outer, geo, true); outer.userData.muzzle = hw.muzzle;
+  return outer;
 }
 let HB = null;
 function hitGeometry() {
@@ -1526,8 +1588,8 @@ function buildBot(profile) {
   const hit = (b, geo, zone, oy) => { if (!b) return; const s = b.getWorldScale(_v1).x || 1; const m = new THREE.Mesh(geo, HB.mat); m.visible = false; m.scale.setScalar(1 / s); m.position.set(0, oy / s, 0); m.userData.zone = zone; b.add(m); meshes.push(m); };
   hit(B.head, HB.head, 'head', .1); hit(B.spine1, HB.chest, 'body', .1); hit(B.hips, HB.pelvis, 'body', 0);
   for (const s of ['Left', 'Right']) { hit(bone(s + 'UpLeg'), HB.thigh, 'limb', .22); hit(bone(s + 'Leg'), HB.shin, 'limb', .22); hit(bone(s + 'Arm'), HB.arm, 'limb', .14); hit(bone(s + 'ForeArm'), HB.arm, 'limb', .13); }
-  const gun = new THREE.Group(); gun.add(rifleTP(profile.weapon)); scene.add(gun);
-  const muzzle = new THREE.Object3D(); muzzle.position.set(0, .12, .5); gun.add(muzzle);
+  const gun = new THREE.Group(), gunInner = rifleTP(profile.weapon); gun.add(gunInner); scene.add(gun);
+  const muzzle = new THREE.Object3D(); muzzle.position.copy(gunInner.userData.muzzle || new THREE.Vector3(0, .12, .5)); gun.add(muzzle);
   const flash = new THREE.Sprite(HB.flashMat); flash.scale.setScalar(.2); flash.visible = false; muzzle.add(flash);
   const glint = new THREE.Sprite(HB.glintMat); glint.scale.setScalar(.01); glint.visible = false; glint.renderOrder = 9; gun.add(glint); glint.position.set(0, .2, .1);
   const bubble = new THREE.Sprite(HB.shieldMat); bubble.scale.set(1.6, 2.4, 1); bubble.position.y = 1; bubble.visible = false; root.add(bubble);
@@ -1543,7 +1605,7 @@ function buildBot(profile) {
   // name tag
   const tag = document.createElement('div'); tag.className = 'tag'; tag.innerHTML = `<b></b><i><s></s></i>`; $('tags').appendChild(tag);
   const w = BOTW[profile.weapon];
-  const r = { isBot: true, name: profile.name, color: col, cssCol: `#${col.getHexString()}`, weapon: profile.weapon, skill: profile.skill, root, model, B, meshes, gun, muzzle, flash, glint, mixer, act, body, visor, tag, bubble,
+  const r = { isBot: true, name: profile.name, color: col, cssCol: `#${col.getHexString()}`, weapon: profile.weapon, skill: profile.skill, root, model, B, meshes, gun, gunInner, muzzle, flash, glint, mixer, act, body, visor, tag, bubble,
     hp: 100, dead: false, deadT: 0, respawnT: 0, kills: 0, deaths: 0, score: 0, heads: 0, streak: 0, ping: Math.round(rand(18, 70)),
     vel: V3(), vy: 0, onGround: true, airJumps: 0, bodyYaw: 0, aimYaw: 0, aimPitch: 0, crouch: 0, crouchWant: false,
     ammo: w.mag, mag: w.mag, reload: 0, fireCd: rand(.5, 1), burstLeft: 0, shotKick: 0, flashT: 0, firedT: 0, scopeT: 0,
@@ -1650,7 +1712,7 @@ const springs = {
 };
 function resetPlayer() {
   Object.assign(P, { pos: new THREE.Vector3(0, 0, 25), vel: V3(), yaw: 0, pitch: 0, onGround: true, crouch: 0,
-    hp: 100, ammo: 30, mag: 30, reserve: 240, weapon: 'carbine', store: { carbine: { ammo: 30, reserve: 240 }, sniper: { ammo: 10, reserve: 40 }, knife: { ammo: 0, reserve: 0 } }, swingT: 0, swingDur: 1, swingHeavy: false, swingHit: true, switchT: 0, boltT: 0, trigReady: true, reload: 0, reloadDur: 0, reloadEmpty: false, reloadStage: 0, fireCd: 0, heat: 0, shotIdx: 0, lastShot: -9, recoilAcc: 0,
+    hp: 100, ammo: WEAPONS[LOADOUT[0]].mag, mag: WEAPONS[LOADOUT[0]].mag, reserve: WEAPONS[LOADOUT[0]].reserve, weapon: LOADOUT[0], spawnAt: G.time || 0, store: Object.fromEntries([...LOADOUT.map(id => [id, { ammo: WEAPONS[id].mag, reserve: WEAPONS[id].reserve }]), ['knife', { ammo: 0, reserve: 0 }]]), swingT: 0, swingDur: 1, swingHeavy: false, swingHit: true, switchT: 0, boltT: 0, trigReady: true, reload: 0, reloadDur: 0, reloadEmpty: false, reloadStage: 0, fireCd: 0, heat: 0, shotIdx: 0, lastShot: -9, recoilAcc: 0,
     lastHurt: -99, bob: 0, stepAcc: 0, ads: 0, fov: 78, camY: 1.65, trauma: 0, hitFx: 0, dead: false,
     shield: 0, airJumps: 0, jumpQ: 0, lastGround: 0, dashT: 0, dashCd: 0, slideT: 0, crouchHold: false, nades: 2, nadeT: 9, od: 0, odT: 0, odAnnounced: false, killer: null });
   for (const k in springs) springs[k].reset();
@@ -1658,6 +1720,7 @@ function resetPlayer() {
 function clearDynamic() {
   for (const d of debris) scene.remove(d.m); debris.length = 0;
   for (const n of NADES) scene.remove(n.m); NADES.length = 0;
+  for (const r of ROCKETS) scene.remove(r.m); ROCKETS.length = 0;
   for (const p of pickups) scene.remove(p.m); pickups.length = 0;
   FX.clear(); SMOKE.clear(); clearDecals();
   for (const c of casings) { c.m.visible = false; c.life = 0; }
@@ -1672,7 +1735,7 @@ function setStyle(el, prop, v) { const c = el._sc || (el._sc = {}); if (c[prop] 
 let compassW = 440;
 const hpsegs = $('hpsegs'), pips = $('pips');
 for (let i = 0; i < 10; i++) hpsegs.appendChild(document.createElement('i'));
-for (let i = 0; i < 30; i++) pips.appendChild(document.createElement('i'));
+for (let i = 0; i < 42; i++) pips.appendChild(document.createElement('i'));
 function updateHud(force) {
   if (!P.pos) return;
   if (NET.on && NET.code) try { localStorage.setItem('sector9-room', JSON.stringify({ nick: NET.nick, code: NET.code, t: Date.now(), k: PLAYER_ENT.kills, d: PLAYER_ENT.deaths })); } catch (e) {}
@@ -1801,7 +1864,7 @@ function newRoster() {
   while (robots.length) removeRobot(robots[0]);
   const names = BOT_NAMES.slice().sort(() => Math.random() - .5), cols = BOT_COLORS.slice().sort(() => Math.random() - .5);
   for (let i = 0; i < BOT_COUNT; i++) {
-    const r = buildBot({ name: names[i], color: cols[i], weapon: i === 0 ? 'sniper' : 'rifle', skill: i < 2 ? rand(.85, 1) : rand(.55, .92) });
+    const r = buildBot({ name: names[i], color: cols[i], weapon: ['sniper', 'wasp', 'carbine', 'breacher', 'wasp', 'carbine', 'carbine'][i], skill: i < 2 ? rand(.85, 1) : rand(.55, .92) });
     respawnBot(r, true);
   }
 }
@@ -1810,6 +1873,7 @@ function respawnBot(r, quiet) {
   r.root.position.copy(p); r.root.visible = true; r.gun.visible = true; r.dead = false; r.hp = 100; r.vel.set(0, 0, 0); r.vy = 0;
   r.ammo = r.mag; r.reload = 0; r.target = null; r.targetVis = false; r.mode = 'roam'; r.hasGoal = false; r.path = null; r.shield = quiet ? 0 : 1.6; r.scopeT = 0; r.crouch = 0;
   r.bodyYaw = r.aimYaw = Math.atan2(-p.x, -p.z); r.root.rotation.y = r.bodyYaw; r.visor.emissive.copy(r.color); r.body.emissive.setRGB(0, 0, 0);
+  for (const m of [r.body, r.visor]) { m.opacity = 1; m.transparent = false; m.depthWrite = true; m.needsUpdate = true; }
   for (const k in r.act) { const a = r.act[k]; a.w = 0; a.setEffectiveWeight(0); if (k === 'death' || k === 'roll') a.stop(); }
   r.act.death.stop(); targetsDirty = true;
   if (!quiet) { const q = p.clone(); q.y += 1; for (let i = 0; i < 24; i++) { const a = rand(0, 6.28), s = rand(1, 3); FX.spawn(q, Math.cos(a) * s, rand(-1, 3), Math.sin(a) * s, r.color.r * 2, r.color.g * 2, r.color.b * 2, rand(.05, .1), rand(.3, .7), 2, 1); } }
@@ -1819,9 +1883,9 @@ function startMatch() {
   clearDynamic(); newRoster();
   Object.assign(PLAYER_ENT, { kills: 0, deaths: 0, score: 0, heads: 0, streak: 0 });
   resetPlayer(); P.pos.copy(pickSpawn(PLAYER_ENT)); P.yaw = Math.atan2(P.pos.x, P.pos.z); P.shield = 2;
-  setModel('carbine'); if (station) station.cd = 0;
+  setModel(P.weapon); if (station) station.cd = 0;
   for (const p of PADS) { p.ready = true; p.t = 0; p.item.visible = true; }
-  Object.assign(G, { time: 0, matchT: MATCH_TIME, ended: false, endT: 0, score: 0, kills: 0, heads: 0, fired: 0, hits: 0, headHits: 0, dmg: 0, bestStreak: 0, combo: 0, comboT: 0, multi: 0, multiT: 0, heartT: 0, wave: 0, queue: [] });
+  Object.assign(G, { firstBlood: false, time: 0, matchT: MATCH_TIME, ended: false, endT: 0, score: 0, kills: 0, heads: 0, fired: 0, hits: 0, headHits: 0, dmg: 0, bestStreak: 0, combo: 0, comboT: 0, multi: 0, multiT: 0, heartT: 0, wave: 0, queue: [] });
   $('feed').innerHTML = ''; $('kfeed').innerHTML = ''; updateHud(true);
   banner('FREE FOR ALL', `${BOT_COUNT + 1} players · first to ${KILL_LIMIT} kills`); sfx.wave();
   setTimeout(() => { for (const r of robots.slice(0, 3)) if (state === 'play') kfeedText(`${r.name} joined the match`); }, 900);
@@ -1854,6 +1918,12 @@ const ICON = {
   rifle: '<svg viewBox="0 0 40 12" width="34" height="11"><path d="M1 4h24l3-2h9v4h-4l-1 3h-3l-1-2h-6l-2 4h-4l1-4H1z" fill="currentColor"/></svg>',
   sniper: '<svg viewBox="0 0 48 12" width="40" height="11"><path d="M1 5h30v-1h4V2h6v2h6v3H35l-3 1h-6l-3 3h-4l2-3H1z" fill="currentColor"/><rect x="18" y="0" width="12" height="3" fill="currentColor"/></svg>',
   nade: '<svg viewBox="0 0 14 14" width="13" height="13"><circle cx="7" cy="8" r="5" fill="currentColor"/><rect x="5" y="0" width="4" height="3" fill="currentColor"/></svg>',
+  carbine: '<svg viewBox="0 0 40 12" width="34" height="11"><path d="M1 4h24l3-2h9v4h-4l-1 3h-3l-1-2h-6l-2 4h-4l1-4H1z" fill="currentColor"/></svg>',
+  wasp: '<svg viewBox="0 0 30 12" width="26" height="11"><path d="M1 4h16l2-2h9v4h-3l-1 5h-3l-1-3h-4l-2 4H11l1-4H1z" fill="currentColor"/></svg>',
+  breacher: '<svg viewBox="0 0 40 13" width="34" height="11"><path d="M1 3h28l3-2h7v6h-8l-2 2h-4l-2 4h-5l1-4H1z" fill="currentColor"/><circle cx="36" cy="4" r="2" fill="#000"/></svg>',
+  helix: '<svg viewBox="0 0 48 12" width="40" height="11"><path d="M1 4h36l2-2h8v4h-8l-2 2H24l-2 3h-4l1-3H1z" fill="currentColor"/><path d="M26 2v6M30 2v6M34 2v6" stroke="#000" stroke-width="1"/></svg>',
+  nova: '<svg viewBox="0 0 40 14" width="34" height="12"><rect x="6" y="1" width="30" height="5" rx="2" fill="currentColor"/><path d="M1 7h30v3h-14l-2 4h-4l1-4H1z" fill="currentColor"/></svg>',
+  pistol: '<svg viewBox="0 0 22 14" width="18" height="12"><path d="M1 2h19v4H9l-1 7H4l1-7H1z" fill="currentColor"/></svg>',
   knife: '<svg viewBox="0 0 34 12" width="30" height="11"><path d="M1 5h11l2-2h2v6h-2l-2-2H1zM16 4h12l5 2-5 3H16z" fill="currentColor"/></svg>',
   head: '<svg viewBox="0 0 14 14" width="13" height="13"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="7" cy="7" r="1.6" fill="currentColor"/></svg>',
 };
@@ -1873,11 +1943,204 @@ function announceStreak(e) {
 }
 
 /* ================= combat ================= */
+/* ================= arsenal: weapon definitions (all balanced against 100 HP) ================= */
+// TTK body at close range: carbine .33 s · wasp .33 s (falls off fast) · breacher 1 shot ≤7 m · helix 2 shots / 1 head · longbow 1 shot (scoped) · nova splash · pistol .45 s
 const WEAPONS = {
-  carbine: { label: 'K-7 Carbine · 5.56 · Auto', mag: 30, reserve: 240, maxReserve: 360, rpm: 720, auto: true, dmg: 24, hip: .016, ads: .0015, adsFov: 44, adsSpeed: 14, reload: 1.85, reloadEmpty: 2.25 },
-  knife:   { label: 'Arc Knife · plasma edge · melee', mag: 0, reserve: 0, maxReserve: 0, rpm: 140, auto: false, dmg: 55, hip: 0, ads: 0, adsFov: 78, adsSpeed: 10, reload: 1, reloadEmpty: 1 },
-  sniper:  { label: 'R-90 Longbow · .338 · Bolt', mag: 10, reserve: 40, maxReserve: 60, rpm: 200, auto: false, dmg: 5000, hip: .06, ads: 0, adsFov: 13, adsSpeed: 26, reload: 2.0, reloadEmpty: 2.0 },
+  carbine:  { name: 'K-7 Carbine', cls: 'Pulse rifle', mag: 30, reserve: 240, maxReserve: 360, rpm: 720, auto: true, dmg: 24, head: 2.4, hip: .016, ads: .0015, adsFov: 44, adsSpeed: 14, reload: 1.85, reloadEmpty: 2.25, falloff: [30, 90, .65], kick: 1, move: 1, heat: .14, skin: 'carbine', glow: [2.4, .9, .3], shape: [1, 1, 1], sound: 'shot', tracer: [5, 3.6, 2.2],
+    stats: [62, 72, 70, 70], desc: 'Reliable automatic pulse rifle. Good at every range.' },
+  wasp:     { name: 'V-9 Wasp', cls: 'Ion SMG', mag: 42, reserve: 336, maxReserve: 420, rpm: 1080, auto: true, dmg: 15, head: 2, hip: .02, ads: .006, adsFov: 58, adsSpeed: 22, reload: 1.5, reloadEmpty: 1.8, falloff: [12, 32, .5], kick: .55, move: 1.08, heat: .07, skin: 'wasp', glow: [.4, 2.4, 2.8], shape: [.92, .88, .7], sound: 'smg', tracer: [1.6, 3.6, 5],
+    stats: [42, 98, 35, 92], desc: 'Shreds up close. Fast to aim, fast to move. Weak past 15 m.' },
+  breacher: { name: 'Breacher', cls: 'Plasma shotgun', mag: 6, reserve: 36, maxReserve: 54, rpm: 80, auto: false, dmg: 13, pellets: 10, spreadP: .062, head: 1.5, hip: 0, ads: 0, adsFov: 62, adsSpeed: 16, reload: 2.4, reloadEmpty: 2.4, falloff: [7, 24, .2], kick: 2.8, move: 1.02, heat: 0, skin: 'breach', glow: [3, .4, .3], shape: [1.18, 1.1, .8], sound: 'shotgun', tracer: [6, 1.6, 1],
+    stats: [96, 20, 18, 80], desc: 'Ten plasma pellets. One-shots anyone within 7 m.' },
+  helix:    { name: 'Helix', cls: 'Railgun', mag: 4, reserve: 28, maxReserve: 36, rpm: 62, auto: false, dmg: 90, head: 2.2, pierce: true, hip: .018, ads: 0, adsFov: 30, adsSpeed: 15, reload: 2.2, reloadEmpty: 2.2, falloff: null, kick: 3, move: .95, heat: 0, skin: 'helix', glow: [.5, 2.6, 4], shape: [.95, .95, 1.22], sound: 'rail', tracer: [1.5, 4, 7], beam: true,
+    stats: [88, 22, 92, 60], desc: 'Hypersonic slug that pierces bodies. Headshot kills, 2 body shots.' },
+  sniper:   { name: 'R-90 Longbow', cls: 'Sniper rifle', mag: 10, reserve: 40, maxReserve: 60, rpm: 200, auto: false, dmg: 5000, head: 1, oneShot: true, pierce: true, scope: true, hip: .06, ads: 0, adsFov: 13, adsSpeed: 26, reload: 2.0, reloadEmpty: 2.0, falloff: null, kick: 4, move: .94, heat: 0, skin: 'sniper', glow: [.4, 1.8, 2.6], shape: [1, 1, 1], sound: 'sniper', tracer: [7, 5, 3],
+    stats: [100, 30, 100, 45], desc: 'Scoped. Kills in one shot and passes through every body in line.' },
+  nova:     { name: 'Nova', cls: 'Plasma launcher', mag: 2, reserve: 10, maxReserve: 14, rpm: 55, auto: false, projectile: true, hip: .01, ads: .004, adsFov: 55, adsSpeed: 12, reload: 2.6, reloadEmpty: 2.6, kick: 3.5, move: .92, heat: 0, skin: 'nova', glow: [3, 1.2, .3], shape: [1.15, 1.15, .95], sound: 'launch',
+    stats: [92, 12, 60, 40], desc: 'Fires plasma rockets that explode on impact. Splash damage.' },
+  pistol:   { name: 'M-2 Pulse Pistol', cls: 'Sidearm', mag: 14, reserve: 98, maxReserve: 140, rpm: 400, auto: false, dmg: 30, head: 2.2, hip: .012, ads: .003, adsFov: 60, adsSpeed: 24, reload: 1.2, reloadEmpty: 1.4, falloff: [20, 50, .6], kick: 1.3, move: 1.06, heat: .05, skin: 'pistol', glow: [2.6, 1.9, .4], sound: 'pistol', tracer: [5, 4, 1.5],
+    stats: [55, 55, 50, 96], desc: 'Fast draw, precise semi-auto. Great backup.' },
+  knife:    { name: 'Arc Knife', cls: 'Melee', mag: 0, reserve: 0, maxReserve: 0, rpm: 140, auto: false, dmg: 55, hip: 0, ads: 0, adsFov: 78, adsSpeed: 10, reload: 1, reloadEmpty: 1, move: 1.12 },
 };
+for (const k in WEAPONS) WEAPONS[k].label = WEAPONS[k].name + ' · ' + WEAPONS[k].cls.toLowerCase();
+const GUN_IDS = ['carbine', 'wasp', 'breacher', 'helix', 'sniper', 'nova', 'pistol'];
+const NET_W = ['carbine', 'sniper', 'knife', 'nade', 'wasp', 'breacher', 'helix', 'nova', 'pistol'];
+let LOADOUT = ['carbine', 'sniper'];
+try { const l = JSON.parse(localStorage.getItem('sector9-loadout') || 'null'); if (Array.isArray(l) && l.length === 2 && l.every(x => GUN_IDS.includes(x)) && l[0] !== l[1]) LOADOUT = l; } catch (e) {}
+const falloffK = (w, d) => !w.falloff ? 1 : d <= w.falloff[0] ? 1 : d >= w.falloff[1] ? w.falloff[2] : lerp(1, w.falloff[2], (d - w.falloff[0]) / (w.falloff[1] - w.falloff[0]));
+
+/* arsenal screen */
+function arsenalHTML() {
+  const bar = (v, l) => `<div class="st"><span>${l}</span><i><s style="transform:scaleX(${v / 100})"></s></i></div>`;
+  return GUN_IDS.map(id => { const w = WEAPONS[id], slot = LOADOUT.indexOf(id);
+    return `<button class="wcard${slot >= 0 ? ' on' : ''}" data-id="${id}"><div class="wtop"><b>${w.name}</b>${slot >= 0 ? `<em>SLOT ${slot + 1}</em>` : ''}</div><div class="wcls">${w.cls}</div>
+      <div class="wsil">${ICON[id] || ''}</div>${bar(w.stats[0], 'Damage')}${bar(w.stats[1], 'Fire rate')}${bar(w.stats[2], 'Range')}${bar(w.stats[3], 'Mobility')}<p>${w.desc}</p></button>`; }).join('');
+}
+let arsenalSlot = 0;
+function openArsenal() {
+  $('arsenal').hidden = false; arsenalSlot = 0; renderArsenal();
+}
+function renderArsenal() {
+  $('arsGrid').innerHTML = arsenalHTML();
+  $('arsSlots').innerHTML = LOADOUT.map((id, i) => `<button class="aslot${arsenalSlot === i ? ' sel' : ''}" data-slot="${i}"><span>Slot ${i + 1} · key ${i + 1}</span><b>${WEAPONS[id].name}</b></button>`).join('') + '<div class="aslot fixed"><span>Slot 3 · key 3</span><b>Arc Knife</b></div>';
+}
+function pickWeapon(id) {
+  const other = 1 - arsenalSlot;
+  if (LOADOUT[other] === id) LOADOUT[other] = LOADOUT[arsenalSlot];
+  LOADOUT[arsenalSlot] = id;
+  try { localStorage.setItem('sector9-loadout', JSON.stringify(LOADOUT)); } catch (e) {}
+  arsenalSlot = other; renderArsenal(); sfx.equip();
+  // change takes effect right away if you just spawned, otherwise on your next life
+  if ((state === 'paused' || state === 'play') && P.pos && (P.shield > 0 || G.time - (P.spawnAt || -99) < 6)) applyLoadout();
+  else $('arsNote').textContent = state === 'menu' || state === 'matchend' ? 'Loadout saved.' : 'Your new loadout is used from your next respawn.';
+}
+function applyLoadout() {
+  P.store = { knife: { ammo: 0, reserve: 0 } };
+  for (const id of LOADOUT) P.store[id] = { ammo: WEAPONS[id].mag, reserve: WEAPONS[id].reserve };
+  P.weapon = LOADOUT[0]; P.ammo = P.store[P.weapon].ammo; P.reserve = P.store[P.weapon].reserve; P.mag = WEAPONS[P.weapon].mag;
+  if (WM[P.weapon]) setModel(P.weapon); updateHud(true);
+  $('arsNote').textContent = 'Loadout equipped.';
+}
+
+/* models: one CC0 rifle body, reshaped and re-skinned per weapon, plus weapon-specific hardware */
+// where key points of the rifle model land in gun space for a given shape (length, height, width scales)
+function gunGeom(shape, k, tp) {
+  const [sw, sh, sl] = shape, a = k * sl, b = k * sh, c = k * sw;
+  const P3 = (x, y, z) => tp ? new THREE.Vector3(-z * c, y * b, x * a) : new THREE.Vector3(z * c, y * b, -x * a);
+  const anchor = tp ? P3(-1.0, 1.15, -.27).negate() : new THREE.Vector3(0, .05, .05).sub(P3(-.95, 1.71, -.27));
+  return { scale: new THREE.Vector3(a, b, c), pos: anchor, at: (x, y, z) => P3(x, y, z).add(anchor) };
+}
+function skinMat(id, tp) {
+  const w = WEAPONS[id];
+  const m = ASSET.gunMat(id === 'sniper' ? 'sniper' : 'carbine', tp);
+  const map = ASSET.skins && ASSET.skins[w.skin]; if (map) m.map = map;
+  m.emissive = new THREE.Color(...w.glow).multiplyScalar(.75);
+  return m;
+}
+function addWeaponHardware(id, g, geo, tp) {
+  const glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(...WEAPONS[id].glow) });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x1a1c20, metalness: .8, roughness: .35, envMapIntensity: 1.2 });
+  const mz = geo.at(.66, 1.555, -.27);
+  const fx = [];
+  if (id === 'breacher') {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(.055 * (tp ? .6 : 1), .012 * (tp ? .6 : 1), 10, 28), glow); ring.position.copy(mz); g.add(ring); fx.push(ring);
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, .09, 20), dark); drum.rotation.z = Math.PI / 2; drum.position.copy(geo.at(-.55, 1.0, -.27)); drum.scale.setScalar(tp ? .6 : 1); g.add(drum);
+  } else if (id === 'helix') {
+    for (let i = 0; i < 4; i++) { const c = new THREE.Mesh(new THREE.TorusGeometry(.085 * (tp ? .6 : 1), .009 * (tp ? .6 : 1), 8, 28), glow); c.position.copy(geo.at(.2 + i * .12, 1.555, -.27)); g.add(c); fx.push(c); }
+  } else if (id === 'nova') {
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(.045, .05, .62, 18), dark); tube.rotation.x = Math.PI / 2; tube.position.copy(geo.at(-.15, 1.42, .04)); tube.scale.setScalar(tp ? .6 : 1); g.add(tube);
+    const tip = new THREE.Mesh(new THREE.TorusGeometry(.047, .01, 8, 24), glow); tip.position.copy(geo.at(.46, 1.42, .04)); tip.scale.setScalar(tp ? .6 : 1); g.add(tip); fx.push(tip);
+  } else if (id === 'wasp') {
+    const cell = new THREE.Mesh(new THREE.CapsuleGeometry(.014, .07, 4, 10), glow); cell.rotation.x = Math.PI / 2; cell.position.copy(geo.at(-.4, 1.35, -.45)); cell.scale.setScalar(tp ? .6 : 1); g.add(cell); fx.push(cell);
+  }
+  return { glow, fx, muzzle: mz };
+}
+function buildPistolParts(g, id, tp) {
+  const w = WEAPONS[id], s = tp ? .55 : 1;
+  const metal = skinMat(id, tp); const dark = new THREE.MeshStandardMaterial({ color: 0x17191c, metalness: .7, roughness: .4, envMapIntensity: 1.3 });
+  const glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(...w.glow) });
+  const add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x * s, y * s, z * s); o.scale.setScalar(s); g.add(o); return o; };
+  add(extrude([[-.16, .0], [.14, .0], [.15, .045], [.12, .062], [-.15, .062], [-.17, .03]], .046, .006), metal, 0, 0, -.06);       // slide
+  add(extrude([[-.14, -.035], [.1, -.035], [.1, .0], [-.14, .0]], .04, .005), dark, 0, 0, -.06);                                      // frame
+  add(extrude([[-.08, -.035], [-.02, -.035], [.0, -.17], [-.055, -.175], [-.085, -.08]], .038, .008), dark, 0, 0, -.02);              // grip
+  add(new THREE.BoxGeometry(.05, .008, .2), glow, 0, .034, -.06);                                                                        // energy rail
+  const muz = new THREE.Mesh(new THREE.TorusGeometry(.017, .005, 8, 20), glow); muz.position.set(0, .03 * s, -.215 * s); muz.scale.setScalar(s); g.add(muz);
+  return { glow, fx: [muz], muzzle: new THREE.Vector3(0, .03 * s, -.23 * s) };
+}
+function buildGunVM(id) {
+  const w = WEAPONS[id];
+  if (id === 'carbine' || id === 'sniper') { const vm = buildRifleVM(id); vm.hw = { fx: [], muzzle: null }; return vm; }
+  const g = new THREE.Group(); g.visible = false; gunScene.add(g);
+  const glove = new THREE.MeshStandardMaterial({ color: 0x2c2a26, roughness: .82 });
+  const sleeve = new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: .9, normalMap: tex(T.armor.normal, false, 3, 3), normalScale: new THREE.Vector2(.4, .4) });
+  const limb = (from, to, r, m, parent) => { const d = to.clone().sub(from), L = d.length(); const c = new THREE.Mesh(new THREE.CapsuleGeometry(r, Math.max(.001, L - r * 2), 4, 12), m); c.position.copy(from).addScaledVector(d, .5); c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); parent.add(c); return c; };
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  let hw, gripY = -.12, gripZ = .06, foreZ = -.3, foreY = -.19;
+  if (id === 'pistol') { hw = buildPistolParts(g, id, false); gripY = -.09; gripZ = -.03; foreZ = -.05; foreY = -.11; }
+  else {
+    const geo = gunGeom(w.shape, .5, false), inner = new THREE.Group();
+    const src = ASSET.rifle.scene.clone(true); for (const n of ['View_Finder', 'Body']) { const o = src.getObjectByName(n); if (o) o.visible = false; }
+    src.updateMatrixWorld(true); const parts = { paint: [], metal: [] };
+    src.traverse(o => { if (o.isMesh && o.visible) { let p = o.parent, vis = true; while (p) { if (!p.visible) vis = false; p = p.parent; } if (!vis) return; const gg = o.geometry.clone().applyMatrix4(o.matrixWorld); for (const k of Object.keys(gg.attributes)) if (!['position', 'normal', 'uv'].includes(k)) gg.deleteAttribute(k); if (!gg.index) gg.setIndex([...Array(gg.attributes.position.count).keys()]); gg.setAttribute('uv2', gg.attributes.uv); parts[o.material.name === 'paint' ? 'paint' : 'metal'].push(gg); } });
+    const mats = { paint: skinMat(id, false), metal: ASSET.gunMat('metalC') }; mats.metal.emissive = new THREE.Color(...w.glow).multiplyScalar(.5);
+    for (const k of ['paint', 'metal']) { const gm = THREE.BufferGeometryUtils.mergeBufferGeometries(parts[k]); if (gm) inner.add(new THREE.Mesh(gm, mats[k])); }
+    inner.rotation.y = Math.PI / 2; inner.scale.copy(geo.scale); inner.position.copy(geo.pos); g.add(inner);
+    hw = addWeaponHardware(id, g, geo, false);
+    const grip = geo.at(-1.0, 1.15, -.27), fore = geo.at(-.3, 1.23, -.27); gripY = grip.y + .11; gripZ = grip.z - .015; foreZ = fore.z; foreY = fore.y;
+    // holo sight on every reshaped gun
+    const dark = new THREE.MeshStandardMaterial({ color: 0x16171a, roughness: .45, metalness: .6, envMapIntensity: 1.2 });
+    const hood = new THREE.Group(); g.add(hood);
+    const bx = (ww, hh, dd, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(ww, hh, dd), dark); m.position.set(x, y, z); hood.add(m); };
+    bx(.05, .03, .11, 0, .066, -.05); bx(.103, .009, .062, 0, .178, -.07); bx(.103, .008, .056, 0, .087, -.07); bx(.008, .09, .06, -.047, .13, -.07); bx(.008, .09, .06, .047, .13, -.07);
+  }
+  // hands
+  const glMat = glove, rear = new THREE.Group(); rear.position.set(0, gripY + .035, gripZ - .088); g.add(rear);
+  { const pm = new THREE.Mesh(rbox(.05, .07, .085, .018), glMat); pm.position.set(.006, -.12, .118); pm.rotation.x = .38; rear.add(pm);
+    for (let k = 0; k < 4; k++) limb(V(.04, -.1 - k * .022, .055), V(-.04, -.104 - k * .022, .048), .0105, glMat, rear);
+    limb(V(.016, -.16, .17), V(.12, -.42, .62), .036, glMat, rear); limb(V(.07, -.3, .42), V(.2, -.56, .95), .052, sleeve, rear); }
+  const left = new THREE.Group(); g.add(left); const li = new THREE.Group(); li.position.set(0, foreY + .145, foreZ + .36); left.add(li);
+  { const pm = new THREE.Mesh(rbox(.09, .045, .1, .018), glMat); pm.position.set(-.005, -.04, -.36); li.add(pm);
+    for (let k = 0; k < 4; k++) limb(V(-.055, -.04, -.395 + k * .022), V(-.075, .03, -.392 + k * .022), .0095, glMat, li);
+    limb(V(-.03, -.06, -.33), V(-.26, -.38, .05), .034, glMat, li); limb(V(-.17, -.25, -.14), V(-.42, -.6, .42), .05, sleeve, li); }
+  // reticle, flash
+  const reticle = new THREE.Group(); reticle.position.copy(DOT); g.add(reticle);
+  if (id !== 'pistol') {
+    const col = new THREE.Color(...w.glow).multiplyScalar(2.2);
+    const dot = new THREE.Mesh(new THREE.CircleGeometry(.0026, 16), new THREE.MeshBasicMaterial({ color: col, depthTest: false, transparent: true })); dot.renderOrder = 5; reticle.add(dot);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(.0118, .013, 48), new THREE.MeshBasicMaterial({ color: col.clone().multiplyScalar(.5), depthTest: false, transparent: true, opacity: .85 })); ring.renderOrder = 5; reticle.add(ring);
+  } else { reticle.position.set(0, .07, -.06); const d = new THREE.Mesh(new THREE.CircleGeometry(.0022, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(5, 3.5, .8), depthTest: false, transparent: true })); d.renderOrder = 5; reticle.add(d); }
+  const fm = new THREE.MeshBasicMaterial({ map: tex(T.star), color: new THREE.Color(...(w.tracer || w.glow)).multiplyScalar(1.1), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  const flash = new THREE.Group(); flash.position.copy(hw.muzzle).add(new THREE.Vector3(0, 0, -.04)); g.add(flash);
+  const fs = id === 'breacher' || id === 'nova' ? 1.5 : id === 'wasp' || id === 'pistol' ? .8 : 1;
+  flash.add(new THREE.Mesh(new THREE.PlaneGeometry(.3 * fs, .3 * fs), fm)); const f2 = new THREE.Mesh(new THREE.PlaneGeometry(.11 * fs, .45 * fs), fm); f2.rotation.y = Math.PI / 2; f2.position.z = -.1 * fs; flash.add(f2); const f3 = f2.clone(); f3.rotation.set(0, Math.PI / 2, Math.PI / 2); flash.add(f3);
+  flash.visible = false;
+  const hip = id === 'pistol' ? new THREE.Vector3(.16, -.17, -.34) : new THREE.Vector3(.2, -.235, -.44);
+  const adsPos = id === 'pistol' ? new THREE.Vector3(0, -.07 * GUN_SCALE, -.27) : ADS_POS.clone();
+  g.scale.setScalar(GUN_SCALE);
+  return { group: g, mag: new THREE.Group(), magPos: new THREE.Vector3(), leftArm: left, rear: id === 'pistol' ? new THREE.Group() : rear, flash, reticle, hip, adsPos, hw };
+}
+
+/* rockets (Nova) */
+const ROCKETS = []; let ROCKET_GEO;
+function launchRocket(owner, from, dir) {
+  if (!ROCKET_GEO) ROCKET_GEO = new THREE.CapsuleGeometry(.06, .22, 4, 10).rotateX(Math.PI / 2);
+  const m = new THREE.Mesh(ROCKET_GEO, new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.3, .4) })); m.position.copy(from); m.lookAt(from.clone().add(dir)); scene.add(m);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex(T.glow), color: new THREE.Color(2.4, 1, .3), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); glow.scale.setScalar(1.3); m.add(glow);
+  ROCKETS.push({ m, v: dir.clone().normalize().multiplyScalar(44), owner, life: 3 });
+  sfx.launch(from.clone());
+}
+function updateRockets(dt) {
+  for (let i = ROCKETS.length - 1; i >= 0; i--) {
+    const r = ROCKETS[i]; r.life -= dt; r.v.y -= 2 * dt;
+    const p = r.m.position, prev = _b4.copy(p); p.addScaledVector(r.v, dt);
+    let boom = p.y < .1 || r.life <= 0;
+    for (let k = 1; k <= 4 && !boom; k++) { const q = _b3.copy(prev).lerp(p, k / 4); for (const c of world.colliders) if (c.containsPoint(q)) { boom = true; p.copy(q); break; } }
+    if (!boom) for (const e of entities()) { if (e === r.owner || !entAlive(e)) continue; const c = entChest(e, _b1); if (c.distanceTo(p) < .8) { boom = true; break; } }
+    for (let k = 0; k < 2; k++) SMOKE.spawn(p, rand(-.3, .3), rand(-.1, .3), rand(-.3, .3), .5, .45, .45, .25, rand(.5, 1), -.2, 1.5, .6, .45);
+    FX.spawn(p, rand(-1, 1), rand(-1, 1), rand(-1, 1), 4, 1.6, .4, .1, .2, 0, 2, 1);
+    if (boom) { scene.remove(r.m); ROCKETS.splice(i, 1); explode(p.clone(), r.owner, 'nova'); }
+  }
+}
+
+/* kill rewards: badge, medals, sounds */
+const MEDALS = {
+  headshot: ['Headshot', '#ffd27a'], double: ['Double kill', '#ff9a3c'], triple: ['Triple kill', '#ff7a2c'], multi: ['Multi kill', '#ff5a2c'], rampage: ['Rampage', '#ff3a2c'],
+  longshot: ['Longshot', '#7fe7ff'], pointblank: ['Point blank', '#ffb066'], backstab: ['Backstab', '#c792ff'], explosive: ['Plasma kill', '#5ad1ff'],
+  collateral: ['Collateral', '#9dff7a'], revenge: ['Revenge', '#ff6a8a'], firstblood: ['First blood', '#ff3a3a'], shutdown: ['Shutdown', '#ffe14a'], noscope: ['No-scope', '#7affd8'], airborne: ['Mid-air', '#8ab4ff'],
+};
+const MEDAL_SVG = c => `<svg viewBox="0 0 40 40" width="34" height="34"><path d="M20 2l15 8.7v18.6L20 38 5 29.3V10.7z" fill="none" stroke="${c}" stroke-width="2.4"/><path d="M20 9l9 5.2v11.6L20 31l-9-5.2V14.2z" fill="${c}" opacity=".85"/></svg>`;
+let badgeT = 0, medalQ = [];
+function showKillBadge(victim, pts, medals) {
+  const b = $('killbadge');
+  b.innerHTML = `<div class="kb-emblem"><svg viewBox="0 0 120 120" width="92" height="92"><defs><linearGradient id="kbg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset="1" stop-color="#ff7a2c"/></linearGradient></defs><path d="M60 6l46 26.5v55L60 114 14 87.5v-55z" fill="rgba(20,12,6,.75)" stroke="url(#kbg)" stroke-width="4"/><path d="M60 26l26 15v30L60 86 34 71V41z" fill="url(#kbg)"/><path d="M47 48l26 26M73 48L47 74" stroke="#1a0e05" stroke-width="7" stroke-linecap="round"/></svg></div>
+    <div class="kb-text"><b>ELIMINATED</b><span></span><em>+${pts}</em></div>`;
+  b.querySelector('.kb-text span').textContent = victim.name;
+  b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); badgeT = 2.4; $('banner').style.opacity = 0; bannerT = 0;
+  const row = $('medals'); row.innerHTML = '';
+  medals.forEach((k, i) => { const [label, col] = MEDALS[k]; const d = document.createElement('div'); d.className = 'medal'; d.style.animationDelay = (i * .12 + .15) + 's'; d.innerHTML = MEDAL_SVG(col) + `<span style="color:${col}">${label}</span>`; row.appendChild(d); setTimeout(() => sfx.medal(i), (i * 120 + 150)); });
+  const kf = $('killflash'); kf.classList.remove('on'); void kf.offsetWidth; kf.classList.add('on');
+}
+
 const WM = {}; let HIP_POS = new THREE.Vector3(.17, -.19, -.4), ADS_POS = new THREE.Vector3(-DOT.x * GUN_SCALE, -DOT.y * GUN_SCALE, -.3 - DOT.z * GUN_SCALE);
 function W() { return WEAPONS[P.weapon]; }
 function setModel(name) {
@@ -1885,7 +2148,7 @@ function setModel(name) {
   const m = WM[name]; gun = m.group; gunMag = m.mag; gunMagPos = m.magPos; leftArm = m.leftArm; gunRear = m.rear; muzzleFlash = m.flash; reticle = m.reticle;
   HIP_POS = m.hip; ADS_POS = m.adsPos;
   $('hWeapon').textContent = WEAPONS[name].label;
-  pips.classList.toggle('big', name === 'sniper'); cache.pip = -1;
+  pips.classList.toggle('big', WEAPONS[name].mag <= 10); cache.pip = -1;
 }
 function switchWeapon(name) {
   if (P.weapon === name || P.switchT > 0 || state !== 'play') return;
@@ -1895,10 +2158,10 @@ function switchWeapon(name) {
   setModel(name); sfx.equip(); updateHud(true);
 }
 function addAmmo(name, n) {
-  const w = WEAPONS[name];
+  const w = WEAPONS[name]; if (!w || (P.weapon !== name && !P.store[name])) return;
   if (P.weapon === name) P.reserve = Math.min(w.maxReserve, P.reserve + n); else P.store[name].reserve = Math.min(w.maxReserve, P.store[name].reserve + n);
 }
-function topUp(name, min) { const cur = P.weapon === name ? P.reserve : P.store[name].reserve; if (cur < min) addAmmo(name, min - cur); }
+function topUp(name, min) { if (P.weapon !== name && !P.store[name]) return; const cur = P.weapon === name ? P.reserve : P.store[name].reserve; if (cur < min) addAmmo(name, min - cur); }
 let station = null;
 function buildStation() {
   const g = new THREE.Group(); g.position.set(2.4, 1.6, -2.3); scene.add(g);
@@ -1918,7 +2181,7 @@ function updateStation(dt) {
   const ready = station.cd <= 0, pulse = ready ? .75 + Math.sin(G.time * 4) * .25 : .15;
   station.bandMat.color.setRGB(.5 * pulse, 3.2 * pulse, 4 * pulse); station.glow.material.opacity = ready ? pulse : .1;
   if (ready && Math.hypot(P.pos.x - 2.4, P.pos.z + 2.3) < 1.6 && Math.abs(P.pos.y - 1.6) < .6) {
-    topUp('carbine', 300); topUp('sniper', 35); station.cd = 30;
+    for (const id of LOADOUT) topUp(id, Math.round(WEAPONS[id].maxReserve * .85)); station.cd = 30;
     if (P.ammo < P.mag && P.reload <= 0) startReload();
     feed('Ammo crate · full resupply'); sfx.pickup(); updateHud();
   }
@@ -1928,72 +2191,87 @@ function fire() {
   P.shield = 0; // attacking ends your spawn protection
   if (P.weapon === 'knife') { knifeAttack(false); return; }
   if (P.reload > 0 || P.switchT > 0) return;
-  const w = W(), sniper = P.weapon === 'sniper';
+  const id = P.weapon, w = W(), od = P.odT > 0;
   if (P.ammo <= 0) { if (P.fireCd <= 0) { sfx.dry(); P.fireCd = .25; } if (P.reserve > 0) startReload(); return; }
-  P.ammo--; G.fired++; P.fireCd = 60 / w.rpm / (P.odT > 0 ? 1.35 : 1); noise(camera.position, 45, PLAYER_ENT);
+  P.ammo--; G.fired++; P.fireCd = 60 / w.rpm / (od ? 1.35 : 1); noise(camera.position, 45, PLAYER_ENT);
   if (G.time - P.lastShot > .25) P.shotIdx = 0; P.shotIdx++; P.lastShot = G.time;
-  const hs = Math.hypot(P.vel.x, P.vel.z), ads = P.ads;
-  const scoped = sniper ? clamp((ads - .7) / .3, 0, 1) : ads;
-  let spread = lerp(w.hip, w.ads, scoped) + (hs > 1 ? lerp(.022, sniper ? .002 : .006, scoped) : 0) + (P.onGround ? 0 : .05) + P.heat * lerp(.02, .006, scoped);
+  const hs = Math.hypot(P.vel.x, P.vel.z), ads = P.ads, scoped = w.scope ? clamp((ads - .7) / .3, 0, 1) : ads;
+  let spread = lerp(w.hip, w.ads, scoped) + (hs > 1 ? lerp(.022, w.scope ? .002 : .006, scoped) * (id === 'wasp' || id === 'pistol' ? .5 : 1) : 0) + (P.onGround ? 0 : .05 * (id === 'wasp' || id === 'pistol' ? .4 : 1)) + P.heat * lerp(.02, .006, scoped);
   spread *= 1 - P.crouch * .35;
-  P.heat = Math.min(1, P.heat + (sniper ? 0 : .14));
+  P.heat = Math.min(1, P.heat + (w.heat || 0));
   camera.getWorldDirection(shotDir); camRight.set(1, 0, 0).applyQuaternion(camera.quaternion); camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
-  const a = Math.random() * 6.283, m = Math.sqrt(Math.random()) * spread;
-  shotDir.addScaledVector(camRight, Math.cos(a) * m).addScaledVector(camUp, Math.sin(a) * m).normalize();
-  ray.set(camera.position, shotDir); ray.far = 250;
-  if (targetsDirty) rebuildTargets();
-  const hits = ray.intersectObjects(targets, false);
+  const base = shotDir.clone();
   muzzleW.set(.13 * (1 - ads), -.12 * (1 - ads) - .03 * ads, -.75).applyMatrix4(camera.matrixWorld);
+  if (targetsDirty) rebuildTargets();
   let end = _v3.copy(camera.position).addScaledVector(shotDir, 150);
-  if (sniper && hits.length && hits[0].object.userData.robot) {
-    // the sniper round punches through every frame in its path and only stops at a wall
-    const seen = new Set(); let wall = false;
-    for (const h of hits) {
-      const r = h.object.userData.robot;
-      if (!r) { end.copy(h.point); wall = true; break; }
-      if (seen.has(r) || r.dead) continue; seen.add(r);
-      G.hits++; damageRobot(r, r.hp + 1, h.object.userData.zone === 'head', h.point, shotDir, h.object.userData.zone, true);
+  if (w.projectile) {
+    const a = Math.random() * 6.283, m = Math.sqrt(Math.random()) * spread;
+    const d = base.clone().addScaledVector(camRight, Math.cos(a) * m).addScaledVector(camUp, Math.sin(a) * m).normalize();
+    const from = camera.position.clone().addScaledVector(d, .9).addScaledVector(camRight, .12 * (1 - ads)).addScaledVector(camUp, -.08);
+    launchRocket(PLAYER_ENT, from, d); netNade(from, d.clone().multiplyScalar(44), 1);
+  } else {
+    const pellets = w.pellets || 1, seen = new Set();
+    P.collat = 0;
+    for (let pi = 0; pi < pellets; pi++) {
+      const cone = pellets > 1 ? w.spreadP * (1 - scoped * .25) : spread;
+      const a = Math.random() * 6.283, m = Math.sqrt(Math.random()) * cone;
+      shotDir.copy(base).addScaledVector(camRight, Math.cos(a) * m).addScaledVector(camUp, Math.sin(a) * m).normalize();
+      ray.set(camera.position, shotDir); ray.far = 250;
+      const hits = ray.intersectObjects(targets, false);
+      end = _v3.copy(camera.position).addScaledVector(shotDir, 150);
+      let wallHit = null;
+      if (w.pierce) {
+        for (const h of hits) {
+          const r = h.object.userData.robot;
+          if (!r) { end.copy(h.point); wallHit = h; break; }
+          if (seen.has(r) || r.dead) continue; seen.add(r); P.collat = seen.size;
+          const zone = h.object.userData.zone, crit = zone === 'head';
+          G.hits++; damageBot(r, w.oneShot ? Math.max(r.hp + 1, 101) : w.dmg * (crit ? w.head : zone === 'limb' ? .75 : 1) * (od ? 1.25 : 1), crit, h.point, shotDir.clone(), zone, PLAYER_ENT, id);
+        }
+      } else if (hits.length) {
+        const h = hits[0]; end.copy(h.point);
+        const r = h.object.userData.robot;
+        if (r && !r.dead) {
+          const zone = h.object.userData.zone, crit = zone === 'head';
+          if (pi === 0 || !seen.has(r)) G.hits++; seen.add(r);
+          damageBot(r, w.dmg * (crit ? w.head : zone === 'limb' ? .75 : 1) * falloffK(w, h.distance) * (od ? 1.25 : 1), crit, h.point, shotDir.clone(), zone, PLAYER_ENT, id);
+        } else wallHit = h;
+      }
+      if (wallHit && (pellets === 1 || pi % 3 === 0)) {
+        const h = wallHit, n = h.face ? _v2.copy(h.face.normal).transformDirection(h.object.matrixWorld) : _v2.set(0, 1, 0);
+        const metal = h.object.userData.surface === 'metal', k = w.oneShot || w.beam ? 2.5 : pellets > 1 ? .5 : 1;
+        decal(h.point, n, w.oneShot || w.beam ? 1.6 : 1);
+        for (let i = 0; i < (metal ? 9 : 4) * k; i++) FX.spawn(h.point, n.x * 3 + rand(-3, 3), n.y * 3 + rand(0, 4), n.z * 3 + rand(-3, 3), ...(w.tracer || [6, 3.2, 1.2]).map(c => c * .9), rand(.02, .045), rand(.15, .35), 14, 1);
+        for (let i = 0; i < (metal ? 2 : 5) * k; i++) SMOKE.spawn(h.point, n.x * rand(.5, 1.5) + rand(-.3, .3), n.y * rand(.5, 1.5) + rand(0, .5), n.z * rand(.5, 1.5) + rand(-.3, .3), .42, .38, .34, rand(.12, .25) * k, rand(.5, 1.1), -.2, 2.5, .8, .5);
+        if (Math.random() < .5 || w.oneShot) sfx.impact(h.point, metal);
+      }
+      const tc = new THREE.Color(...w.tracer);
+      if (w.beam) { tracer(muzzleW, end, tc.clone().multiplyScalar(.45), .035, .3); const L = muzzleW.distanceTo(end), dir = end.clone().sub(muzzleW).normalize(); for (let s = 0; s < Math.min(80, L * 2); s++) { const q = muzzleW.clone().addScaledVector(dir, s * .5), ang = s * .7; const ox = camRight.clone().multiplyScalar(Math.cos(ang) * .06), oy = camUp.clone().multiplyScalar(Math.sin(ang) * .06); FX.spawn(q.add(ox).add(oy), 0, .15, 0, tc.r * .6, tc.g * .6, tc.b * .6, .045, .45, 0, 1, 0); } }
+      else if (w.oneShot) tracer(muzzleW, end, tc, .03, .12);
+      else if (pellets > 1) { if (pi < 6) tracer(muzzleW, end, tc, .016, .05); }
+      else if (P.shotIdx % 2 === 1 || id === 'pistol') tracer(muzzleW, end, tc, .022, .05);
     }
-    if (!wall) end.copy(camera.position).addScaledVector(shotDir, 150);
-    if (seen.size > 1) callout(seen.size === 2 ? 'COLLATERAL' : `COLLATERAL ×${seen.size}`, 'multi');
-  } else if (hits.length) {
-    const h = hits[0]; end.copy(h.point);
-    const r = h.object.userData.robot;
-    if (r && !r.dead) {
-      const zone = h.object.userData.zone, mult = zone === 'head' ? 2.4 : zone === 'limb' ? .75 : 1;
-      const fall = sniper ? 1 : h.distance > 30 ? clamp(1 - (h.distance - 30) / 60, .65, 1) : 1;
-      G.hits++; damageRobot(r, sniper ? r.hp + 1 : w.dmg * mult * fall * (P.odT > 0 ? 1.25 : 1), zone === 'head', h.point, shotDir, zone, sniper);
-    } else {
-      const n = h.face ? _v2.copy(h.face.normal).transformDirection(h.object.matrixWorld) : _v2.set(0, 1, 0);
-      const metal = h.object.userData.surface === 'metal', k = sniper ? 2.5 : 1;
-      decal(h.point, n, sniper ? 1.6 : 1);
-      for (let i = 0; i < (metal ? 9 : 4) * k; i++) FX.spawn(h.point, n.x * 3 + rand(-3, 3), n.y * 3 + rand(0, 4), n.z * 3 + rand(-3, 3), 6, 3.2, 1.2, rand(.02, .045), rand(.15, .35), 14, 1);
-      for (let i = 0; i < (metal ? 2 : 5) * k; i++) SMOKE.spawn(h.point, n.x * rand(.5, 1.5) + rand(-.3, .3), n.y * rand(.5, 1.5) + rand(0, .5), n.z * rand(.5, 1.5) + rand(-.3, .3), .42, .38, .34, rand(.12, .25) * k, rand(.5, 1.1), -.2, 2.5, .8, .5);
-      if (Math.random() < .5 || sniper) sfx.impact(h.point, metal);
-    }
+    if (seen.size > 1 && w.pierce) { P.collat = seen.size; callout(seen.size === 2 ? 'COLLATERAL' : `COLLATERAL ×${seen.size}`, 'multi'); }
   }
   netShot(muzzleW, end);
-  if (sniper) tracer(muzzleW, end, new THREE.Color(7, 5, 3), .03, .12);
-  else if (P.shotIdx % 2 === 1) tracer(muzzleW, end, new THREE.Color(5, 3.6, 2.2), .022, .05);
-  if (!sniper) ejectCasing();
-  // feel
-  if (sniper) {
+  if (!w.beam && !w.projectile && id !== 'breacher') ejectCasing();
+  // feel: recoil, shake and sound per weapon
+  if (id === 'sniper') {
     P.pitch += .028 + rand(0, .008); P.yaw += rand(-.008, .008); P.recoilAcc += .028;
     springs.kickZ.v += 4; springs.kickRot.v += 7; springs.camKick.v += 2.4; P.trauma = Math.min(1, P.trauma + .3);
     P.boltT = .3; setTimeout(() => { if (P.weapon === 'sniper') { sfx.bolt(); ejectCasing(); } }, 110);
-    sfx.sniper();
   } else {
-    const kick = lerp(1, .55, ads) * (1 - P.crouch * .25);
+    const kick = lerp(1, .55, ads) * (1 - P.crouch * .25) * w.kick;
     const climb = (.0075 + rand(0, .002)) * kick, drift = (Math.sin(P.shotIdx * .62) * .0028 + rand(-.0012, .0012)) * kick;
     P.pitch += climb; P.yaw += drift; P.recoilAcc += climb;
-    springs.kickZ.v += lerp(1.6, .9, ads); springs.kickRot.v += lerp(3, 1.2, ads) * rand(.8, 1.2); springs.camKick.v += .55 * kick;
-    P.trauma = Math.min(1, P.trauma + .05);
-    sfx.shot();
+    springs.kickZ.v += lerp(1.6, .9, ads) * Math.min(w.kick, 2.5); springs.kickRot.v += lerp(3, 1.2, ads) * rand(.8, 1.2) * Math.min(w.kick, 2.5); springs.camKick.v += .55 * kick;
+    P.trauma = Math.min(1, P.trauma + .05 * w.kick);
   }
-  muzzleFlash.visible = true; muzzleFlash.rotation.z = rand(0, 6.28); muzzleFlash.scale.setScalar(rand(.8, 1.25)); P.flashT = sniper ? .05 : .035;
-  lightFlash(muzzleW, 0xffaa55, sniper ? 9 : 5, sniper ? 16 : 10);
+  (sfx[w.sound] || sfx.shot)();
+  muzzleFlash.visible = true; muzzleFlash.rotation.z = rand(0, 6.28); muzzleFlash.scale.setScalar(rand(.8, 1.25)); P.flashT = w.oneShot || w.pellets ? .05 : .035;
+  lightFlash(muzzleW, new THREE.Color(...(w.tracer || w.glow)).multiplyScalar(.25), w.oneShot || w.pellets || w.beam ? 9 : 5, w.oneShot ? 16 : 10);
   updateHud();
-  if (P.ammo === 0 && P.reserve > 0) setTimeout(() => { if (state === 'play' && P.ammo === 0) startReload(); }, sniper ? 900 : 220);
+  if (P.ammo === 0 && P.reserve > 0) setTimeout(() => { if (state === 'play' && P.ammo === 0) startReload(); }, w.oneShot ? 900 : 220);
 }
 function ejectCasing() {
   const c = casings[casingIdx]; casingIdx = (casingIdx + 1) % casings.length;
@@ -2004,7 +2282,7 @@ function startReload() {
   if (P.reload > 0 || P.switchT > 0 || P.ammo === P.mag || P.reserve <= 0) return;
   const w = W(); P.reloadEmpty = P.ammo === 0; P.reloadDur = P.reloadEmpty ? w.reloadEmpty : w.reload; P.reload = P.reloadDur; P.reloadStage = 0; P.boltT = 0;
 }
-function damageRobot(r, dmg, crit, point, dir, zone, sniper) { damageBot(r, dmg, crit, point, dir, zone, PLAYER_ENT, sniper ? 'sniper' : 'rifle'); }
+function damageRobot(r, dmg, crit, point, dir, zone, sniper) { damageBot(r, dmg, crit, point, dir, zone, PLAYER_ENT, sniper ? 'sniper' : 'carbine'); }
 function damageEntity(e, dmg, crit, point, dir, zone, attacker, weapon) { if (e.isPlayer) hurtPlayer(dmg, attacker ? entPos(attacker) : point, attacker, crit, weapon); else damageBot(e, dmg, crit, point, dir, zone, attacker, weapon); }
 function damageBot(r, dmg, crit, point, dir, zone, attacker, weapon) {
   if (r.dead) return;
@@ -2034,12 +2312,14 @@ function damageBot(r, dmg, crit, point, dir, zone, attacker, weapon) {
   if (kill) killEntity(r, attacker, weapon, crit, dir);
 }
 function killEntity(v, k, weapon, crit, dir) {
-  v.deaths++; v.streak = 0;
+  const vStreak = v.streak || 0; v.deaths++; v.streak = 0;
+  const first = !G.firstBlood && k && k !== v; if (k && k !== v) G.firstBlood = true;
   if (k && k !== v) { k.kills++; k.streak++; if (k.isPlayer) G.bestStreak = Math.max(G.bestStreak || 0, k.streak); k.score += 100 + (crit ? 50 : 0); if (crit) k.heads++; announceStreak(k); }
   else v.score = Math.max(0, v.score - 50);
   kfeed(k, v, weapon, crit);
   if (v.isPlayer) playerDie(k, weapon, crit); else botDie(v, dir || _v1.set(0, 0, 1), crit, k === PLAYER_ENT);
-  if (k === PLAYER_ENT && k !== v) playerKillFx(v, crit, weapon, dir);
+  if (k === PLAYER_ENT && k !== v) playerKillFx(v, crit, weapon, dir, { streak: vStreak, first });
+  if (v === PLAYER_ENT && k && k !== v) P.lastKiller = k;
   if (k && k.kills >= KILL_LIMIT) setTimeout(() => endMatch(k), 1200);
   updateHud();
 }
@@ -2055,16 +2335,29 @@ function botDie(r, dir, crit, byMe) {
   if (byMe) { lightFlash(cp, 0xff8a3a, 7, 14); sfx.kill(cp, crit); } else sfx.botDeath(cp);
   if (Math.random() < .5) dropPickup(cp.clone(), Math.random() < .7 ? 'ammo' : 'med');
 }
-function playerKillFx(r, crit, weapon, dir) {
+function playerKillFx(r, crit, weapon, dir, ex = {}) {
   const cp = r.root.position.clone(); cp.y += 1;
   const near = camera.position.distanceTo(cp); P.trauma = Math.min(1, P.trauma + clamp(1 - near / 18, 0, 1) * .4);
-  hitstop = weapon === 'sniper' ? .08 : crit ? .06 : .04;
-  G.combo = Math.min(4, G.combo + .5); G.comboT = 4; G.multi++; G.multiT = 2.2;
-  const pts = Math.round(100 * (1 + G.combo * .5) * (crit ? 1.5 : 1)); G.score += pts; G.kills++; if (crit) G.heads++;
+  hitstop = weapon === 'sniper' || weapon === 'helix' ? .08 : crit ? .06 : .045; P.fov -= 2.5;
+  G.combo = Math.min(4, G.combo + .5); G.comboT = 4; G.multi++; G.multiT = 2.4;
+  const medals = [];
+  if (crit) medals.push(weapon === 'knife' ? 'backstab' : 'headshot');
+  if (G.multi >= 2) medals.push(['', '', 'double', 'triple', 'multi', 'rampage'][Math.min(G.multi, 5)]);
+  if (ex.first) medals.push('firstblood');
+  if ((ex.streak || 0) >= 3) medals.push('shutdown');
+  if (P.lastKiller === r) { medals.push('revenge'); P.lastKiller = null; }
+  if (weapon === 'nade' || weapon === 'nova') medals.push('explosive');
+  if (near > 38 && weapon !== 'nade' && weapon !== 'nova') medals.push('longshot');
+  if (near < 3 && weapon !== 'knife') medals.push('pointblank');
+  if ((P.collat || 0) > 1) medals.push('collateral');
+  if ((weapon === 'sniper' || weapon === 'helix') && P.ads < .5 && near > 8) medals.push('noscope');
+  if (!P.onGround && weapon !== 'nade') medals.push('airborne');
+  const pts = Math.round(100 * (1 + G.combo * .5) * (crit ? 1.5 : 1)) + medals.length * 25; G.score += pts; G.kills++; if (crit) G.heads++;
   feed(`${crit ? 'Headshot' : 'Eliminated'} ${r.name}  +${pts}`, crit);
-  if (G.multi >= 2) { callout(['', '', 'DOUBLE KILL', 'TRIPLE KILL', 'MULTI KILL', 'RAMPAGE'][Math.min(G.multi, 5)], 'multi'); sfx.multi(G.multi); }
-  else if (crit) callout('HEADSHOT', 'crit'); else if (weapon === 'sniper') callout('ONE SHOT', 'crit'); else if (weapon === 'nade') callout('PLASMA KILL', 'crit');
-  addAmmo('carbine', 30); addAmmo('sniper', 2); P.od = Math.min(1, P.od + .2);
+  showKillBadge(r, pts, medals.slice(0, 4));
+  sfx.killConfirm(crit, G.multi);
+  if (G.multi >= 2) sfx.multi(G.multi);
+  for (const id of LOADOUT) addAmmo(id, Math.ceil(WEAPONS[id].mag * .6)); P.od = Math.min(1, P.od + .2);
   if (P.od >= 1 && !P.odAnnounced) { P.odAnnounced = true; feed('Overdrive ready · press F'); sfx.overdriveReady(); }
 }
 const pickups = [];
@@ -2077,17 +2370,17 @@ function dropPickup(pos, kind) {
   pickups.push({ m: g, kind, life: 30, base: pos.y });
 }
 function hurtPlayer(dmg, from, attacker, crit, weapon) {
-  if (state !== 'play' || P.dead) return;
+  if (state !== 'play' || P.dead || window.__god) return; // __god: automated test switch only
   if (P.shield > 0) return;
   if (P.odT > 0) dmg *= .7;
   P.hp -= dmg; P.lastHurt = G.time; P.hitFx = Math.min(1, P.hitFx + .6); P.trauma = Math.min(1, P.trauma + (weapon === 'sniper' ? .6 : .14)); sfx.hurt();
   if (from) { const ang = Math.atan2(from.x - P.pos.x, from.z - P.pos.z), rel = -(ang - (P.yaw + Math.PI)); $('dmgdir').style.transform = `rotate(${rel}rad)`; dirT = 1.2; }
   if (attacker) P.lastAttacker = attacker;
-  if (P.hp <= 0) { P.hp = 0; killEntity(PLAYER_ENT, attacker, weapon || 'rifle', crit, null); }
+  if (P.hp <= 0) { P.hp = 0; killEntity(PLAYER_ENT, attacker, weapon || 'carbine', crit, null); }
   updateHud();
 }
 function playerDie(killer, weapon, crit) {
-  NET.killW = ['rifle', 'sniper', 'knife', 'nade'].indexOf(weapon); if (NET.killW < 0) NET.killW = 0; NET.killH = !!crit;
+  NET.killW = NET_W.indexOf(weapon); if (NET.killW < 0) NET.killW = 0; NET.killH = !!crit;
   P.dead = true; state = 'dead'; gunVisible = false; P.dieT = 0; P.killer = killer && killer !== PLAYER_ENT ? killer : null; mouseDown = false; adsHeld = false; P.ads = 0;
   for (const k in keys) keys[k] = false;
   $('deathBy').innerHTML = P.killer ? `Eliminated by <b style="color:${P.killer.cssCol}">${P.killer.name}</b>${crit ? ' · headshot' : ''}${P.killer.hp > 0 ? ` · they had ${Math.ceil(P.killer.hp)} HP` : ''}` : 'You eliminated yourself';
@@ -2095,8 +2388,8 @@ function playerDie(killer, weapon, crit) {
 }
 function respawnPlayer() {
   const od = P.od;
-  resetPlayer(); P.pos.copy(pickSpawn(PLAYER_ENT)); P.yaw = Math.atan2(P.pos.x, P.pos.z); P.shield = 2.5; P.od = od;
-  setModel('carbine'); $('death').hidden = true; grade.uniforms.uDying.value = 0;
+  resetPlayer(); P.spawnAt = G.time; P.pos.copy(pickSpawn(PLAYER_ENT)); P.yaw = Math.atan2(P.pos.x, P.pos.z); P.shield = 2.5; P.od = od;
+  setModel(P.weapon); $('death').hidden = true; grade.uniforms.uDying.value = 0;
   state = 'play'; gunVisible = true; sfx.spawnMe(); updateHud(true);
 }
 
@@ -2133,18 +2426,26 @@ function botShoot(r, aimPoint) {
   if (t && t.isPlayer && P.odT > 0) err *= 1.15;
   const up = Math.abs(d.y) > .95 ? _b3.set(1, 0, 0) : _b3.set(0, 1, 0), sx = _b4.crossVectors(d, up).normalize(), sy = up.crossVectors(sx, d).normalize();
   const a = rand(0, 6.283), m = Math.sqrt(Math.random()) * err; d.addScaledVector(sx, Math.cos(a) * m).addScaledVector(sy, Math.sin(a) * m).normalize();
-  const res = traceShot(eye, d, r, 150);
-  r.muzzle.getWorldPosition(_v3);
-  tracer(_v3, res.point, sniper ? new THREE.Color(5, 6, 9) : new THREE.Color(r.color.r * 4 + 1, r.color.g * 4 + 1, r.color.b * 4 + 1), sniper ? .035 : .022, sniper ? .14 : .06);
+  const pellets = w.pellets || 1, base = d.clone(); let res;
+  r.muzzle.getWorldPosition(_v3); const mz = _v3.clone();
+  for (let pi = 0; pi < pellets; pi++) {
+    if (pellets > 1) { const a2 = rand(0, 6.283), m2 = Math.sqrt(Math.random()) * w.spreadP; d.copy(base).addScaledVector(sx, Math.cos(a2) * m2).addScaledVector(sy, Math.sin(a2) * m2).normalize(); }
+    res = traceShot(eye, d, r, 150);
+    if (pi < 3) tracer(mz, res.point, sniper ? new THREE.Color(5, 6, 9) : new THREE.Color(r.color.r * 4 + 1, r.color.g * 4 + 1, r.color.b * 4 + 1), sniper ? .035 : .022, sniper ? .14 : .06);
+    if (pellets > 1 && res.ent) { const z = res.zone, k = falloffK(WEAPONS[r.weapon] || {}, res.dist); damageEntity(res.ent, w.dmg * k * (z === 'head' ? w.head : z === 'limb' ? w.limb : 1), z === 'head', res.point, d.clone(), z, r, r.weapon); }
+  }
+  _v3.copy(mz);
   const audible = state === 'play' || state === 'dead';
-  if (audible && camera.position.distanceTo(_v3) < 70) sfx.botShot(_v3.clone(), sniper);
+  if (audible && camera.position.distanceTo(_v3) < 70) sfx.botShot(_v3.clone(), r.weapon);
   if (camera.position.distanceTo(_v3) < 16) lightFlash(_v3, 0xffaa55, 2.5, 7);
   noise(_v3, 42, r);
   if (res.ent) {
     r.hits = (r.hits || 0) + 1; if (res.zone === 'head') r.headHits = (r.headHits || 0) + 1;
-    const z = res.zone, dmg = w.dmg * (z === 'head' ? w.head : z === 'limb' ? w.limb : 1);
+  }
+  if (res.ent && pellets === 1) {
+    const z = res.zone, dmg = w.dmg * falloffK(WEAPONS[r.weapon] || {}, res.dist) * (z === 'head' ? w.head : z === 'limb' ? w.limb : 1);
     damageEntity(res.ent, dmg, z === 'head', res.point, d, z, r, r.weapon);
-  } else {
+  } else if (!res.ent) {
     const n = res.face ? _v2.copy(res.face.normal).transformDirection(res.obj.matrixWorld) : _v2.set(0, 1, 0);
     if (res.dist < 149) { for (let i = 0; i < 3; i++) FX.spawn(res.point, n.x * 3 + rand(-2, 2), n.y * 3 + rand(0, 3), n.z * 3 + rand(-2, 2), 6, 3.2, 1.2, rand(.02, .04), rand(.12, .28), 14, 1); if (Math.random() < .3) decal(res.point, n, .9); }
   }
@@ -2177,8 +2478,8 @@ function updateNades(dt) {
     if (boom || n.t <= 0) { if (p.y < .1) p.y = .1; scene.remove(n.m); NADES.splice(i, 1); explode(p.clone(), n.owner); }
   }
 }
-function explode(p, owner) {
-  const R = 7.5;
+function explode(p, owner, weapon = 'nade') {
+  const R = weapon === 'nova' ? 6 : 7.5;
   for (let i = 0; i < 70; i++) { const a = rand(0, 6.28), e = rand(-.2, 1), s = rand(3, 14); FX.spawn(p, Math.cos(a) * s * (1 - e * .5), e * s, Math.sin(a) * s * (1 - e * .5), .5, 2.4, 4, rand(.05, .12), rand(.3, .8), 8, 1.6); }
   for (let i = 0; i < 16; i++) FX.spawn(p, rand(-3, 3), rand(0, 4), rand(-3, 3), 3, 2.2, 4, rand(.6, 1.1), rand(.15, .3), 0, 3, 4);
   for (let i = 0; i < 18; i++) SMOKE.spawn(p, rand(-2, 2), rand(.5, 3), rand(-2, 2), .14, .16, .2, rand(.6, 1.1), rand(1.5, 3), -.4, 1.5, 1.4, .7);
@@ -2188,10 +2489,10 @@ function explode(p, owner) {
     if (!entAlive(e) || e.remote) continue; // the other player's own machine applies blast damage to them
     const c = entChest(e, _b1), d = c.distanceTo(p); if (d > R) continue;
     if (!lineOfSight(_b2.copy(p).setY(p.y + .3), c)) continue;
-    let dmg = 165 * Math.pow(1 - d / R, .75) + 12; if (e === owner) dmg *= .45;
+    let dmg = (weapon === 'nova' ? 140 : 165) * Math.pow(1 - d / R, .75) + 12; if (e === owner) dmg *= .45;
     const dir = _b3.subVectors(c, p).normalize();
     if (e.isPlayer) { P.vel.addScaledVector(dir, 9 * (1 - d / R)); P.vel.y += 4 * (1 - d / R); }
-    damageEntity(e, dmg, false, c.clone(), dir.clone(), 'body', owner, 'nade');
+    damageEntity(e, dmg, false, c.clone(), dir.clone(), 'body', owner, weapon);
   }
   noise(p, 50, owner);
 }
@@ -2299,8 +2600,7 @@ function onNetPeers() {
   const pr = p.presence;
   if (!NET.opp) {
     const nick = String(pr.n || 'Opponent').slice(0, 16), col = NET_COLORS[(pr.c | 0) % NET_COLORS.length];
-    const r = buildBot({ name: nick, color: col, weapon: 'rifle', skill: 1 }); r.remote = true; r.root.visible = true;
-    const sn = rifleTP('sniper'); sn.visible = false; r.gun.add(sn); r.gunSniper = sn; r.gunRifle = r.gun.children[0];
+    const r = buildBot({ name: nick, color: col, weapon: 'carbine', skill: 1 }); r.remote = true; r.root.visible = true;
     NET.opp = r; NET.oppPeer = p.peer; NET.last = { shot: pr.sh | 0, hit: pr.hs | 0, nade: pr.ns | 0, dead: !!pr.dd, D: pr.D | 0 }; NET.snaps = [];
     r.dead = !!pr.dd; targetsDirty = true;
     kfeedText(`${nick} joined the match`); banner('1 V 1', `vs ${nick} · first to ${ONLINE_KILLS}`); sfx.wave(); updateHud();
@@ -2313,27 +2613,27 @@ function netReceive(pr) {
   const now = performance.now();
   NET.snaps.push({ t: now, x: +pr.x[0], y: +pr.x[1], z: +pr.x[2], yaw: +pr.yw, pitch: +pr.pt }); if (NET.snaps.length > 20) NET.snaps.shift();
   r.netCrouch = +pr.cr || 0; r.netGround = !!pr.g; r.reload = pr.rl ? 1 : 0; r.shield = +pr.sd || 0; r.hp = clamp(+pr.hp || 0, 0, 100); r.kills = pr.K | 0; r.score = (pr.K | 0) * 100; r.shots = pr.sF | 0; r.hits = pr.sH | 0; r.headHits = pr.sHH | 0;
-  const w = pr.w === 2 ? 'knife' : pr.w === 1 ? 'sniper' : 'rifle';
-  if (r.netW !== w) { r.netW = w; r.gunRifle.visible = w === 'rifle'; r.gunSniper.visible = w === 'sniper'; }
+  const w = NET_W[pr.w | 0] || 'carbine';
+  if (r.netW !== w) { r.netW = w; if (w !== 'knife') { r.gun.remove(r.gunInner); r.gunInner = rifleTP(w); r.gun.add(r.gunInner); r.muzzle.position.copy(r.gunInner.userData.muzzle || r.muzzle.position); } }
   if (typeof pr.pe === 'number' && pr.pe === NET.pingSent) { NET.rtt = Date.now() - pr.pe; NET.pingSent = -1; }
   NET.echo = pr.pg;
   // their shots: tracer, muzzle flash and sound
   if ((pr.sh | 0) > NET.last.shot && Array.isArray(pr.sx)) {
     NET.last.shot = pr.sh | 0; r.flashT = .05; r.shotKick = 1; r.firedT = 1.4;
     const a = _v1.set(+pr.sx[0], +pr.sx[1], +pr.sx[2]), b = _v2.set(+pr.sx[3], +pr.sx[4], +pr.sx[5]);
-    tracer(a, b, pr.w === 1 ? new THREE.Color(5, 6, 9) : new THREE.Color(r.color.r * 4 + 1, r.color.g * 4 + 1, r.color.b * 4 + 1), pr.w === 1 ? .035 : .022, pr.w === 1 ? .14 : .06);
-    sfx.botShot(a.clone(), pr.w === 1);
+    const ww = WEAPONS[NET_W[pr.w | 0]] || WEAPONS.carbine; tracer(a, b, new THREE.Color(...(ww.tracer || [5, 3.6, 2.2])), ww.beam ? .07 : ww.oneShot ? .035 : .022, ww.beam ? .3 : ww.oneShot ? .14 : .06);
+    sfx.botShot(a.clone(), NET_W[pr.w | 0]);
     for (let i = 0; i < 3; i++) FX.spawn(b, rand(-2, 2), rand(0, 3), rand(-2, 2), 6, 3.2, 1.2, .03, .2, 14, 1);
   }
   // their hits on you (they aimed at you on their screen: shooter-side hit detection)
   if (Array.isArray(pr.hl)) for (const h of pr.hl) {
     if (!h || (h.s | 0) <= NET.last.hit) continue; NET.last.hit = h.s | 0;
-    if (state === 'play' && !P.dead) hurtPlayer(clamp(+h.a || 0, 0, 250), r.root.position, r, !!h.h, ['rifle', 'sniper', 'knife', 'nade'][h.w | 0] || 'rifle');
+    if (state === 'play' && !P.dead) hurtPlayer(clamp(+h.a || 0, 0, 250), r.root.position, r, !!h.h, NET_W[h.w | 0] || 'carbine');
   }
-  if ((pr.ns | 0) > NET.last.nade && Array.isArray(pr.nv)) { NET.last.nade = pr.ns | 0; throwNade(r, new THREE.Vector3(+pr.nv[0], +pr.nv[1], +pr.nv[2]), new THREE.Vector3(+pr.nv[3], +pr.nv[4], +pr.nv[5])); }
+  if ((pr.ns | 0) > NET.last.nade && Array.isArray(pr.nv)) { NET.last.nade = pr.ns | 0; const f = new THREE.Vector3(+pr.nv[0], +pr.nv[1], +pr.nv[2]), v = new THREE.Vector3(+pr.nv[3], +pr.nv[4], +pr.nv[5]); if (pr.nv[6]) launchRocket(r, f, v.normalize()); else throwNade(r, f, v); }
   // deaths are decided by the victim and reported here
   if (pr.dd && !r.dead) {
-    const self = pr.kb === 's', w2 = ['rifle', 'sniper', 'knife', 'nade'][pr.kw | 0] || 'rifle';
+    const self = pr.kb === 's', w2 = NET_W[pr.kw | 0] || 'carbine';
     r.deaths = pr.D | 0;
     if (!self) { PLAYER_ENT.kills++; PLAYER_ENT.streak++; PLAYER_ENT.score += 100 + (pr.kh ? 50 : 0); if (pr.kh) PLAYER_ENT.heads++; announceStreak(PLAYER_ENT); }
     kfeed(self ? null : PLAYER_ENT, r, w2, !!pr.kh);
@@ -2343,7 +2643,7 @@ function netReceive(pr) {
     if (PLAYER_ENT.kills >= KILL_LIMIT) setTimeout(() => endMatch(PLAYER_ENT), 1200);
     updateHud();
   } else if (!pr.dd && r.dead) {
-    r.dead = false; r.root.visible = true; r.gun.visible = true; r.hp = 100; r.visor.emissive.copy(r.color); r.act.death.stop(); r.act.death.w = 0; r.act.death.setEffectiveWeight(0); NET.snaps = []; targetsDirty = true;
+    r.dead = false; r.root.visible = true; r.gun.visible = true; r.hp = 100; r.visor.emissive.copy(r.color); for (const m of [r.body, r.visor]) { m.opacity = 1; m.transparent = false; m.depthWrite = true; m.needsUpdate = true; } r.body.emissive.setRGB(0, 0, 0); r.act.death.stop(); r.act.death.w = 0; r.act.death.setEffectiveWeight(0); NET.snaps = []; targetsDirty = true;
   }
 }
 // what the other player needs to draw you: absolute state, every frame (the platform coalesces to ~30 Hz)
@@ -2354,13 +2654,13 @@ function netSend(dt) {
   const R2 = v => Math.round(v * 100) / 100;
   const st = {
     v: 1, n: NET.nick, c: NET.color | 0, x: [R2(P.pos.x), R2(P.pos.y), R2(P.pos.z)], yw: R2(P.yaw + Math.PI), pt: R2(P.pitch), cr: R2(P.crouch), g: P.onGround ? 1 : 0,
-    w: P.weapon === 'knife' ? 2 : P.weapon === 'sniper' ? 1 : 0, rl: P.reload > 0 ? 1 : 0, hp: Math.round(P.hp), sd: R2(P.shield), dd: P.dead ? 1 : 0, D: PLAYER_ENT.deaths, K: PLAYER_ENT.kills,
+    w: Math.max(0, NET_W.indexOf(P.weapon)), rl: P.reload > 0 ? 1 : 0, hp: Math.round(P.hp), sd: R2(P.shield), dd: P.dead ? 1 : 0, D: PLAYER_ENT.deaths, K: PLAYER_ENT.kills,
     kb: P.killer ? 'o' : 's', kw: NET.killW | 0, kh: NET.killH ? 1 : 0, sF: G.fired | 0, sH: G.hits | 0, sHH: G.headHits | 0, sh: NET.seq.shot, sx: NET.shot || null, hs: NET.seq.hit, hl: NET.hits, ns: NET.seq.nade, nv: NET.nade || null, pg: NET.pingTag || 0, pe: NET.echo ?? null };
   NET.room.presence(st).catch(() => {});
 }
 function netShot(from, to) { if (!NET.on) return; NET.seq.shot++; const R2 = v => Math.round(v * 100) / 100; NET.shot = [R2(from.x), R2(from.y), R2(from.z), R2(to.x), R2(to.y), R2(to.z)]; }
-function netHit(dmg, crit, weapon) { NET.seq.hit++; NET.hits.push({ s: NET.seq.hit, a: Math.round(dmg), h: crit ? 1 : 0, w: ['rifle', 'sniper', 'knife', 'nade'].indexOf(weapon) }); if (NET.hits.length > 6) NET.hits.shift(); }
-function netNade(from, v) { if (!NET.on) return; NET.seq.nade++; const R2 = x => Math.round(x * 100) / 100; NET.nade = [R2(from.x), R2(from.y), R2(from.z), R2(v.x), R2(v.y), R2(v.z)]; }
+function netHit(dmg, crit, weapon) { NET.seq.hit++; NET.hits.push({ s: NET.seq.hit, a: Math.round(dmg), h: crit ? 1 : 0, w: Math.max(0, NET_W.indexOf(weapon)) }); if (NET.hits.length > 6) NET.hits.shift(); }
+function netNade(from, v, rocket) { if (!NET.on) return; NET.seq.nade++; const R2 = x => Math.round(x * 100) / 100; NET.nade = [R2(from.x), R2(from.y), R2(from.z), R2(v.x), R2(v.y), R2(v.z), rocket ? 1 : 0]; }
 // draw the opponent ~100 ms in the past, interpolated between received states: smooth motion despite network jitter
 function updateRemote(r, dt) {
   const S = NET.snaps, t = performance.now() - (NET.room && NET.room.name && String(NET.room.name).startsWith('sector9-duel') ? 70 : 100);
@@ -2375,21 +2675,21 @@ function updateRemote(r, dt) {
     p.set(nx, ny, nz);
     r.aimYaw = a.yaw + wrapPi(b.yaw - a.yaw) * k; r.aimPitch = lerp(a.pitch, b.pitch, k);
   }
-  if (r.dead) { if (r.preQ) [r.B.hips, r.B.spine, r.B.spine1, r.B.spine2, r.B.neck].forEach((b, i) => b && b.quaternion.copy(r.preQ[i])); r.preQ = null; r.deadT += dt; r.mixer.update(dt); r.gun.visible = r.deadT < .25; if (r.deadT > 3) r.root.visible = false; return; }
+  if (r.dead) { if (r.preQ) [r.B.hips, r.B.spine, r.B.spine1, r.B.spine2, r.B.neck].forEach((b, i) => b && b.quaternion.copy(r.preQ[i])); r.preQ = null; r.deadT += dt; r.mixer.update(dt); r.gun.visible = r.deadT < .25; derez(r); return; }
   r.crouch = damp(r.crouch, r.netCrouch || 0, 12, dt); r.onGround = r.netGround !== false; r.targetVis = true; r.lastSeenT = G.time; r.mode = 'fight';
   r.firedT -= dt; r.flashT -= dt; r.shotKick = Math.max(0, r.shotKick - dt * 9);
   NET.losT -= dt; if (NET.losT <= 0) { NET.losT = .2; r.seesPlayer = !P.dead && lineOfSight(entEye(r, _a1), _a2.set(P.pos.x, P.pos.y + P.camY, P.pos.z)); }
   animateBot(r, dt);
-  if (r.netW === 'knife') r.gun.visible = false;
+  r.gun.visible = r.netW !== 'knife';
 }
 function startOnlineMatch() {
   clearDynamic(); while (robots.length) removeRobot(robots[0]); NET.opp = null; NET.oppPeer = null;
   KILL_LIMIT = ONLINE_KILLS;
   Object.assign(PLAYER_ENT, { kills: 0, deaths: 0, score: 0, heads: 0, streak: 0, name: 'You' });
   resetPlayer(); P.pos.copy(pickSpawn(PLAYER_ENT)); P.yaw = Math.atan2(P.pos.x, P.pos.z); P.shield = 2;
-  setModel('carbine'); if (station) station.cd = 0;
+  setModel(P.weapon); if (station) station.cd = 0;
   for (const p of PADS) { p.ready = true; p.t = 0; p.item.visible = true; }
-  Object.assign(G, { time: 0, matchT: MATCH_TIME, ended: false, endT: 0, score: 0, kills: 0, heads: 0, fired: 0, hits: 0, headHits: 0, dmg: 0, bestStreak: 0, combo: 0, comboT: 0, multi: 0, multiT: 0, heartT: 0 });
+  Object.assign(G, { firstBlood: false, time: 0, matchT: MATCH_TIME, ended: false, endT: 0, score: 0, kills: 0, heads: 0, fired: 0, hits: 0, headHits: 0, dmg: 0, bestStreak: 0, combo: 0, comboT: 0, multi: 0, multiT: 0, heartT: 0 });
   NET.last.dead = false; NET.hits = []; NET.killW = 0; NET.killH = false;
   $('feed').innerHTML = ''; $('kfeed').innerHTML = ''; updateHud(true);
   banner('WAITING', `Room ${NET.code} · send your friend the link`);
@@ -2480,8 +2780,8 @@ function updatePlayer(dt, rdt) {
   wish.set(0, 0, 0);
   if (keys.KeyW) wish.add(fwd); if (keys.KeyS) wish.sub(fwd); if (keys.KeyD) wish.add(right); if (keys.KeyA) wish.sub(right);
   const sprint = (keys.ShiftLeft || keys.ShiftRight) && keys.KeyW && !keys.KeyS && P.reload <= 0 && !adsHeld && !crouching && P.onGround;
-  P.sprint = sprint;
-  let speed = sprint ? 8.8 : 5.6; speed = lerp(speed, 3.0, P.ads); speed = lerp(speed, 2.8, P.crouch); if (P.odT > 0) speed *= 1.25; if (P.weapon === 'knife') speed *= 1.12;
+  P.sprint = !!sprint;
+  let speed = (sprint ? 8.8 : 5.6) * (W().move || 1); speed = lerp(speed, 3.0, P.ads); speed = lerp(speed, 2.8, P.crouch); if (P.odT > 0) speed *= 1.25; if (P.weapon === 'knife') speed *= 1.12;
   if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(speed);
   const accel = P.onGround ? 11 : 1.6;
   if (P.slideT > 0) { P.vel.x = damp(P.vel.x, 0, 1.3, dt); P.vel.z = damp(P.vel.z, 0, 1.3, dt); }
@@ -2538,7 +2838,7 @@ function updatePlayer(dt, rdt) {
     const d = Math.hypot(p.m.position.x - P.pos.x, p.m.position.z - P.pos.z);
     if (d < 4 && d > .2) { p.m.position.x += (P.pos.x - p.m.position.x) * Math.min(1, dt * 3 / d); p.m.position.z += (P.pos.z - p.m.position.z) * Math.min(1, dt * 3 / d); }
     if (d < 1.2 && Math.abs(p.m.position.y - (P.pos.y + .5)) < 1.8) {
-      if (p.kind === 'ammo') { addAmmo('carbine', 90); addAmmo('sniper', 6); feed('Ammo +90 · sniper +6'); } else { P.hp = Math.min(100, P.hp + 45); feed('Med kit +45'); }
+      if (p.kind === 'ammo') { for (const id of LOADOUT) addAmmo(id, WEAPONS[id].mag * 3); feed('Ammo resupplied'); } else { P.hp = Math.min(100, P.hp + 45); feed('Med kit +45'); }
       sfx.pickup(); scene.remove(p.m); pickups.splice(i, 1); updateHud(); continue;
     }
     if (p.life <= 0) { scene.remove(p.m); pickups.splice(i, 1); }
@@ -2582,7 +2882,7 @@ function updateCamera(dt, rdt) {
   const sh = reduceMotion ? 0 : P.trauma * P.trauma, t = performance.now() / 1000;
   camera.position.set(P.pos.x, P.smoothY + Math.sin(P.bob * 2) * .04 * bobAmt + land * .12, P.pos.z);
   camera.rotation.set(P.pitch + kick * .05 + sh * .03 * Math.sin(t * 37), P.yaw + sh * .03 * Math.sin(t * 29 + 1.3), Math.sin(P.bob) * .008 * bobAmt + sh * .04 * Math.sin(t * 23 + 2.1) - P.crouch * .02);
-  const scopedK = P.weapon === 'sniper' ? clamp((P.ads - .75) / .25, 0, 1) : 0;
+  const scopedK = W().scope ? clamp((P.ads - .75) / .25, 0, 1) : 0;
   if (scopedK > 0) { const sw = (1 - P.crouch * .6) * .0022 * scopedK; camera.rotation.x += Math.sin(t * .9) * sw; camera.rotation.y += Math.sin(t * .63 + 1) * sw * 1.3; }
   const fovT = lerp(P.sprint ? 84 : 78, W().adsFov, P.ads);
   P.fov = damp(P.fov, fovT, 12, rdt);
@@ -2626,7 +2926,7 @@ function updateViewmodel(dt) {
   reticle.visible = ads > .5;
   gunRear.visible = ads < .6;
   updateGunFx(dt);
-  const scoped = P.weapon === 'sniper' && ads > .85;
+  const scoped = !!W().scope && ads > .85;
   gun.visible = !scoped; setStyle($('scope'), 'opacity', scoped ? '1' : '0');
 }
 
@@ -2717,7 +3017,7 @@ function moveBot(r, dt) {
   r.strafeT -= dt; r.dashCd -= dt; r.jumpCd -= dt; r.nadeCd -= dt; r.coverCd -= dt;
   if (r.mode === 'fight' && r.target) {
     const tp = entPos(r.target), dx = tp.x - p.x, dz = tp.z - p.z, dist = Math.hypot(dx, dz) || 1, fx = dx / dist, fz = dz / dist;
-    const pref = r.weapon === 'sniper' ? 26 : 13;
+    const pref = { sniper: 26, wasp: 9, breacher: 5, carbine: 13 }[r.weapon] || 13;
     if (r.strafeT <= 0) {
       // like a person: strafe one way for a while, sometimes plant your feet to aim
       r.strafeT = rand(1.2, 2.6); if (Math.random() < .5) r.strafeDir *= -1;
@@ -2842,7 +3142,17 @@ function animateBot(r, dt) {
   r.flash.visible = r.flashT > 0; if (r.flash.visible) r.flash.material.rotation = rand(0, 6.28);
   // shield shimmer, hit flash
   r.shield = Math.max(0, r.shield - dt); r.bubble.visible = r.shield > 0;
-  if (r.hitT > .25) r.body.emissive.setRGB(.8, .7, .6); else r.body.emissive.setRGB(0, 0, 0);
+  if (r.hitT > .25) r.body.emissive.setRGB(.8, .7, .6); else if (!r.dead) r.body.emissive.setRGB(0, 0, 0);
+}
+// a dead operator's armour breaks down into drifting light in their colour
+const _dz = new THREE.Vector3();
+function derez(r) {
+  const t = r.deadT;
+  if (t < 1.25) return;
+  const k = clamp((t - 1.25) / 1.1, 0, 1);
+  for (const m of [r.body, r.visor]) { if (!m.transparent) { m.transparent = true; m.depthWrite = false; m.needsUpdate = true; } m.opacity = 1 - k; m.emissive.copy(r.color).multiplyScalar(2.5 * (1 - k * .6)); }
+  if (k < 1 && camera.position.distanceTo(r.root.position) < 60) for (let i = 0; i < 6; i++) { const bs = r.meshes[(Math.random() * r.meshes.length) | 0]; bs.getWorldPosition(_dz); _dz.x += rand(-.15, .15); _dz.z += rand(-.15, .15); FX.spawn(_dz, rand(-.3, .3), rand(.8, 2.2), rand(-.3, .3), r.color.r * 3, r.color.g * 3, r.color.b * 3, rand(.03, .06), rand(.5, 1), -1.2, 1.5, 0); }
+  if (k >= 1) r.root.visible = false;
 }
 function updateDeadBot(r, dt) {
   if (r.preQ) [r.B.hips, r.B.spine, r.B.spine1, r.B.spine2, r.B.neck].forEach((b, i) => b && b.quaternion.copy(r.preQ[i]));
@@ -2850,8 +3160,7 @@ function updateDeadBot(r, dt) {
   const p = r.root.position;
   if (r.deadT < .6) { p.x += r.deathVel.x * dt * (1 - r.deadT / .6); p.z += r.deathVel.z * dt * (1 - r.deadT / .6); if (blocked(p.x, p.z, p.y, .3, 1)) r.deathVel.multiplyScalar(-.3); }
   r.gun.visible = r.deadT < .25;
-  if (r.deadT > 2.6) p.y -= dt * .7;
-  if (r.deadT > 3.4) r.root.visible = false;
+  derez(r);
   if (r.deadT > r.respawnT) respawnBot(r);
 }
 function updateRobots(dt, menu) {
@@ -2927,6 +3236,10 @@ function menuScene() { clearDynamic(); state = 'menu'; Object.assign(G, { time: 
 function play() { initAudio(); startMatch(); setState('play'); lock(); }
 function resume() { initAudio(); setState(P.dead ? 'dead' : 'play'); lock(); }
 $('btnPlay').addEventListener('click', play); $('btnNext').addEventListener('click', () => { if (NET.on) { initAudio(); startOnlineMatch(); setState('play'); lock(); } else play(); }); $('btnResume').addEventListener('click', resume);
+$('btnArsenal').addEventListener('click', openArsenal); $('btnArsenal2').addEventListener('click', openArsenal);
+$('btnArsClose').addEventListener('click', () => { $('arsenal').hidden = true; });
+$('arsSlots').addEventListener('click', e => { const b = e.target.closest('[data-slot]'); if (b) { arsenalSlot = +b.dataset.slot; renderArsenal(); } });
+$('arsGrid').addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (b) pickWeapon(b.dataset.id); });
 $('btnOnline').addEventListener('click', () => { const p = $('onlinePanel'); p.hidden = !p.hidden; if (!p.hidden) { $('nick').value = NET.nick; $('nick').focus(); } });
 async function enterRoom(nick, code, resume) {
   const msg = $('onlineMsg'); msg.className = 'note';
@@ -2993,13 +3306,14 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyG' && !e.repeat && P.nades > 0) P.nadeHold = performance.now();
   if (e.code === 'KeyF' && !e.repeat) overdrive();
   if (e.code === 'Tab') { e.preventDefault(); $('board').innerHTML = boardHTML(); $('board').hidden = false; }
-  if (e.code === 'Digit1') switchWeapon('carbine');
-  if (e.code === 'Digit2') switchWeapon('sniper');
+  if (e.code === 'Digit1') switchWeapon(LOADOUT[0]);
+  if (e.code === 'Digit2') switchWeapon(LOADOUT[1]);
   if (e.code === 'Digit3') switchWeapon('knife');
-  if (e.code === 'KeyQ') switchWeapon(P.weapon === 'carbine' ? 'sniper' : 'carbine');
+  if (e.code === 'KeyQ') switchWeapon(P.weapon === LOADOUT[0] ? LOADOUT[1] : LOADOUT[0]);
   if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
   if (e.code === 'Escape' && noLock) setState('paused');
 });
+addEventListener('wheel', e => { if (state !== 'play') return; const cyc = [LOADOUT[0], LOADOUT[1], 'knife'], i = cyc.indexOf(P.weapon); switchWeapon(cyc[(i + (e.deltaY > 0 ? 1 : 2)) % 3]); }, { passive: true });
 addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'KeyG' && P.nadeHold) { const c = (performance.now() - P.nadeHold) / 1000; P.nadeHold = 0; throwPlayerNade(c); } if (e.code === 'Tab') $('board').hidden = true; });
 addEventListener('blur', () => { if (state === 'play') { for (const k in keys) keys[k] = false; mouseDown = false; adsHeld = false; if (noLock) setState('paused'); } });
 addEventListener('contextmenu', e => { if (state === 'play' || e.target === renderer.domElement) e.preventDefault(); });
@@ -3031,11 +3345,11 @@ function frame(now) {
   if (state === 'play') {
     G.time += dt; G.matchT -= dt; if (G.matchT <= 0 && !G.ended) endMatch(standings()[0]);
     updatePlayer(dt, sdt); updateCamera(dt, sdt); updateViewmodel(sdt);
-    const tb = performance.now(); updateRobots(dt, false); perf.bots = lerp(perf.bots || 0, performance.now() - tb, .05); updatePads(dt); updateNades(dt);
+    const tb = performance.now(); updateRobots(dt, false); perf.bots = lerp(perf.bots || 0, performance.now() - tb, .05); updatePads(dt); updateNades(dt); updateRockets(dt);
     G.comboT -= dt; if (G.comboT <= 0) G.combo = 0; G.multiT -= dt; if (G.multiT <= 0) G.multi = 0;
   } else if (state === 'dead') {
     G.time += dt; G.matchT -= dt; P.dieT += rdt;
-    updateRobots(dt, false); updatePads(dt); updateNades(dt);
+    updateRobots(dt, false); updatePads(dt); updateNades(dt); updateRockets(dt);
     const kl = P.killer && !P.killer.dead ? P.killer.root.position : null;
     if (P.dieT < 1.2 || !kl) { camera.position.y = damp(camera.position.y, P.pos.y + .4, 4, rdt); camera.rotation.z = damp(camera.rotation.z, .7, 3, rdt); camera.rotation.x = damp(camera.rotation.x, -.25, 3, rdt); }
     else { camera.position.lerp(_v1.set(P.pos.x, P.pos.y + 2.4, P.pos.z), .08); camera.lookAt(kl.x, kl.y + 1.3, kl.z); if (camera.fov !== 45) { camera.fov = 45; camera.updateProjectionMatrix(); } }
@@ -3056,6 +3370,7 @@ function frame(now) {
   if (state !== 'paused') { updateDebris(dt); FX.update(dt); SMOKE.update(dt); }
   // HUD effects
   if (NET.on && NET.opp && state === 'paused') updateRobots(dt, false);
+  if (badgeT > 0) badgeT -= rdt;
   if (state === 'play' || state === 'dead') {
     updateAbilities(); updateTags(); if (!$('board').hidden && frames % 20 === 0) $('board').innerHTML = boardHTML();
     hmT -= rdt; const hm = $('hm'); setStyle(hm, 'opacity', hmT > 0 ? '1' : '0'); setStyle(hm, 'transform', `scale(${hmT > 0 ? 1 + hmT * (hmKill ? 1.2 : 1.5) : 1})`);
@@ -3096,6 +3411,7 @@ async function boot() {
   gunScene.remove(gun);
   WM.carbine = Object.assign(buildRifleVM('carbine'), { hip: new THREE.Vector3(.2, -.235, -.44), adsPos: ADS_POS.clone() });
   WM.sniper = Object.assign(buildRifleVM('sniper'), { hip: new THREE.Vector3(.21, -.24, -.48), adsPos: new THREE.Vector3(0, -.1075 * GUN_SCALE, -.3) });
+  for (const id of ['wasp', 'breacher', 'helix', 'nova', 'pistol']) WM[id] = buildGunVM(id);
   WM.knife = buildKnifeVM();
   buildStation(); buildNav(); buildPads(); mergeStatic();
   FX = makeParticles(3500, true); SMOKE = makeParticles(800, false); DUST = makeDust();
@@ -3106,7 +3422,7 @@ async function boot() {
   const cg = new THREE.CylinderGeometry(.006, .006, .03, 8), cm = new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 1, roughness: .25 });
   for (let i = 0; i < 40; i++) { const m = new THREE.Mesh(cg, cm); m.visible = false; scene.add(m); casings.push({ m, v: V3(), av: V3(), life: 0 }); }
   for (let i = 0; i < 1; i++) { const l = new THREE.PointLight(0xffaa55, 0, 10, 2); scene.add(l); flashLights.push(l); }
-  resetPlayer(); setModel('carbine'); Object.assign(G, { time: 0, matchT: MATCH_TIME, score: 0, kills: 0, heads: 0, fired: 0, hits: 0, combo: 0, comboT: 0, multi: 0, multiT: 0 });
+  resetPlayer(); setModel(P.weapon); Object.assign(G, { time: 0, matchT: MATCH_TIME, score: 0, kills: 0, heads: 0, fired: 0, hits: 0, combo: 0, comboT: 0, multi: 0, multiT: 0 });
   for (const sc of [scene, gunScene]) sc.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { if (m.envMapIntensity !== undefined) m.envMapIntensity *= .55; }); });
   applyQuality(); syncSettings(); showBest();
   menuScene(); setState('menu');
@@ -3114,7 +3430,7 @@ async function boot() {
   try { const sv = JSON.parse(localStorage.getItem('sector9-room') || 'null'); if (sv && sv.code && sv.nick && Date.now() - sv.t < 3 * 3600e3) { $('onlinePanel').hidden = false; $('nick').value = sv.nick; $('roomCode').value = sv.code; enterRoom(sv.nick, sv.code, sv).then(ok => { if (ok) setState('play'); }); } } catch (e) {}
   $('loading').remove();
   requestAnimationFrame(t => { last = t; frame(t); });
-  window.__s9 = { P, G, robots, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT };
+  window.__s9 = { P, G, robots, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS };
 }
 requestAnimationFrame(() => setTimeout(boot, 30));
 })();
