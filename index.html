@@ -1249,7 +1249,7 @@ function initAudio() {
   if (AU.ctx) { if (AU.ctx.state === 'suspended') AU.ctx.resume(); return; }
   try {
     const c = new (window.AudioContext || window.webkitAudioContext)(); AU.ctx = c;
-    const comp = c.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 5; comp.attack.value = .002; comp.release.value = .18; comp.connect(c.destination);
+    const comp = c.createDynamicsCompressor(); comp.threshold.value = -9; comp.knee.value = 10; comp.ratio.value = 3; comp.attack.value = .003; comp.release.value = .3; comp.connect(c.destination);
     AU.master = c.createGain(); AU.master.gain.value = CFG.vol; AU.master.connect(comp);
     AU.dry = c.createGain(); AU.dry.connect(AU.master);
     const ir = (dur, decay) => { const len = c.sampleRate * dur, b = c.createBuffer(2, len, c.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); } return b; };
@@ -1264,7 +1264,16 @@ function initAudio() {
     ws.connect(wf); wf.connect(wg); wg.connect(AU.master); ws.start();
   } catch (e) { AU.ctx = null; }
 }
+const VOICES = { bot: [0, 0, 9], step: [0, 0, 5], impact: [0, 0, 6], whiz: [0, 0, 3], misc: [0, 0, 8] };
+function voice(kind, pos) {
+  if (!AU.ctx) return false;
+  if (pos && camera.position.distanceTo(pos) > 55) return false;
+  const v = VOICES[kind] || VOICES.misc, now = AU.ctx.currentTime;
+  if (now - v[0] >= .5) { v[0] = now; v[1] = 0; }
+  if (v[1] >= v[2] / 2) return false; v[1]++; return true;
+}
 function bus({ pos = null, verb = 0, echo = 0, ref = 4, vol = 1 } = {}) {
+  AU.count = (AU.count || 0) + 1;
   const c = AU.ctx, g = c.createGain(); g.gain.value = vol; let out = g;
   if (pos) {
     const p = c.createPanner(); p.panningModel = 'equalpower'; p.distanceModel = 'inverse'; p.refDistance = ref; p.rolloffFactor = 1.1; p.maxDistance = 120;
@@ -1307,8 +1316,8 @@ const sfx = {
   enemyShot(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, verb: .35, echo: .25, ref: 5 });
     osc(d, t, .12, 'sawtooth', 1300, 260, .35); nz(d, t, .1, 'bandpass', 1800, 2, .6); osc(d, t, .08, 'sine', 180, 60, .5); },
   charge(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 4 }); osc(d, t, .45, 'sine', 500, 1500, .12, .3); },
-  whiz(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 2 }); nz(d, t, .18, 'bandpass', 3200, 4, .6, .03, 900); },
-  impact(pos, metal) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 3, vol: .55 });
+  whiz(pos) { if (!voice('whiz', pos)) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 2 }); nz(d, t, .18, 'bandpass', 3200, 4, .6, .03, 900); },
+  impact(pos, metal) { if (!voice('impact', pos)) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 3, vol: .55 });
     if (metal) { osc(d, t, .12, 'square', rand(1800, 2600), 1400, .06); nz(d, t, .06, 'bandpass', 3500, 5, .3); } else nz(d, t, .08, 'bandpass', 900, 1.2, .35); },
   hurt() { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, .16, 'lowpass', 420, 1, .7); osc(AU.dry, t, .18, 'sine', 110, 55, .5); nz(AU.dry, t, .05, 'bandpass', 3000, 3, .2); },
   step(sprint, land, crouch) { if (!AU.ctx) return; const t = AU.ctx.currentTime; const v = (land ? 1 : sprint ? .75 : .55) * (crouch ? .45 : 1), d = bus({ verb: .08, vol: v }), p = rand(.9, 1.1);
@@ -1319,21 +1328,21 @@ const sfx = {
   sniper() { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ verb: .55, echo: .45 });
     nz(d, t, .035, 'highpass', 3000, .7, .9); nz(d, t, .3, 'bandpass', 700, .7, 1.2, .001, 260); nz(d, t, .7, 'lowpass', 300, .7, .8, .004);
     osc(d, t, .3, 'sine', 120, 30, 1.4); osc(d, t, .03, 'square', 1800, 900, .08); },
-  robotStep(pos, heavy) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 3, vol: heavy ? .9 : .5 }); nz(d, t, .1, 'lowpass', heavy ? 260 : 420, 1, .6); osc(d, t, .06, 'square', heavy ? 90 : 140, 60, .05); },
+  robotStep(pos, heavy) { if (!voice('step', pos)) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 3, vol: heavy ? .9 : .5 }); nz(d, t, .1, 'lowpass', heavy ? 260 : 420, 1, .6); osc(d, t, .06, 'square', heavy ? 90 : 140, 60, .05); },
   spawn(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, verb: .5, ref: 6 }); osc(d, t, .6, 'sawtooth', 120, 900, .08, .4); nz(d, t + .4, .3, 'highpass', 1500, 1, .3); },
   pickup() { if (!AU.ctx) return; const t = AU.ctx.currentTime; osc(AU.dry, t, .09, 'triangle', 660, 990, .16); osc(AU.dry, t + .07, .12, 'triangle', 990, 1320, .16); },
   wave() { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ verb: .6, echo: .4 }); osc(d, t, 1.4, 'sawtooth', 110, 108, .09, .5); osc(d, t, 1.4, 'sawtooth', 110.8, 109, .09, .5); osc(d, t + .7, 1.2, 'sawtooth', 82.4, 82, .09, .4); },
   clear() { if (!AU.ctx) return; const t = AU.ctx.currentTime; [523, 659, 784, 1046].forEach((f, i) => osc(AU.dry, t + i * .09, .4, 'triangle', f, f, .12)); },
-  botShot(pos, kind) { if (!AU.ctx) return; const sniper = kind === true || kind === 'sniper' || kind === 'helix', sg = kind === 'breacher', smg = kind === 'wasp' || kind === 'pistol';
-    const t = AU.ctx.currentTime, d = bus({ pos, verb: .3, echo: .22, ref: 5, vol: sniper || sg ? 1.1 : smg ? .45 : .6 });
-    nz(d, t, .025, 'highpass', 3600, .7, .5); nz(d, t, sniper ? .4 : sg ? .35 : .14, 'bandpass', sniper ? 620 : sg ? 700 : (smg ? 1500 : 1100) * rand(.94, 1.06), .8, .95, .001, sniper ? 220 : 430); osc(d, t, sniper || sg ? .32 : .1, 'sine', sniper || sg ? 100 : 165, 38, sniper || sg ? 1.2 : .55); },
-  botStep(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 2.5, vol: .5 }); nz(d, t, .07, 'lowpass', 260, 1, .7); nz(d, t + .01, .04, 'bandpass', 2200, 1.5, .25); },
-  botDeath(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, verb: .4, ref: 5, vol: .7 }); nz(d, t, .5, 'lowpass', 700, .7, .8, .004, 120); osc(d, t, .4, 'sawtooth', 500, 60, .1); },
+  botShot(pos, kind) { if (!voice('bot', pos)) return; const sniper = kind === true || kind === 'sniper' || kind === 'helix', sg = kind === 'breacher', smg = kind === 'wasp' || kind === 'pistol';
+    const t = AU.ctx.currentTime, near = camera.position.distanceTo(pos) < 18, d = bus({ pos, verb: near ? .25 : 0, ref: 5, vol: sniper || sg ? 1.1 : smg ? .45 : .6 });
+    nz(d, t, sniper ? .4 : sg ? .35 : .14, 'bandpass', sniper ? 620 : sg ? 700 : (smg ? 1500 : 1100) * rand(.94, 1.06), .8, .95, .001, sniper ? 220 : 430); osc(d, t, sniper || sg ? .3 : .09, 'sine', sniper || sg ? 100 : 165, 38, sniper || sg ? 1.2 : .55); },
+  botStep(pos) { if (!voice('step', pos)) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 2.5, vol: .5 }); nz(d, t, .07, 'lowpass', 260, 1, .7); nz(d, t + .01, .04, 'bandpass', 2200, 1.5, .25); },
+  botDeath(pos) { if (!voice('misc', pos)) return; const t = AU.ctx.currentTime, d = bus({ pos, verb: .4, ref: 5, vol: .7 }); nz(d, t, .5, 'lowpass', 700, .7, .8, .004, 120); osc(d, t, .4, 'sawtooth', 500, 60, .1); },
   thrust() { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, .32, 'bandpass', 900, .8, .55, .01, 2600); osc(AU.dry, t, .25, 'sine', 90, 160, .35); },
   dash() { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, .28, 'bandpass', 1800, .9, .7, .005, 500); osc(AU.dry, t, .18, 'sawtooth', 220, 70, .12); },
   slide() { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, .7, 'bandpass', 1400, .6, .4, .02, 500); nz(AU.dry, t, .6, 'lowpass', 300, .8, .4, .02); },
   nadeThrow(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 3 }); nz(d, t, .15, 'bandpass', 1200, 1, .3, .03, 600); osc(d, t, .08, 'square', 1700, 1500, .05); },
-  nadeBounce(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 3, vol: .6 }); osc(d, t, .08, 'square', rand(1500, 2100), 1300, .07); nz(d, t, .05, 'bandpass', 3000, 4, .25); },
+  nadeBounce(pos) { if (!voice('misc', pos)) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 3, vol: .6 }); osc(d, t, .08, 'square', rand(1500, 2100), 1300, .07); nz(d, t, .05, 'bandpass', 3000, 4, .25); },
   explode(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, verb: .7, echo: .5, ref: 8, vol: 1.3 });
     nz(d, t, .04, 'highpass', 2500, .7, 1); nz(d, t, 1.4, 'lowpass', 1100, .7, 1.4, .003, 90); osc(d, t, .9, 'sine', 70, 24, 1.6); osc(d, t, .4, 'sawtooth', 300, 40, .25); nz(d, t + .05, .5, 'bandpass', 3200, 1, .35, .01, 900); },
   overdrive() { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ verb: .5 }); osc(d, t, .9, 'sawtooth', 110, 440, .16, .05); osc(d, t, .9, 'sawtooth', 111, 445, .16, .05); nz(d, t, .5, 'highpass', 2000, 1, .3, .2); },
@@ -1342,7 +1351,7 @@ const sfx = {
   spawnMe() { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ verb: .4 }); osc(d, t, .5, 'sine', 300, 900, .14, .1); nz(d, t + .3, .3, 'highpass', 2500, 1, .2); },
   knifeSwing(heavy) { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, heavy ? .3 : .2, 'bandpass', heavy ? 1300 : 2200, 1.2, .5, .03, heavy ? 500 : 900); osc(AU.dry, t, .12, 'sine', 900, 1800, .04); },
   knifeHit() { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, .12, 'bandpass', 3200, 3, .6); osc(AU.dry, t, .18, 'sawtooth', 1400, 300, .12); osc(AU.dry, t, .25, 'sine', 120, 50, .5); },
-  smg() { if (!AU.ctx) return; const t = AU.ctx.currentTime, p = rand(.95, 1.08), d = bus({ verb: .3, echo: .2, vol: .75 }); nz(d, t, .02, 'highpass', 4200, .7, .5); nz(d, t, .1, 'bandpass', 1500 * p, 1, .8, .001, 700); osc(d, t, .07, 'sine', 210 * p, 70, .7); osc(d, t, .03, 'square', 3200, 2000, .04); },
+  smg() { if (!AU.ctx) return; const t = AU.ctx.currentTime, p = rand(.95, 1.08), d = bus({ verb: .2, vol: .75 }); nz(d, t, .02, 'highpass', 4200, .7, .5); nz(d, t, .1, 'bandpass', 1500 * p, 1, .8, .001, 700); osc(d, t, .07, 'sine', 210 * p, 70, .7); osc(d, t, .03, 'square', 3200, 2000, .04); },
   shotgun() { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ verb: .55, echo: .4, vol: 1.2 }); nz(d, t, .04, 'highpass', 2600, .7, .9); nz(d, t, .45, 'lowpass', 700, .7, 1.4, .002, 120); osc(d, t, .35, 'sine', 95, 30, 1.6); osc(d, t, .12, 'sawtooth', 900, 120, .2); nz(d, t + .28, .05, 'bandpass', 2600, 4, .25); nz(d, t + .38, .06, 'bandpass', 1900, 4, .25); },
   rail() { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ verb: .7, echo: .5, vol: 1.1 }); osc(d, t, .5, 'sawtooth', 2400, 90, .3, .001); osc(d, t, .5, 'sine', 5200, 300, .12); nz(d, t, .3, 'bandpass', 3800, 2, .7, .001, 600); osc(d, t, .4, 'sine', 70, 30, 1.3); osc(d, t + .05, .8, 'sine', 880, 870, .06, .05); },
   pistol() { if (!AU.ctx) return; const t = AU.ctx.currentTime, p = rand(.96, 1.05), d = bus({ verb: .4, echo: .3, vol: .85 }); nz(d, t, .025, 'highpass', 3600, .7, .55); nz(d, t, .14, 'bandpass', 1300 * p, .9, .9, .001, 500); osc(d, t, .1, 'sine', 180 * p, 50, .9); osc(d, t, .04, 'triangle', 2400, 1800, .08); },
@@ -3430,7 +3439,7 @@ async function boot() {
   try { const sv = JSON.parse(localStorage.getItem('sector9-room') || 'null'); if (sv && sv.code && sv.nick && Date.now() - sv.t < 3 * 3600e3) { $('onlinePanel').hidden = false; $('nick').value = sv.nick; $('roomCode').value = sv.code; enterRoom(sv.nick, sv.code, sv).then(ok => { if (ok) setState('play'); }); } } catch (e) {}
   $('loading').remove();
   requestAnimationFrame(t => { last = t; frame(t); });
-  window.__s9 = { P, G, robots, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS };
+  window.__s9 = { P, G, robots, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS, AU, initAudio };
 }
 requestAnimationFrame(() => setTimeout(boot, 30));
 })();
