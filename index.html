@@ -2342,7 +2342,7 @@ function updateRemote(r, dt) {
     p.set(nx, ny, nz);
     r.aimYaw = a.yaw + wrapPi(b.yaw - a.yaw) * k; r.aimPitch = lerp(a.pitch, b.pitch, k);
   }
-  if (r.dead) { r.deadT += dt; r.mixer.update(dt); r.gun.visible = r.deadT < .25; if (r.deadT > 3) r.root.visible = false; return; }
+  if (r.dead) { if (r.preQ) [r.B.hips, r.B.spine, r.B.spine1, r.B.spine2, r.B.neck].forEach((b, i) => b && b.quaternion.copy(r.preQ[i])); r.preQ = null; r.deadT += dt; r.mixer.update(dt); r.gun.visible = r.deadT < .25; if (r.deadT > 3) r.root.visible = false; return; }
   r.crouch = damp(r.crouch, r.netCrouch || 0, 12, dt); r.onGround = r.netGround !== false; r.targetVis = true; r.lastSeenT = G.time; r.mode = 'fight';
   r.firedT -= dt; r.flashT -= dt; r.shotKick = Math.max(0, r.shotKick - dt * 9);
   NET.losT -= dt; if (NET.losT <= 0) { NET.losT = .2; r.seesPlayer = !P.dead && lineOfSight(entEye(r, _a1), _a2.set(P.pos.x, P.pos.y + P.camY, P.pos.z)); }
@@ -2781,7 +2781,11 @@ function animateBot(r, dt) {
   r.hitT = Math.max(0, r.hitT - dt); const hk = clamp(r.hitT / .35, 0, 1) * .75;
   for (const k in U) { const a = A[k]; a.w = damp(a.w, U[k], 14, dt); a.setEffectiveWeight(a.w * (1 - hk) < .01 ? 0 : a.w * (1 - hk)); }
   A.hit.setEffectiveWeight(hk);
+  // three.js skips writing a bone whose animated value didn't change, so undo last frame's aim twist first or it piles up every frame
+  const PB = [r.B.hips, r.B.spine, r.B.spine1, r.B.spine2, r.B.neck];
+  if (r.preQ) PB.forEach((b, i) => b && b.quaternion.copy(r.preQ[i])); else r.preQ = PB.map(() => new THREE.Quaternion());
   r.mixer.update(dt);
+  PB.forEach((b, i) => b && r.preQ[i].copy(b.quaternion));
   // procedural aim: twist the spine toward the aim yaw, bend it for pitch
   const twist = clamp(wrapPi(r.aimYaw - r.bodyYaw), -.7, .7) - r.legYaw;
   rotateBoneWorld(r.B.hips, UPV, r.legYaw);
@@ -2801,7 +2805,8 @@ function animateBot(r, dt) {
   if (r.hitT > .25) r.body.emissive.setRGB(.8, .7, .6); else r.body.emissive.setRGB(0, 0, 0);
 }
 function updateDeadBot(r, dt) {
-  r.deadT += dt; r.mixer.update(dt);
+  if (r.preQ) [r.B.hips, r.B.spine, r.B.spine1, r.B.spine2, r.B.neck].forEach((b, i) => b && b.quaternion.copy(r.preQ[i]));
+  r.deadT += dt; r.mixer.update(dt); r.preQ = null;
   const p = r.root.position;
   if (r.deadT < .6) { p.x += r.deathVel.x * dt * (1 - r.deadT / .6); p.z += r.deathVel.z * dt * (1 - r.deadT / .6); if (blocked(p.x, p.z, p.y, .3, 1)) r.deathVel.multiplyScalar(-.3); }
   r.gun.visible = r.deadT < .25;
