@@ -1675,6 +1675,7 @@ for (let i = 0; i < 10; i++) hpsegs.appendChild(document.createElement('i'));
 for (let i = 0; i < 30; i++) pips.appendChild(document.createElement('i'));
 function updateHud(force) {
   if (!P.pos) return;
+  if (NET.on && NET.code) try { localStorage.setItem('sector9-room', JSON.stringify({ nick: NET.nick, code: NET.code, t: Date.now(), k: PLAYER_ENT.kills, d: PLAYER_ENT.deaths })); } catch (e) {}
   const st = standings(), place = st.indexOf(PLAYER_ENT) + 1;
   setHTML('hPlace', `${place}<small>${ord(place).slice(String(place).length).toUpperCase()}</small>`);
   setText('hKD', `${PLAYER_ENT.kills} kills · ${PLAYER_ENT.deaths} deaths`);
@@ -2213,29 +2214,60 @@ function fakeRoom() {
   return api;
 }
 // direct browser-to-browser link: the first player in a room claims its id, the second connects to it
-function peerRoom(code) {
+let PeerLib = null;
+function loadPeerLib() {
+  const get = () => window.Peer || (window.peerjs && (window.peerjs.Peer || window.peerjs.default)) || null;
+  if (get()) return Promise.resolve(get());
+  return new Promise(res => {
+    let tries = 0;
+    const tick = () => { if (get()) return res(get()); if (++tries === 10) { const sc = document.createElement('script'); sc.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'; document.head.appendChild(sc); } if (tries > 60) return res(null); setTimeout(tick, 200); };
+    tick();
+  });
+}
+async function peerRoom(code) {
+  PeerLib = await loadPeerLib(); if (!PeerLib) return null;
+  return peerRoomInner(code);
+}
+function peerRoomInner(code) {
+  // first player in the room claims its id (host), the other connects to it; if either side drops or refreshes,
+  // both keep retrying in the background until they find each other again
   return new Promise(resolve => {
-    if (!window.Peer) return resolve(null);
-    const id = 'sector9-duel-' + code; let peer, conn = null, remote = null, handler = null, pending = null, pres = {}, done = false;
+    const Peer = PeerLib;
+    const id = 'sector9-duel-' + code; let peer = null, conn = null, remote = null, handler = null, pending = null, pres = {}, closed = false, isHost = false, timer = null, resolved = false;
     const meP = () => ({ peer: 'me', isMe: true, sameTab: true, kind: 'viewer', guest: false, by: null, presence: pres, updatedAt: Date.now() });
     const opP = () => remote ? [{ peer: 'opp', isMe: false, sameTab: false, kind: 'viewer', guest: false, by: null, presence: remote, updatedAt: Date.now() }] : [];
     const fire = (joined = [], left = []) => handler && handler({ peers: [meP(), ...opP()], joined, left, updated: [] });
     const send = () => { pending = null; if (conn && conn.open) try { conn.send(pres); } catch (e) {} };
-    const wire = c => { conn = c; c.on('data', d => { if (!d || typeof d !== 'object') return; const isNew = !remote; remote = d; fire(isNew ? opP() : [], []); }); c.on('close', () => { const p = opP(); remote = null; conn = null; fire([], p); }); c.on('open', send); };
+    const schedule = ms => { if (closed) return; clearTimeout(timer); timer = setTimeout(connect, ms); };
+    const drop = c => { if (c !== conn) return; const p = opP(); remote = null; conn = null; fire([], p); if (!isHost) schedule(1200); };
+    const wire = c => {
+      if (conn && conn !== c) { try { conn.close(); } catch (e) {} }
+      conn = c;
+      c.on('data', d => { if (c !== conn || !d || typeof d !== 'object') return; const isNew = !remote; remote = d; fire(isNew ? opP() : [], []); });
+      c.on('close', () => drop(c)); c.on('error', () => drop(c)); c.on('open', send);
+    };
+    const done = () => { if (!resolved) { resolved = true; resolve(api); } };
+    function connect() {
+      if (closed || (conn && conn.open)) return;
+      try { if (peer) peer.destroy(); } catch (e) {}
+      isHost = false;
+      const h = new Peer(id, { debug: 0 }); peer = h;
+      h.on('open', () => { isHost = true; done(); });
+      h.on('connection', c => { if (conn && conn.open) { c.on('open', () => c.close()); return; } wire(c); });
+      h.on('disconnected', () => { if (peer === h && !closed) try { h.reconnect(); } catch (e) {} });
+      h.on('error', e => {
+        if (peer !== h) return;
+        if (e.type !== 'unavailable-id') return schedule(2500);
+        try { h.destroy(); } catch (x) {}
+        const g = new Peer({ debug: 0 }); peer = g;
+        g.on('open', () => { done(); wire(g.connect(id, { reliable: false, serialization: 'json' })); setTimeout(() => { if (peer === g && !(conn && conn.open)) schedule(300); }, 5000); });
+        g.on('error', () => { if (peer === g) schedule(2000); });
+      });
+    }
     const api = { name: id, presence(patch) { pres = Object.assign({}, pres, patch); if (!pending) pending = setTimeout(send, 20); return Promise.resolve(); },
-      peers: () => [meP(), ...opP()], onPeers(h) { handler = h; setTimeout(() => fire([meP(), ...opP()], []), 0); return () => { handler = null; }; }, connected: () => true, leave() { try { peer.destroy(); } catch (e) {} return Promise.resolve(); } };
-    const ok = () => { if (!done) { done = true; resolve(api); } }, fail = () => { if (!done) { done = true; resolve(null); } };
-    setTimeout(fail, 12000);
-    peer = new Peer(id, { debug: 0 });
-    peer.on('open', ok);
-    peer.on('connection', c => { if (conn && conn.open) { c.on('open', () => c.close()); return; } wire(c); });
-    peer.on('error', e => {
-      if (e.type !== 'unavailable-id') return fail();
-      try { peer.destroy(); } catch (x) {}
-      peer = new Peer({ debug: 0 });
-      peer.on('open', () => { wire(peer.connect(id, { reliable: false, serialization: 'json' })); ok(); });
-      peer.on('error', fail);
-    });
+      peers: () => [meP(), ...opP()], onPeers(h) { handler = h; setTimeout(() => fire([meP(), ...opP()], []), 0); return () => { handler = null; }; }, connected: () => true,
+      leave() { closed = true; clearTimeout(timer); try { peer && peer.destroy(); } catch (e) {} return Promise.resolve(); } };
+    connect(); done(); // the room is usable right away; the link keeps (re)connecting in the background
   });
 }
 async function joinOnline(nick, code) {
@@ -2252,7 +2284,7 @@ async function joinOnline(nick, code) {
   named.onPeers(ch => { if (NET.room !== named) return; for (const p of ch.left) if (p.peer === NET.oppPeer) dropOpponent(true); onNetPeers(); });
   return null;
 }
-function leaveOnline() { if (NET.room) { try { NET.room.leave(); } catch (e) {} } NET.room = null; NET.on = false; if (NET.opp) dropOpponent(false); }
+function leaveOnline() { try { localStorage.removeItem('sector9-room'); } catch (e) {} if (NET.room) { try { NET.room.leave(); } catch (e) {} } NET.room = null; NET.on = false; if (NET.opp) dropOpponent(false); }
 function dropOpponent(announce) {
   const r = NET.opp; NET.opp = null; NET.oppPeer = null; NET.snaps = [];
   if (r) { const i = robots.indexOf(r); if (i >= 0) removeRobot(r); }
@@ -2317,6 +2349,7 @@ function netReceive(pr) {
 // what the other player needs to draw you: absolute state, every frame (the platform coalesces to ~30 Hz)
 function netSend(dt) {
   if (!NET.on || !NET.room) return;
+  NET.saveT = (NET.saveT || 0) - dt; if (NET.saveT <= 0) { NET.saveT = 2; try { localStorage.setItem('sector9-room', JSON.stringify({ nick: NET.nick, code: NET.code, t: Date.now(), k: PLAYER_ENT.kills, d: PLAYER_ENT.deaths })); } catch (e) {} }
   NET.pingT -= dt; if (NET.pingT <= 0) { NET.pingT = 1; NET.pingSent = Date.now(); NET.pingTag = NET.pingSent; }
   const R2 = v => Math.round(v * 100) / 100;
   const st = {
@@ -2462,6 +2495,13 @@ function updatePlayer(dt, rdt) {
   const nx = P.pos.x + P.vel.x * dt; if (!blocked(nx, P.pos.z, P.pos.y, .4, h)) P.pos.x = nx; else P.vel.x = 0;
   const nz2 = P.pos.z + P.vel.z * dt; if (!blocked(P.pos.x, nz2, P.pos.y, .4, h)) P.pos.z = nz2; else P.vel.z = 0;
   P.vel.y -= (P.dashT > 0 ? 6 : 20) * dt; P.pos.y += P.vel.y * dt;
+  // if anything ever leaves you inside a wall/object, step out to the closest free spot
+  if (blocked(P.pos.x, P.pos.z, P.pos.y, .38, h)) {
+    let found = false;
+    for (let rad = .25; rad <= 3.5 && !found; rad += .25) for (let a = 0; a < 16 && !found; a++) { const x = P.pos.x + Math.cos(a / 16 * 6.283) * rad, z = P.pos.z + Math.sin(a / 16 * 6.283) * rad; if (Math.abs(x) < HALF - .5 && Math.abs(z) < HALF - .5 && !blocked(x, z, P.pos.y, .4, h)) { P.pos.x = x; P.pos.z = z; found = true; } }
+    if (!found) { const c = nearestOk(cellOf(P.pos.x, P.pos.z), 20); if (c >= 0) { P.pos.set(cellX(c), NAV.h[c], cellZ(c)); P.vel.set(0, 0, 0); } }
+  }
+  P.pos.x = clamp(P.pos.x, -HALF + .45, HALF - .45); P.pos.z = clamp(P.pos.z, -HALF + .45, HALF - .45);
   const g = groundAt(P.pos.x, P.pos.z, P.pos.y, .4), wasAir = !P.onGround;
   if (P.pos.y <= g) {
     if (wasAir && P.vel.y < -4) { springs.land.v -= Math.min(2.2, -P.vel.y * .25); sfx.step(false, true); }
@@ -2888,16 +2928,22 @@ function play() { initAudio(); startMatch(); setState('play'); lock(); }
 function resume() { initAudio(); setState(P.dead ? 'dead' : 'play'); lock(); }
 $('btnPlay').addEventListener('click', play); $('btnNext').addEventListener('click', () => { if (NET.on) { initAudio(); startOnlineMatch(); setState('play'); lock(); } else play(); }); $('btnResume').addEventListener('click', resume);
 $('btnOnline').addEventListener('click', () => { const p = $('onlinePanel'); p.hidden = !p.hidden; if (!p.hidden) { $('nick').value = NET.nick; $('nick').focus(); } });
-$('btnJoin').addEventListener('click', async () => {
-  const nick = $('nick').value.trim().replace(/[^\p{L}\p{N}_ .-]/gu, '').slice(0, 16), code = $('roomCode').value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 20) || 'duel';
+async function enterRoom(nick, code, resume) {
   const msg = $('onlineMsg'); msg.className = 'note';
-  if (!nick) { msg.textContent = 'Type a nickname first.'; msg.className = 'note err'; return; }
+  if (!nick) { msg.textContent = 'Type a nickname first.'; msg.className = 'note err'; return false; }
   msg.textContent = 'Connecting...'; $('btnJoin').disabled = true; initAudio();
   let h = 0; for (const ch of nick) h = (h * 31 + ch.charCodeAt(0)) >>> 0; NET.color = h % 6;
   const err = await joinOnline(nick, code); $('btnJoin').disabled = false;
-  if (err) { msg.textContent = err; msg.className = 'note err'; return; }
+  if (err) { msg.textContent = err; msg.className = 'note err'; return false; }
   msg.textContent = `In room "${code}".`; $('hMode').textContent = `1v1 · Online · room ${code}`;
-  startOnlineMatch(); setState('play'); lock();
+  startOnlineMatch();
+  if (resume) { PLAYER_ENT.kills = resume.k | 0; PLAYER_ENT.deaths = resume.d | 0; PLAYER_ENT.score = PLAYER_ENT.kills * 100; banner('RECONNECTED', `Room ${code} · click to aim`); updateHud(true); }
+  try { localStorage.setItem('sector9-room', JSON.stringify({ nick, code, t: Date.now(), k: PLAYER_ENT.kills, d: PLAYER_ENT.deaths })); } catch (e) {}
+  return true;
+}
+$('btnJoin').addEventListener('click', async () => {
+  const nick = $('nick').value.trim().replace(/[^\p{L}\p{N}_ .-]/gu, '').slice(0, 16), code = $('roomCode').value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 20) || 'duel';
+  if (await enterRoom(nick, code)) { setState('play'); lock(); }
 });
 $('btnQuit').addEventListener('click', () => { leaveOnline(); menuScene(); setState('menu'); });
 $('btnMenu').addEventListener('click', () => { leaveOnline(); menuScene(); setState('menu'); });
@@ -3065,6 +3111,7 @@ async function boot() {
   applyQuality(); syncSettings(); showBest();
   menuScene(); setState('menu');
   try { renderer.compile(scene, camera); renderer.compile(gunScene, gunCam); } catch (e) {}
+  try { const sv = JSON.parse(localStorage.getItem('sector9-room') || 'null'); if (sv && sv.code && sv.nick && Date.now() - sv.t < 3 * 3600e3) { $('onlinePanel').hidden = false; $('nick').value = sv.nick; $('roomCode').value = sv.code; enterRoom(sv.nick, sv.code, sv).then(ok => { if (ok) setState('play'); }); } } catch (e) {}
   $('loading').remove();
   requestAnimationFrame(t => { last = t; frame(t); });
   window.__s9 = { P, G, robots, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT };
