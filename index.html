@@ -3570,7 +3570,7 @@ function killEntity(v, k, weapon, crit, dir) {
   updateHud();
 }
 function botDie(r, dir, crit, byMe) {
-  spawnDrop(r.weapon, r.root.position);
+  if (byMe) spawnDrop(r.weapon, r.root.position);   // only your own kills drop a gun, so the map isn't littered
   r.dead = true; r.deadT = 0; r.respawnT = rand(3.2, 4.6); r.target = null; targetsDirty = true; r.tag.style.opacity = 0; r.shield = 0; r.glint.visible = false;
   for (const k in r.act) if (k !== 'death') { r.act[k].w = 0; r.act[k].setEffectiveWeight(0); }
   r.act.death.reset(); r.act.death.setEffectiveWeight(1); r.act.death.w = 1; r.act.death.play();
@@ -4024,14 +4024,14 @@ const DROPS = [], DROP_LIFE = 10;
 const SLOTS = () => P.slots || LOADOUT;
 function spawnDrop(id, at) {
   if (NET.on || !id || id === 'knife' || !WEAPONS[id] || !WM[id]) return;
-  const w = WEAPONS[id], g = new THREE.Group(); g.position.set(at.x, at.y, at.z); scene.add(g);
-  const gun = rifleTP(id); gun.scale.multiplyScalar(1.7); const hold = new THREE.Group(); hold.position.y = .75; hold.add(gun); g.add(hold);
+  const w = WEAPONS[id], g = new THREE.Group(); g.position.set(at.x, groundAt(at.x, at.z, at.y + .6, .3), at.z); scene.add(g);   // on the floor even if they died mid-jump
+  const gun = rifleTP(id); gun.scale.multiplyScalar(1.7); const hold = new THREE.Group(); hold.position.y = .32; hold.rotation.z = .18; hold.add(gun); g.add(hold);
   const bb = new THREE.Box3().setFromObject(gun), c = bb.getCenter(new THREE.Vector3()).sub(hold.getWorldPosition(new THREE.Vector3())); gun.position.sub(c);   // spin around the gun's own middle
   const col = new THREE.Color(...(w.glow || [2, 1.5, .5]));
   const ring = new THREE.Mesh(new THREE.RingGeometry(.42, .5, 40), new THREE.MeshBasicMaterial({ color: col, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
   ring.rotation.x = -Math.PI / 2; ring.position.y = .04; g.add(ring);
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(.06, .3, 1.4, 16, 1, true), new THREE.MeshBasicMaterial({ color: col.clone().multiplyScalar(.35), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
-  beam.position.y = .7; g.add(beam);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(.12, .42, .7, 16, 1, true), new THREE.MeshBasicMaterial({ color: col.clone().multiplyScalar(.35), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+  beam.position.y = .35; g.add(beam);
   DROPS.push({ id, g, hold, ring, beam, t: 0 });
   if (DROPS.length > 8) removeDrop(DROPS[0]);
 }
@@ -4042,7 +4042,7 @@ function updateDrops(dt) {
   nearDrop = null; let best = 1.7;
   for (let i = DROPS.length - 1; i >= 0; i--) {
     const d = DROPS[i]; d.t += dt; if (d.t > DROP_LIFE) { removeDrop(d); continue; }
-    d.hold.rotation.y += dt * 1.6; d.hold.position.y = .75 + Math.sin(d.t * 2.4) * .06;
+    d.hold.rotation.y += dt * 1.2; d.hold.position.y = .32 + Math.sin(d.t * 2.4) * .03;
     const left = DROP_LIFE - d.t, blink = left < 3 ? (Math.sin(d.t * 18) > 0 ? 1 : .15) : 1;   // flickers when it's about to vanish
     d.g.visible = blink > .5 || left > 3; d.ring.scale.setScalar(1 + Math.sin(d.t * 3) * .06); d.ring.material.opacity = .9 * Math.min(1, left);
     if (state === 'play' && !P.dead) { const dx = P.pos.x - d.g.position.x, dz = P.pos.z - d.g.position.z, dist = Math.hypot(dx, dz); if (dist < best && Math.abs(P.pos.y - d.g.position.y) < 1.6) { best = dist; nearDrop = d; } }
