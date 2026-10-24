@@ -3375,10 +3375,16 @@ function boomThrow() {
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex(T.glow), color: new THREE.Color(...WEAPONS.boomerang.glow).multiplyScalar(.5), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); halo.scale.setScalar(1.1); m.add(halo);
   const from = camera.position.clone().addScaledVector(shotDir, .6).addScaledVector(camRight, .18).add(_b3.set(0, -.1, 0));
   const speed = lerp(30, 44, k), range = lerp(13, 34, k);
-  BOOM.out = { m, blade, halo, p: from, v: shotDir.clone().multiplyScalar(speed), speed, phase: 'out', t: 0, tOut: range / speed, hit: new Set(), curve: 0, spin: 0, aim: projTarget(PLAYER_ENT, camera.position, shotDir) };
+  BOOM.out = { m, blade, halo, p: from, v: shotDir.clone().multiplyScalar(speed), speed, phase: 'out', t: 0, tOut: range / speed, hit: new Set(), curve: 0, spin: 0, aim: boomAimTarget(camera.position, shotDir) };
   m.position.copy(from); P.shield = 0; G.fired++; noise(camera.position, 25, PLAYER_ENT); netProj('boom', from, BOOM.out.v);
   sfx.boomThrow(); springs.kickZ.v -= 3; P.trauma = Math.min(1, P.trauma + .06);
   updateHud();
+}
+// boomerang lock-on: only an enemy right by the crosshair (~8 degrees) that you can actually see
+function boomAimTarget(from, dir) {
+  let best = null, bd = .14;
+  for (const e of entities()) { if (e === PLAYER_ENT || !entAlive(e)) continue; const c = entChest(e, new THREE.Vector3()), v = _b2.subVectors(c, from), d = v.length(); if (d > 40) continue; const a = Math.acos(clamp(v.normalize().dot(dir), -1, 1)); if (a < bd && lineOfSight(from, c)) { bd = a; best = e; } }
+  return best;
 }
 // everything solid-looking on the map, decorations included (the boomerang bounces off props that bullets ignore)
 let BSOL = { map: null, list: [] };
@@ -3449,7 +3455,7 @@ function updateBoom(dt) {
   const prev = _b4.copy(o.p);
   if (o.phase === 'out') {
     // flies true to the crosshair, gently bending toward the enemy you aimed near, then hooks right near the turnaround
-    if (o.aim && entAlive(o.aim) && !o.hit.has(o.aim)) { const want = _b3.subVectors(entChest(o.aim, _b2), o.p); if (want.length() > 1) { want.setLength(o.v.length()); o.v.lerp(want, Math.min(1, dt * 3.5)); } }
+    if (o.aim && entAlive(o.aim) && !o.hit.has(o.aim)) { const want = _b3.subVectors(entChest(o.aim, _b2), o.p); if (want.length() > 1) { want.setLength(o.v.length()); o.v.lerp(want, Math.min(1, dt * 2)); } }
     else if (o.t > o.tOut * .65) o.v.applyAxisAngle(UPV, -dt * .9);
     const slow = 1 - clamp(o.t / o.tOut, 0, 1) * .55; o.v.setLength(o.speed * slow);
     if (o.t >= o.tOut) boomReturn(o);
@@ -3480,7 +3486,7 @@ function updateBoom(dt) {
   for (const e of entities()) {
     if (e === PLAYER_ENT || !entAlive(e) || o.hit.has(e)) continue;
     const eye = entEye(e, _a1), chest = entChest(e, _a2), base = entPos(e).y;
-    for (let st = 1; st <= nst; st++) { const q = _pq.copy(prev).lerp(o.p, st / nst); const head = q.distanceTo(eye) < .42, body = Math.hypot(q.x - chest.x, q.z - chest.z) < .8 && q.y > base + .05 && q.y < eye.y + .2;
+    for (let st = 1; st <= nst; st++) { const q = _pq.copy(prev).lerp(o.p, st / nst); const head = q.distanceTo(eye) < .32, body = Math.hypot(q.x - chest.x, q.z - chest.z) < .5 && q.y > base + .05 && q.y < eye.y + .15;
       if (head || body) { o.hit.add(e); if (o.phase === 'out') { o.p.copy(q); o.phase = 'stuck'; o.stuckT = .2; o.stuckE = e; o.stuckOff = _a1.subVectors(q, entChest(e, _a2)).multiplyScalar(.35).clone(); o.embed = rand(-.5, .5); sfx.knifeHit(); P.trauma = Math.min(1, P.trauma + .08); } damageEntity(e, w.dmg, head, q.clone(), o.v.clone().normalize(), head ? 'head' : 'body', PLAYER_ENT, 'boomerang'); G.hits++; sfx.boomHit(q.clone()); hitstop = .04;
         for (let k = 0; k < 20; k++) FX.spawn(q, rand(-4, 4), rand(0, 4), rand(-4, 4), ...w.glow, rand(.03, .06), rand(.25, .45), 8, 1); break; } }
   }
@@ -3810,7 +3816,7 @@ function resetDeathFx(r) {
   if (r.bodyCol) r.body.color.copy(r.bodyCol); r.body.emissive.setRGB(0, 0, 0);
 }
 function botDie(r, dir, crit, byMe) {
-  if (byMe) { r.gun.updateMatrixWorld(true); spawnDrop(r.weapon, r.root.position, r.gun.getWorldPosition(new THREE.Vector3()), dir); }   // only your own kills drop a gun
+  if (byMe) { r.root.updateMatrixWorld(true); spawnDrop(r.weapon, r.root.position, r.gun.getWorldPosition(new THREE.Vector3()), dir); }   // only your own kills drop a gun
   r.gun.visible = false;
   r.dead = true; r.deadT = 0; r.respawnT = rand(3.2, 4.6); r.target = null; targetsDirty = true; r.tag.style.opacity = 0; r.shield = 0; r.glint.visible = false;
   for (const k in r.act) if (k !== 'death') { r.act[k].w = 0; r.act[k].setEffectiveWeight(0); }
@@ -4356,13 +4362,15 @@ const SLOTS = () => P.slots || LOADOUT;
 function spawnDrop(id, at, from, dir) {
   if (NET.on || !id || id === 'knife' || !WEAPONS[id] || !WM[id]) return;
   const w = WEAPONS[id], g = new THREE.Group(); g.position.set(at.x, groundAt(at.x, at.z, at.y + .6, .3), at.z); scene.add(g);   // on the floor even if they died mid-jump
-  const gun = rifleTP(id); gun.scale.multiplyScalar(1.15); const hold = new THREE.Group(); hold.add(gun); g.add(hold);
-  const bb = new THREE.Box3().setFromObject(gun), c = bb.getCenter(new THREE.Vector3()).sub(hold.getWorldPosition(new THREE.Vector3())); gun.position.sub(c);   // spin around the gun's own middle
+  const gun = rifleTP(id); gun.scale.multiplyScalar(1.15); gun.updateMatrixWorld(true);
+  const bb = new THREE.Box3().setFromObject(gun); gun.position.sub(bb.getCenter(new THREE.Vector3()));   // centred on its own middle, measured before it has a parent
+  const hold = new THREE.Group(); hold.add(gun); g.add(hold);
   const col = new THREE.Color(...(w.glow || [2, 1.5, .5]));
   const ring = new THREE.Mesh(new THREE.RingGeometry(.42, .5, 40), new THREE.MeshBasicMaterial({ color: col, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
   ring.rotation.x = -Math.PI / 2; ring.position.y = .04; g.add(ring);
   // starts where the dead player's hand was and falls: lands lying on its side
-  const h0 = from ? Math.max(.15, from.y - g.position.y) : .9; hold.position.set(from ? from.x - g.position.x : 0, h0, from ? from.z - g.position.z : 0);
+  if (from && (Math.hypot(from.x - g.position.x, from.z - g.position.z) > 1.2 || Math.abs(from.y - g.position.y) > 2.5)) from = null;
+  const h0 = from ? clamp(from.y - g.position.y, .15, 1.6) : 1.1; hold.position.set(from ? from.x - g.position.x : 0, h0, from ? from.z - g.position.z : 0);
   const yaw = rand(0, 6.28), fly = dir ? new THREE.Vector3(dir.x, 0, dir.z).normalize().multiplyScalar(rand(.8, 1.6)) : new THREE.Vector3();
   hold.rotation.set(0, yaw, 0); ring.material.opacity = 0;
   const rest = new THREE.Box3();
