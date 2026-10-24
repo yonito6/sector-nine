@@ -1299,8 +1299,11 @@ function mergeStatic() {
    in its vertex colours; origins are the bottom centre, +y up. A map built from the kit merges every piece per material
    (a handful of draw calls) and gets invisible box proxies for bullets, line of sight and the boomerang. */
 const MKIT = {}, MKMAT = {};
-const MKMETA = {"wall_4":{"b":[[-2.0,0,-0.2,2.0,3.6,0.2]],"w":[]},"wall_4_window":{"b":[[-2.0,0,-0.2,-1.0,3.6,0.2],[1.0,0,-0.2,2.0,3.6,0.2],[-1.0,0,-0.2,1.0,1.1,0.2],[-1.0,2.0,-0.2,1.0,3.6,0.2]],"w":[]},"wall_4_door":{"b":[[-2.0,0,-0.2,-1.1,3.6,0.2],[1.1,0,-0.2,2.0,3.6,0.2],[-1.1,2.8,-0.2,1.1,3.6,0.2]],"w":[]},"wall_corner":{"b":[[-0.4,0,-0.4,0.4,3.6,0.4]],"w":[0]},"wall_low":{"b":[[-2.0,0,-0.3,2.0,1.1,0.3]],"w":[0]},"wall_half":{"b":[[-2.0,0,-0.2,2.0,2.0,0.2]],"w":[]},"floor_4":{"b":[[-2.0,0,-2.0,2.0,0.3,2.0]],"w":[0]},"floor_grate_4":{"b":[[-2.0,0,-2.0,2.0,0.3,2.0]],"w":[0]},"platform_4":{"b":[[1.43,0,-1.87,1.87,3.1,-1.43],[1.43,0,1.43,1.87,3.1,1.87],[-1.87,0,-1.87,-1.43,3.1,-1.43],[-1.87,0,1.43,-1.43,3.1,1.87],[-2.0,3.1,-2.0,2.0,3.6,2.0]],"w":[4]},"catwalk_4":{"b":[[-1.0,3.28,-2.0,1.0,3.6,2.0],[-0.25,0,-0.35,0.25,3.15,0.35],[-1.0,3.6,-2.0,-0.9,4.7,2.0],[0.9,3.6,-2.0,1.0,4.7,2.0]],"w":[0]},"railing_4":{"b":[[-2.0,0,-0.05,2.0,1.1,0.05]],"w":[]},"stairs_4":{"b":[[-1.2,0,2.5,1.2,0.3,3.0],[-1.2,0,2.0,1.2,0.6,2.5],[-1.2,0,1.5,1.2,0.9,2.0],[-1.2,0,1.0,1.2,1.2,1.5],[-1.2,0,0.5,1.2,1.5,1.0],[-1.2,0,-0.0,1.2,1.8,0.5],[-1.2,0,-0.5,1.2,2.1,-0.0],[-1.2,0,-1.0,1.2,2.4,-0.5],[-1.2,0,-1.5,1.2,2.7,-1.0],[-1.2,0,-2.0,1.2,3.0,-1.5],[-1.2,0,-2.5,1.2,3.3,-2.0],[-1.2,0,-3.0,1.2,3.6,-2.5]],"w":[0,1,2,3,4,5,6,7,8,9,10,11]},"ramp_4":{"b":[[-1.15,0,2.667,1.15,0.2,3.0],[-1.15,0,2.333,1.15,0.4,2.667],[-1.15,0,2.0,1.15,0.6,2.333],[-1.15,0,1.667,1.15,0.8,2.0],[-1.15,0,1.333,1.15,1.0,1.667],[-1.15,0,1.0,1.15,1.2,1.333],[-1.15,0,0.667,1.15,1.4,1.0],[-1.15,0,0.333,1.15,1.6,0.667],[-1.15,0,-0.0,1.15,1.8,0.333],[-1.15,0,-0.333,1.15,2.0,0.0],[-1.15,0,-0.667,1.15,2.2,-0.333],[-1.15,0,-1.0,1.15,2.4,-0.667],[-1.15,0,-1.333,1.15,2.6,-1.0],[-1.15,0,-1.667,1.15,2.8,-1.333],[-1.15,0,-2.0,1.15,3.0,-1.667],[-1.15,0,-2.333,1.15,3.2,-2.0],[-1.15,0,-2.667,1.15,3.4,-2.333],[-1.15,0,-3.0,1.15,3.6,-2.667]],"w":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]},"tower_sniper":{"b":[[-0.95,0,-0.95,0.95,5.6,0.95],[1.57,0,-2.13,2.13,5.7,-1.57],[1.57,0,1.57,2.13,5.7,2.13],[-2.13,0,-2.13,-1.57,5.7,-1.57],[-2.13,0,1.57,-1.57,5.7,2.13],[-2.2,5.45,-2.2,2.2,6.0,2.2],[-2.2,6.0,1.95,2.2,7.1,2.2],[1.95,6.0,-2.2,2.2,7.1,2.2],[-2.2,6.0,-2.2,-1.95,7.1,2.2],[-0.8,6.0,-2.2,2.2,7.1,-1.95],[1.94,6.0,-2.16,2.16,8.6,-1.94],[1.94,6.0,1.94,2.16,8.6,2.16],[-2.16,6.0,-2.16,-1.94,8.6,-1.94],[-2.16,6.0,1.94,-1.94,8.6,2.16],[-1.95,7.6,2.11,1.95,8.2,2.25],[2.11,7.6,-1.95,2.25,8.2,1.95],[-2.25,7.6,-1.95,-2.11,8.2,1.95],[-2.4,8.6,-2.4,2.4,8.94,2.4],[2.2,0,2.933,3.6,0.3,3.4],[2.2,0,2.467,3.6,0.6,2.933],[2.2,0,2.0,3.6,0.9,2.467],[2.2,0,1.533,3.6,1.2,2.0],[2.2,0,1.067,3.6,1.5,1.533],[2.2,0,0.6,3.6,1.8,1.067],[2.2,0,0.133,3.6,2.1,0.6],[2.2,0,-0.333,3.6,2.4,0.133],[2.2,0,-0.8,3.6,2.7,-0.333],[2.2,0,-1.267,3.6,3.0,-0.8],[2.2,0,-1.733,3.6,3.3,-1.267],[2.2,0,-2.2,3.6,3.6,-1.733],[2.2,0,-3.6,3.6,3.6,-2.2],[1.825,0,-3.6,2.2,3.9,-2.2],[1.45,0,-3.6,1.825,4.2,-2.2],[1.075,0,-3.6,1.45,4.5,-2.2],[0.7,0,-3.6,1.075,4.8,-2.2],[0.325,0,-3.6,0.7,5.1,-2.2],[-0.05,0,-3.6,0.325,5.4,-2.2],[-0.425,0,-3.6,-0.05,5.7,-2.2],[-0.8,0,-3.6,-0.425,6.0,-2.2],[-2.2,0,-3.6,-0.8,6.0,-2.2],[3.51,0,-2.2,3.61,4.6,3.4],[-0.8,3.6,-3.61,2.2,7.0,-3.51]],"w":[5,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39]},"bunker":{"b":[[-2.0,0,2.6,-1.4,2.7,3.0],[1.4,0,2.6,2.0,2.7,3.0],[-1.4,0,2.6,1.4,1.2,3.0],[-1.4,1.6,2.6,1.4,2.7,3.0],[0.8,0,-3.0,2.0,2.7,-2.6],[-2.0,0,-3.0,-0.8,2.7,-2.6],[-0.8,2.3,-3.0,0.8,2.7,-2.6],[1.6,0,1.5,2.0,2.7,2.6],[1.6,0,-2.6,2.0,2.7,-1.5],[1.6,0,-1.5,2.0,1.2,1.5],[1.6,1.6,-1.5,2.0,2.7,1.5],[-2.0,0,-2.6,-1.6,2.7,2.6],[-2.25,2.7,-3.25,2.25,3.08,3.25],[1.7,0,-3.3,2.3,3.0,-2.7],[1.7,0,2.7,2.3,3.0,3.3],[-2.3,0,-3.3,-1.7,3.0,-2.7],[-2.3,0,2.7,-1.7,3.0,3.3]],"w":[12]},"pillbox_round":{"b":[[1.412,0,-0.73,2.158,1.15,0.02],[1.412,1.5,-0.73,2.158,2.6,0.02],[1.197,0,-1.386,1.829,1.15,-0.636],[1.197,1.5,-1.386,1.829,2.6,-0.636],[0.636,0,-1.829,1.386,1.15,-1.197],[0.636,1.5,-1.829,1.386,2.6,-1.197],[-1.386,0,-1.829,-0.636,1.15,-1.197],[-1.386,1.5,-1.829,-0.636,2.6,-1.197],[-1.829,0,-1.386,-1.197,1.15,-0.636],[-1.829,1.5,-1.386,-1.197,2.6,-0.636],[-2.158,0,-0.73,-1.412,1.15,0.02],[-2.158,1.5,-0.73,-1.412,2.6,0.02],[-2.158,0,-0.02,-1.412,1.15,0.73],[-2.158,1.5,-0.02,-1.412,2.6,0.73],[-1.829,0,0.636,-1.197,1.15,1.386],[-1.829,1.5,0.636,-1.197,2.6,1.386],[-1.386,0,1.197,-0.636,1.15,1.829],[-1.386,1.5,1.197,-0.636,2.6,1.829],[-0.73,0,1.412,0.02,1.15,2.158],[-0.73,1.5,1.412,0.02,2.6,2.158],[-0.02,0,1.412,0.73,1.15,2.158],[-0.02,1.5,1.412,0.73,2.6,2.158],[0.636,0,1.197,1.386,1.15,1.829],[0.636,1.5,1.197,1.386,2.6,1.829],[1.197,0,0.636,1.829,1.15,1.386],[1.197,1.5,0.636,1.829,2.6,1.386],[1.412,0,-0.02,2.158,1.15,0.73],[1.412,1.5,-0.02,2.158,2.6,0.73],[-2.25,2.4,-2.25,2.25,3.2,2.25]],"w":[]},"barrier_energy":{"b":[[-1.2,0,-0.3,1.2,1.45,0.3]],"w":[]},"crate_1":{"b":[[-0.6,0,-0.6,0.6,1.2,0.6]],"w":[0]},"crate_stack":{"b":[[-1.25,0,-0.6,-0.05,1.2,0.6],[0.025,0,-0.675,1.275,1.2,0.575],[-0.8,1.2,-0.6,0.4,2.2,0.6]],"w":[0,1,2]},"container_6":{"b":[[-3.05,0,-1.22,3.05,2.6,1.22]],"w":[0]},"container_6_open":{"b":[[3.03,0.2,1.05,4.194,2.4,1.338],[3.03,0.2,-1.338,4.194,2.4,-1.05],[-3.05,0,-1.22,3.05,0.15,1.22],[-3.05,2.42,-1.22,3.05,2.6,1.22],[-3.05,0,1.1,3.05,2.6,1.22],[-3.05,0,-1.22,3.05,2.6,-1.1],[-3.05,0,-1.22,-2.93,2.6,1.22]],"w":[2,3]},"barrels_cluster":{"b":[[-0.8,0,-0.85,1.0,1.0,0.65]],"w":[]},"hexbags":{"b":[[-1.3,0,-0.3,1.3,1.12,0.3]],"w":[]},"pillar_round":{"b":[[-0.5,0,-0.5,0.5,3.6,0.5]],"w":[]},"pillar_square":{"b":[[-0.45,0,-0.45,0.45,3.6,0.45]],"w":[]},"arch_gate":{"b":[[-2.95,0,-0.5,-1.95,4.2,0.5],[1.95,0,-0.5,2.95,4.2,0.5],[-3.0,4.2,-0.5,3.0,5.35,0.5]],"w":[]},"bridge_8":{"b":[[-1.51,3.6,-4.0,-1.35,4.72,4.0],[1.35,3.6,-4.0,1.51,4.72,4.0],[-1.5,3.0,-4.0,1.5,3.6,4.0]],"w":[2]},"pipe_run_4":{"b":[],"w":[]},"cable_bundle":{"b":[],"w":[]},"console_terminal":{"b":[[-0.5,0,-0.325,0.5,1.0,0.325]],"w":[]},"server_rack":{"b":[[-0.35,0,-0.45,0.35,2.1,0.45]],"w":[]},"antenna_mast":{"b":[[-0.45,0,-0.45,0.45,6.5,0.45]],"w":[]},"floodlight_post":{"b":[[-0.15,0,-0.15,0.15,4.2,0.15]],"w":[]},"wall_light_strip":{"b":[],"w":[]},"holo_sign_frame":{"b":[],"w":[]},"vent_fan":{"b":[],"w":[]},"generator":{"b":[[-1.1,0,-0.65,1.1,1.75,0.65]],"w":[]},"drone_dock":{"b":[[-1.0,0,-1.0,1.0,0.25,1.0]],"w":[0]},"cryo_pod":{"b":[[-0.5,0,-0.5,0.5,2.4,0.5]],"w":[]},"plant_alien":{"b":[[-0.4,0,-0.4,0.4,0.55,0.4]],"w":[]}};
+const MKMETA = {"wall_4":{"b":[[-2.0,0,-0.2,2.0,3.6,0.2]],"w":[]},"wall_4_window":{"b":[[-2.0,0,-0.2,-1.0,3.6,0.2],[1.0,0,-0.2,2.0,3.6,0.2],[-1.0,0,-0.2,1.0,1.1,0.2],[-1.0,2.0,-0.2,1.0,3.6,0.2]],"w":[]},"wall_4_door":{"b":[[-2.0,0,-0.2,-1.1,3.6,0.2],[1.1,0,-0.2,2.0,3.6,0.2],[-1.1,2.8,-0.2,1.1,3.6,0.2]],"w":[]},"wall_corner":{"b":[[-0.4,0,-0.4,0.4,3.6,0.4]],"w":[0]},"wall_low":{"b":[[-2.0,0,-0.3,2.0,1.1,0.3]],"w":[0]},"wall_half":{"b":[[-2.0,0,-0.2,2.0,2.0,0.2]],"w":[]},"floor_4":{"b":[[-2.0,0,-2.0,2.0,0.3,2.0]],"w":[0]},"floor_grate_4":{"b":[[-2.0,0,-2.0,2.0,0.3,2.0]],"w":[0]},"platform_4":{"b":[[1.43,0,-1.87,1.87,3.1,-1.43],[1.43,0,1.43,1.87,3.1,1.87],[-1.87,0,-1.87,-1.43,3.1,-1.43],[-1.87,0,1.43,-1.43,3.1,1.87],[-2.0,3.1,-2.0,2.0,3.6,2.0]],"w":[4]},"catwalk_4":{"b":[[-1.0,3.28,-2.0,1.0,3.6,2.0],[-0.25,0,-0.35,0.25,3.15,0.35],[-1.0,3.6,-2.0,-0.9,4.7,2.0],[0.9,3.6,-2.0,1.0,4.7,2.0]],"w":[0]},"railing_4":{"b":[[-2.0,0,-0.05,2.0,1.1,0.05]],"w":[]},"stairs_4":{"b":[[-1.2,0,2.5,1.2,0.3,3.0],[-1.2,0.28,2.0,1.2,0.6,2.5],[-1.2,0.58,1.5,1.2,0.9,2.0],[-1.2,0.88,1.0,1.2,1.2,1.5],[-1.2,1.18,0.5,1.2,1.5,1.0],[-1.2,1.48,-0.0,1.2,1.8,0.5],[-1.2,1.78,-0.5,1.2,2.1,-0.0],[-1.2,2.08,-1.0,1.2,2.4,-0.5],[-1.2,2.38,-1.5,1.2,2.7,-1.0],[-1.2,2.68,-2.0,1.2,3.0,-1.5],[-1.2,2.98,-2.5,1.2,3.3,-2.0],[-1.2,3.28,-3.0,1.2,3.6,-2.5]],"w":[0,1,2,3,4,5,6,7,8,9,10,11]},"ramp_4":{"b":[[-1.15,0,2.667,1.15,0.2,3.0],[-1.15,0,2.333,1.15,0.4,2.667],[-1.15,0,2.0,1.15,0.6,2.333],[-1.15,0,1.667,1.15,0.8,2.0],[-1.15,0,1.333,1.15,1.0,1.667],[-1.15,0,1.0,1.15,1.2,1.333],[-1.15,0,0.667,1.15,1.4,1.0],[-1.15,0,0.333,1.15,1.6,0.667],[-1.15,0,-0.0,1.15,1.8,0.333],[-1.15,0,-0.333,1.15,2.0,0.0],[-1.15,0,-0.667,1.15,2.2,-0.333],[-1.15,0,-1.0,1.15,2.4,-0.667],[-1.15,0,-1.333,1.15,2.6,-1.0],[-1.15,0,-1.667,1.15,2.8,-1.333],[-1.15,0,-2.0,1.15,3.0,-1.667],[-1.15,0,-2.333,1.15,3.2,-2.0],[-1.15,0,-2.667,1.15,3.4,-2.333],[-1.15,0,-3.0,1.15,3.6,-2.667]],"w":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]},"tower_sniper":{"b":[[-0.95,0,-0.95,0.95,5.6,0.95],[1.57,0,-2.13,2.13,5.7,-1.57],[1.57,0,1.57,2.13,5.7,2.13],[-2.13,0,-2.13,-1.57,5.7,-1.57],[-2.13,0,1.57,-1.57,5.7,2.13],[-2.2,5.45,-2.2,2.2,6.0,2.2],[-2.2,6.0,1.95,2.2,7.0,2.2],[1.95,6.0,-2.2,2.2,7.0,2.2],[-2.2,6.0,-2.2,-1.95,7.0,2.2],[-0.8,6.0,-2.2,2.2,7.0,-1.95],[1.94,6.0,-2.16,2.16,8.6,-1.94],[1.94,6.0,1.94,2.16,8.6,2.16],[-2.16,6.0,-2.16,-1.94,8.6,-1.94],[-2.16,6.0,1.94,-1.94,8.6,2.16],[-1.95,7.98,2.11,1.95,8.53,2.25],[2.11,7.98,-1.95,2.25,8.53,1.95],[-2.25,7.98,-1.95,-2.11,8.53,1.95],[-2.4,8.6,-2.4,2.4,8.94,2.4],[2.2,0,2.933,3.6,0.3,3.4],[2.2,0,2.467,3.6,0.6,2.933],[2.2,0,2.0,3.6,0.9,2.467],[2.2,0,1.533,3.6,1.2,2.0],[2.2,0,1.067,3.6,1.5,1.533],[2.2,0,0.6,3.6,1.8,1.067],[2.2,0,0.133,3.6,2.1,0.6],[2.2,0,-0.333,3.6,2.4,0.133],[2.2,0,-0.8,3.6,2.7,-0.333],[2.2,0,-1.267,3.6,3.0,-0.8],[2.2,0,-1.733,3.6,3.3,-1.267],[2.2,0,-2.2,3.6,3.6,-1.733],[2.2,0,-3.6,3.6,3.6,-2.2],[1.825,0,-3.6,2.2,3.9,-2.2],[1.45,0,-3.6,1.825,4.2,-2.2],[1.075,0,-3.6,1.45,4.5,-2.2],[0.7,0,-3.6,1.075,4.8,-2.2],[0.325,0,-3.6,0.7,5.1,-2.2],[-0.05,0,-3.6,0.325,5.4,-2.2],[-0.425,0,-3.6,-0.05,5.7,-2.2],[-0.8,0,-3.6,-0.425,6.0,-2.2],[-2.2,0,-3.6,-0.8,6.0,-2.2],[3.51,0,-2.2,3.61,4.6,3.4],[-0.8,3.6,-3.61,2.2,7.0,-3.51]],"w":[5,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39]},"bunker":{"b":[[-2.0,0,2.6,-1.4,2.7,3.0],[1.4,0,2.6,2.0,2.7,3.0],[-1.4,0,2.6,1.4,1.15,3.0],[-1.4,1.95,2.6,1.4,2.7,3.0],[0.8,0,-3.0,2.0,2.7,-2.6],[-2.0,0,-3.0,-0.8,2.7,-2.6],[-0.8,2.3,-3.0,0.8,2.7,-2.6],[1.6,0,1.5,2.0,2.7,2.6],[1.6,0,-2.6,2.0,2.7,-1.5],[1.6,0,-1.5,2.0,1.15,1.5],[1.6,1.95,-1.5,2.0,2.7,1.5],[-2.0,0,-2.6,-1.6,2.7,2.6],[-2.25,2.7,-3.25,2.25,3.08,3.25],[1.7,0,-3.3,2.3,3.0,-2.7],[1.7,0,2.7,2.3,3.0,3.3],[-2.3,0,-3.3,-1.7,3.0,-2.7],[-2.3,0,2.7,-1.7,3.0,3.3]],"w":[12]},"pillbox_round":{"b":[[1.412,0,-0.73,2.158,1.15,0.02],[1.412,1.95,-0.73,2.158,2.6,0.02],[1.197,0,-1.386,1.829,1.15,-0.636],[1.197,1.95,-1.386,1.829,2.6,-0.636],[0.636,0,-1.829,1.386,1.15,-1.197],[0.636,1.95,-1.829,1.386,2.6,-1.197],[-1.386,0,-1.829,-0.636,1.15,-1.197],[-1.386,1.95,-1.829,-0.636,2.6,-1.197],[-1.829,0,-1.386,-1.197,1.15,-0.636],[-1.829,1.95,-1.386,-1.197,2.6,-0.636],[-2.158,0,-0.73,-1.412,1.15,0.02],[-2.158,1.95,-0.73,-1.412,2.6,0.02],[-2.158,0,-0.02,-1.412,1.15,0.73],[-2.158,1.95,-0.02,-1.412,2.6,0.73],[-1.829,0,0.636,-1.197,1.15,1.386],[-1.829,1.95,0.636,-1.197,2.6,1.386],[-1.386,0,1.197,-0.636,1.15,1.829],[-1.386,1.95,1.197,-0.636,2.6,1.829],[-0.73,0,1.412,0.02,1.15,2.158],[-0.73,1.95,1.412,0.02,2.6,2.158],[-0.02,0,1.412,0.73,1.15,2.158],[-0.02,1.95,1.412,0.73,2.6,2.158],[0.636,0,1.197,1.386,1.15,1.829],[0.636,1.95,1.197,1.386,2.6,1.829],[1.197,0,0.636,1.829,1.15,1.386],[1.197,1.95,0.636,1.829,2.6,1.386],[1.412,0,-0.02,2.158,1.15,0.73],[1.412,1.95,-0.02,2.158,2.6,0.73],[-2.25,2.4,-2.25,2.25,3.2,2.25]],"w":[]},"barrier_energy":{"b":[[-1.2,0,-0.3,1.2,1.45,0.3]],"w":[]},"crate_1":{"b":[[-0.6,0,-0.6,0.6,1.2,0.6]],"w":[0]},"crate_stack":{"b":[[-1.25,0,-0.6,-0.05,1.2,0.6],[0.025,0,-0.675,1.275,1.2,0.575],[-0.8,1.2,-0.6,0.4,2.2,0.6]],"w":[0,1,2]},"container_6":{"b":[[-3.05,0,-1.22,3.05,2.6,1.22]],"w":[0]},"container_6_open":{"b":[[3.03,0.2,1.05,4.194,2.4,1.338],[3.03,0.2,-1.338,4.194,2.4,-1.05],[-3.05,0,-1.22,3.05,0.15,1.22],[-3.05,2.42,-1.22,3.05,2.6,1.22],[-3.05,0,1.1,3.05,2.6,1.22],[-3.05,0,-1.22,3.05,2.6,-1.1],[-3.05,0,-1.22,-2.93,2.6,1.22]],"w":[2,3]},"barrels_cluster":{"b":[[-0.8,0,-0.85,1.0,1.0,0.65]],"w":[]},"hexbags":{"b":[[-1.3,0,-0.3,1.3,1.12,0.3]],"w":[]},"pillar_round":{"b":[[-0.5,0,-0.5,0.5,3.6,0.5]],"w":[]},"pillar_square":{"b":[[-0.45,0,-0.45,0.45,3.6,0.45]],"w":[]},"arch_gate":{"b":[[-2.95,0,-0.5,-1.95,4.2,0.5],[1.95,0,-0.5,2.95,4.2,0.5],[-3.0,4.2,-0.5,3.0,5.35,0.5]],"w":[]},"bridge_8":{"b":[[-1.51,3.6,-4.0,-1.35,4.72,4.0],[1.35,3.6,-4.0,1.51,4.72,4.0],[-1.5,3.0,-4.0,1.5,3.6,4.0]],"w":[2]},"pipe_run_4":{"b":[],"w":[]},"cable_bundle":{"b":[],"w":[]},"console_terminal":{"b":[[-0.5,0,-0.325,0.5,1.0,0.325]],"w":[]},"server_rack":{"b":[[-0.35,0,-0.45,0.35,2.1,0.45]],"w":[]},"antenna_mast":{"b":[[-0.175,0,-0.175,0.175,6.5,0.175]],"w":[]},"floodlight_post":{"b":[[-0.15,0,-0.15,0.15,4.2,0.15]],"w":[]},"wall_light_strip":{"b":[],"w":[]},"holo_sign_frame":{"b":[],"w":[]},"vent_fan":{"b":[],"w":[]},"generator":{"b":[[-1.1,0,-0.65,1.1,1.75,0.65]],"w":[]},"drone_dock":{"b":[[-1.0,0,-1.0,1.0,0.25,1.0]],"w":[0]},"cryo_pod":{"b":[[-0.5,0,-0.5,0.5,2.4,0.5]],"w":[]},"plant_alien":{"b":[[-0.4,0,-0.4,0.4,0.55,0.4]],"w":[]}};
 // pieces whose raised floors the bots may path onto (others' roofs stay players-only so rooms below remain walkable)
+// wallbangs: 'thick' = solid panel wall, damage drops with the distance the bullet travels inside it;
+// 'hollow' = cargo pods, crates, racks: two thin skins. Everything else (concrete, bunkers, towers, sandbags, shields) stops bullets.
+const MK_PEN = { wall_4: 'thick', wall_4_window: 'thick', wall_4_door: 'thick', wall_half: 'thick', crate_1: 'hollow', crate_stack: 'hollow', container_6: 'hollow', container_6_open: 'hollow', server_rack: 'hollow', console_terminal: 'hollow', cryo_pod: 'hollow', generator: 'hollow' };
 const MK_NAV = { tower_sniper: 1, stairs_4: 1, platform_4: 1, catwalk_4: 1, bridge_8: 1, floor_4: 1, floor_grate_4: 1, ramp_4: 1 };
 let MKIT_LOAD = null;
 function loadMapKit() {
@@ -1344,22 +1347,24 @@ function mapkitMats(theme, key) {
   return (MKMAT[key] = M);
 }
 // build a map's structures: put(name, x, z, quarterTurns, y) places a piece; everything is merged at the end
+const MKLOG = {};   // every placement per map, exported to data/maps/<id>.json for the Unity version
 function mkBuild(theme, key, fn) {
-  const mats = mapkitMats(theme, key), geos = {}, proxy = [], v = new THREE.Vector3(), c = new THREE.Vector3();
-  const box = (b, opts = {}) => { world.colliders.push(b); proxy.push(b); if (opts.walk) b.walk = true; return b; };
+  const mats = mapkitMats(theme, key), geos = {}, proxy = [], penProxy = [], v = new THREE.Vector3(), c = new THREE.Vector3(), log = (MKLOG[key] = { theme, pieces: [] });
+  const box = (b, opts = {}) => { world.colliders.push(b); if (opts.pen) { b.pen = opts.pen; penProxy.push(b); } else proxy.push(b); if (opts.walk) b.walk = true; return b; };
   const put = (name, x, z, rq = 0, y = 0) => {
-    const parts = MKIT[name], meta = MKMETA[name]; if (!parts || !meta) return;
+    const parts = MKIT[name], meta = MKMETA[name]; if (!parts || !meta) return; log.pieces.push({ piece: name, x, z, quarterTurns: rq, y });
     const a = rq * Math.PI / 2, M = new THREE.Matrix4().makeRotationY(a).setPosition(x, y, z), ca = Math.round(Math.cos(a)), sa = Math.round(Math.sin(a));
     for (const { m, geo } of parts) (geos[m] = geos[m] || []).push(geo.clone().applyMatrix4(M));
     meta.b.forEach((bx, i) => {
       const xs = [bx[0], bx[3]], zs = [bx[2], bx[5]], X = [], Z = [];
       for (const px of xs) for (const pz of zs) { X.push(px * ca + pz * sa + x); Z.push(-px * sa + pz * ca + z); }
       const b = new THREE.Box3(new THREE.Vector3(Math.min(...X), bx[1] + y, Math.min(...Z)), new THREE.Vector3(Math.max(...X), bx[4] + y, Math.max(...Z)));
-      box(b, { walk: MK_NAV[name] && meta.w.includes(i) && bx[4] < 8 });
+      box(b, { walk: MK_NAV[name] && meta.w.includes(i) && bx[4] < 8, pen: MK_PEN[name] });
     });
   };
   // a plain solid block (e.g. the core under a raised deck), drawn with a kit material
   const solid = (x, y, z, w, h, d, mat = 'm_concrete', visible = true) => {
+    log.pieces.push({ piece: 'solid_block', x, y, z, size: [w, h, d], material: mat, visible });
     if (visible) { const g0 = new THREE.BoxGeometry(w, h, d); worldUV(g0, w, h, d, 2, x + z); const g = g0.toNonIndexed(); const n = g.attributes.position.count, col = new Float32Array(n * 3).fill(.82); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.translate(x, y + h / 2, z); (geos[mat] = geos[mat] || []).push(g); }
     return box(new THREE.Box3(new THREE.Vector3(x - w / 2, y, z - d / 2), new THREE.Vector3(x + w / 2, y + h, z + d / 2)));
   };
@@ -1370,9 +1375,10 @@ function mkBuild(theme, key, fn) {
     const mesh = new THREE.Mesh(g, mats[m] || mats.m_hull); mesh.castShadow = m !== 'm_glow' && m !== 'm_glass'; mesh.receiveShadow = m !== 'm_glow'; mesh.userData.dyn = true; scene.add(mesh);
   }
   // invisible boxes stand in for the detailed meshes when bullets, sight lines and the boomerang test what's solid
-  if (proxy.length) {
-    const bg = THREE.BufferGeometryUtils.mergeBufferGeometries(proxy.map(b => { b.getSize(v); b.getCenter(c); return new THREE.BoxGeometry(Math.max(v.x, .01), Math.max(v.y, .01), Math.max(v.z, .01)).translate(c.x, c.y, c.z); }));
-    const pm = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ visible: false })); pm.visible = false; pm.userData.surface = 'metal'; pm.userData.dyn = true; pm.updateMatrixWorld(); scene.add(pm); world.meshes.push(pm);
+  for (const [list, pen] of [[proxy, false], [penProxy, true]]) {
+    if (!list.length) continue;
+    const bg = THREE.BufferGeometryUtils.mergeBufferGeometries(list.map(b => { b.getSize(v); b.getCenter(c); return new THREE.BoxGeometry(Math.max(v.x, .01), Math.max(v.y, .01), Math.max(v.z, .01)).translate(c.x, c.y, c.z); }));
+    const pm = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ visible: false })); pm.visible = false; pm.userData.surface = 'metal'; pm.userData.dyn = true; if (pen) pm.userData.penBoxes = list; pm.updateMatrixWorld(); scene.add(pm); world.meshes.push(pm);
   }
 }
 
@@ -2607,7 +2613,9 @@ function nearestOk(c, maxR = 6) {
   return -1;
 }
 const canStep = (a, b) => NAV.h[b] - NAV.h[a] <= .62;   // a 0.5 m cell can straddle two 0.3 m stair steps
-function findPath(sx, sz, gx, gz) {
+const PF = { n: 0, ms: 0, max: 0, fail: 0 };   // path-search stats (tests read them)
+function findPath(sx, sz, gx, gz) { const t0 = performance.now(), r = findPath0(sx, sz, gx, gz), d = performance.now() - t0; PF.n++; PF.ms += d; PF.max = Math.max(PF.max, d); if (!r) PF.fail++; return r; }
+function findPath0(sx, sz, gx, gz) {
   const N = NAV.N, s = nearestOk(cellOf(sx, sz)), t = nearestOk(cellOf(gx, gz)); if (s < 0 || t < 0) return null;
   const run = ++NAV.run, heap = [s], tx = t % N, tz = Math.floor(t / N);
   const H = c => { const dx = Math.abs(c % N - tx), dz = Math.abs(Math.floor(c / N) - tz); return (dx + dz + (1.414 - 2) * Math.min(dx, dz)); };
@@ -2844,6 +2852,26 @@ function respawnBot(r, quiet) {
   r.act.death.stop(); resetDeathFx(r); targetsDirty = true;
   if (!quiet) { const q = p.clone(); q.y += 1; for (let i = 0; i < 24; i++) { const a = rand(0, 6.28), s = rand(1, 3); FX.spawn(q, Math.cos(a) * s, rand(-1, 3), Math.sin(a) * s, r.color.r * 2, r.color.g * 2, r.color.b * 2, rand(.05, .1), rand(.3, .7), 2, 1); } }
 }
+// The graphics card has to prepare ("compile") every look the first time it's drawn, which can stall Windows browsers
+// for seconds. So everything that can appear mid-match is prepared up front: every gun in first person and third person,
+// the boomerang, dissolving/burning bodies, decals and effects.
+function warmShaders() {
+  try {
+    const t0 = performance.now(), g = new THREE.Group(); g.position.set(0, -200, 0);
+    for (const id of GUN_IDS) { try { g.add(rifleTP(id)); } catch (e) {} }
+    try { if (!BOOM_MATS) BOOM_MATS = boomMats(new THREE.Color(...WEAPONS.boomerang.glow).multiplyScalar(1.3)); g.add(buildBoomBlade(BOOM_MATS)); } catch (e) {}
+    scene.add(g);
+    // bodies: the normal look and the see-through look used when they dissolve
+    const r0 = robots.find(r => r.body && r.visor), keep = r0 ? [r0.body, r0.visor].map(m => [m, m.transparent, m.depthWrite, m.opacity]) : [];
+    renderer.compile(scene, camera);
+    if (r0) { for (const [m] of keep) { m.transparent = true; m.depthWrite = false; m.needsUpdate = true; } const v = r0.root.visible; r0.root.visible = true; renderer.compile(scene, camera); r0.root.visible = v; for (const [m, tr, dw, op] of keep) { m.transparent = tr; m.depthWrite = dw; m.opacity = op; m.needsUpdate = true; } renderer.compile(scene, camera); }
+    scene.remove(g);
+    // first-person: every gun's viewmodel
+    const vis = Object.keys(WM).map(k => [WM[k].group, WM[k].group.visible]); for (const [gr] of vis) gr.visible = true;
+    renderer.compile(gunScene, gunCam); for (const [gr, v] of vis) gr.visible = v;
+    perf.warm = Math.round(performance.now() - t0);
+  } catch (e) {}
+}
 async function startMatch(mapId) {
   await loadMap(mapId || nextMapId());
   KILL_LIMIT = 30; $('hMode').textContent = 'FFA · Sector Nine · EU-West';
@@ -2856,6 +2884,7 @@ async function startMatch(mapId) {
   $('feed').innerHTML = ''; $('kfeed').innerHTML = ''; updateHud(true);
   banner((MAPS.find(m => m.id === CUR_MAP) || MAPS[0]).name.toUpperCase(), `Free for all · ${BOT_COUNT + 1} players · first to ${KILL_LIMIT} kills`); sfx.wave();
   setTimeout(() => { for (const r of robots.slice(0, 3)) if (state === 'play') kfeedText(`${r.name} joined the match`); }, 900);
+  warmShaders();
 }
 function standings() { return [PLAYER_ENT, ...robots].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || b.score - a.score); }
 const ord = n => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th');
@@ -2903,15 +2932,16 @@ const ICON = {
   void: '<svg viewBox="0 0 44 12" width="38" height="11"><path d="M1 4h30l2-2h10v4H33l-2 2H18l-2 3h-4l1-3H1z" fill="currentColor"/><circle cx="24" cy="4" r="2" fill="none" stroke="#000"/></svg>',
   lava: '<svg viewBox="0 0 14 14" width="13" height="13"><path d="M7 1q5 6 3 10a3 3 0 01-6 0q-2-4 3-10" fill="currentColor"/></svg>',
   knife: '<svg viewBox="0 0 34 12" width="30" height="11"><path d="M1 5h11l2-2h2v6h-2l-2-2H1zM16 4h12l5 2-5 3H16z" fill="currentColor"/></svg>',
+  wall: '<svg viewBox="0 0 16 14" width="15" height="13"><path d="M1 2h6v4H1zM9 2h6v4H9zM4 8h8v4H4z" fill="none" stroke="#ffb066" stroke-width="1.3"/><path d="M0 7h16" stroke="#fff" stroke-width="1.6" stroke-dasharray="2 1.5"/></svg>',
   head: '<svg viewBox="0 0 14 14" width="13" height="13"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="7" cy="7" r="1.6" fill="currentColor"/></svg>',
 };
 function kfeedAdd(html) { const d = document.createElement('div'); d.innerHTML = html; const f = $('kfeed'); f.prepend(d); while (f.children.length > 6) f.lastChild.remove(); setTimeout(() => d.remove(), 6000); }
 function kfeedText(t) { const d = document.createElement('span'); d.className = 'sys'; d.textContent = t; kfeedAdd(d.outerHTML); }
-function kfeed(killer, victim, weapon, crit) {
+function kfeed(killer, victim, weapon, crit, wb) {
   const nm = e => `<b style="color:${e.isPlayer ? '#ffb066' : e.cssCol}">${e.isPlayer ? 'You' : String(e.name).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))}</b>`;
   const cls = killer === PLAYER_ENT || victim === PLAYER_ENT ? ' class="mine"' : '';
   if (!killer || killer === victim) kfeedAdd(`<span${cls}>${ICON[weapon] || ''} ${nm(victim)}</span>`);
-  else kfeedAdd(`<span${cls}>${nm(killer)} ${ICON[weapon] || ICON.rifle}${crit ? ICON.head : ''} ${nm(victim)}</span>`);
+  else kfeedAdd(`<span${cls}>${nm(killer)} ${ICON[weapon] || ICON.rifle}${wb ? ICON.wall : ''}${crit ? ICON.head : ''} ${nm(victim)}</span>`);
 }
 const STREAKS = { 3: 'is on a killing spree', 5: 'is on a rampage', 8: 'is unstoppable', 12: 'is godlike' };
 function announceStreak(e) {
@@ -3164,7 +3194,7 @@ function updateRockets(dt) {
 const MEDALS = {
   headshot: ['Headshot', '#ffd27a'], double: ['Double kill', '#ff9a3c'], triple: ['Triple kill', '#ff7a2c'], multi: ['Multi kill', '#ff5a2c'], rampage: ['Rampage', '#ff3a2c'],
   longshot: ['Longshot', '#7fe7ff'], pointblank: ['Point blank', '#ffb066'], backstab: ['Backstab', '#c792ff'], explosive: ['Plasma kill', '#5ad1ff'],
-  collateral: ['Collateral', '#9dff7a'], revenge: ['Revenge', '#ff6a8a'], firstblood: ['First blood', '#ff3a3a'], shutdown: ['Shutdown', '#ffe14a'], noscope: ['No-scope', '#7affd8'], airborne: ['Mid-air', '#8ab4ff'],
+  collateral: ['Collateral', '#9dff7a'], revenge: ['Revenge', '#ff6a8a'], firstblood: ['First blood', '#ff3a3a'], shutdown: ['Shutdown', '#ffe14a'], noscope: ['No-scope', '#7affd8'], wallbang: ['Wallbang', '#ffb066'], airborne: ['Mid-air', '#8ab4ff'],
 };
 const MEDAL_SVG = c => `<svg viewBox="0 0 40 40" width="34" height="34"><path d="M20 2l15 8.7v18.6L20 38 5 29.3V10.7z" fill="none" stroke="${c}" stroke-width="2.4"/><path d="M20 9l9 5.2v11.6L20 31l-9-5.2V14.2z" fill="${c}" opacity=".85"/></svg>`;
 let badgeT = 0, medalQ = [];
@@ -3192,7 +3222,7 @@ function showKillBadge(victim, pts, medals) {
   const [c1, c2, c3, cls] = head ? ['#ffd27a', '#c0391b', '#fff1c4', 'gold'] : multi ? ['#c79bff', '#5a24b8', '#f1e4ff', 'violet'] : ['#7dffb3', '#118a5e', '#e8fff4', 'alien'];
   b.className = 'kb-' + cls;
   b.innerHTML = `<div class="kb-emblem">${kbSvg(c1, c2, c3)}</div>
-    <div class="kb-text"><b>${(head ? 'Headshot' : KB_TITLE[kind] || 'Eliminated').toUpperCase()}</b><span></span><em>+${pts}</em></div>`;
+    <div class="kb-text"><b>${(medals.includes('wallbang') ? (head ? 'Wallbang headshot' : 'Wallbang') : head ? 'Headshot' : KB_TITLE[kind] || 'Eliminated').toUpperCase()}</b><span></span><em>+${pts}</em></div>`;
   b.querySelector('.kb-text span').textContent = victim.name;
   b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); badgeT = 2.4; $('banner').style.opacity = 0; bannerT = 0;
   const row = $('medals'); row.innerHTML = '';
@@ -3525,7 +3555,7 @@ let BSOL = { map: null, list: [] };
 function boomSolids() {
   if (BSOL.map === CUR_MAP && BSOL.n === MAPROOT.children.length) return BSOL.list;
   const L = new Set(world.meshes);
-  MAPROOT.traverse(o => { if (!o.isMesh || o.isSprite || !o.visible) return; const m = o.material; if (!m || m.transparent || m.blending === THREE.AdditiveBlending || m.depthWrite === false) return;
+  MAPROOT.traverse(o => { if (!o.isMesh || o.isSprite || !o.visible || o.userData.dyn) return; const m = o.material; if (!m || m.transparent || m.blending === THREE.AdditiveBlending || m.depthWrite === false) return;
     if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere(); if (o.geometry.boundingSphere.radius * o.getWorldScale(new THREE.Vector3()).x > 80) return; L.add(o); });
   BSOL = { map: CUR_MAP, n: MAPROOT.children.length, list: [...L] }; return BSOL.list;
 }
@@ -3741,6 +3771,19 @@ function fire() {
   if (w.mode === 'flame') return fireFlame();
   return fireShot();
 }
+// metres of material the bullet crosses at this hit, or -1 if it can't go through (old maps: wooden crates are hollow)
+const _pb = new THREE.Box3(), _pv = new THREE.Vector3();
+function penThrough(h, dir) {
+  const L = h.object.userData.penBoxes;
+  if (!L) return h.object.userData.surface === 'wood' ? .15 : -1;
+  for (const b of L) { _pb.copy(b).expandByScalar(.03); if (!_pb.containsPoint(h.point)) continue;
+    if (b.pen === 'hollow') return .12;
+    let t = Infinity; for (const ax of ['x', 'y', 'z']) { const d = dir[ax]; if (Math.abs(d) < 1e-5) continue; const e = ((d > 0 ? b.max[ax] : b.min[ax]) - h.point[ax]) / d; if (e >= 0) t = Math.min(t, e); }
+    return isFinite(t) ? Math.max(.05, t) : -1; }
+  return -1;
+}
+// how well each gun punches through (fraction of damage lost per metre of wall)
+const PEN_LOSS = { sniper: .55, helix: .45, titan: 1.2, triad: 1.1, carbine: 1.3, judge: 1.25, pistol: 1.7, wasp: 1.9, breacher: 2.6 };
 function fireShot() {
   P.shield = 0; // attacking ends your spawn protection
   if (P.weapon === 'knife') { knifeAttack(false); return; }
@@ -3776,21 +3819,33 @@ function fireShot() {
       end = _v3.copy(camera.position).addScaledVector(shotDir, 150);
       let wallHit = null;
       if (w.pierce) {
+        let mult = 1, through = 0, skipTo = -1;
         for (const h of hits) {
+          if (h.distance < skipTo) continue;
           const r = h.object.userData.robot;
-          if (!r) { end.copy(h.point); wallHit = h; break; }
+          if (!r) { const th = penThrough(h, shotDir); end.copy(h.point); wallHit = h; if (th < 0) break; mult *= 1 - th * (PEN_LOSS[id] ?? .5); if (mult < .12) break; through++; skipTo = h.distance + th + .01; decal(_pv.copy(h.point).addScaledVector(shotDir, th), shotDir, .7, 'hole'); continue; }
+          if (through) { r.wbT = G.time; r.wbBy = PLAYER_ENT; }
           if (seen.has(r) || r.dead) continue; seen.add(r); P.collat = seen.size;
           const zone = h.object.userData.zone, crit = zone === 'head';
-          G.hits++; damageBot(r, w.oneShot ? Math.max(r.hp + 1, 101) : w.dmg * sm * (crit ? w.head : zone === 'limb' ? .75 : 1) * (od ? 1.25 : 1), crit, h.point, shotDir.clone(), zone, PLAYER_ENT, id); if (w.status) applyStatus(r, w.status, PLAYER_ENT);
+          G.hits++; damageBot(r, w.oneShot && mult > .5 ? Math.max(r.hp + 1, 101) : (w.oneShot ? 100 : w.dmg) * sm * mult * (crit ? w.head : zone === 'limb' ? .75 : 1) * (od ? 1.25 : 1), crit, h.point, shotDir.clone(), zone, PLAYER_ENT, id); if (w.status) applyStatus(r, w.status, PLAYER_ENT);
         }
       } else if (hits.length) {
-        const h = hits[0]; end.copy(h.point);
-        const r = h.object.userData.robot;
-        if (r && !r.dead) {
-          const zone = h.object.userData.zone, crit = zone === 'head';
-          if (pi === 0 || !seen.has(r)) G.hits++; seen.add(r);
-          damageBot(r, w.dmg * sm * (crit ? w.head : zone === 'limb' ? .75 : 1) * falloffK(w, h.distance) * (od ? 1.25 : 1), crit, h.point, shotDir.clone(), zone, PLAYER_ENT, id); if (w.status) applyStatus(r, w.status, PLAYER_ENT);
-        } else wallHit = h;
+        let mult = 1, through = 0, skipTo = -1;
+        for (const h of hits) {
+          if (h.distance < skipTo) continue;
+          end.copy(h.point); const r = h.object.userData.robot;
+          if (r) { if (r.dead) continue;
+            const zone = h.object.userData.zone, crit = zone === 'head';
+            if (pi === 0 || !seen.has(r)) G.hits++; seen.add(r);
+            if (through) { r.wbT = G.time; r.wbBy = PLAYER_ENT; }
+            damageBot(r, w.dmg * sm * mult * (crit ? w.head : zone === 'limb' ? .75 : 1) * falloffK(w, h.distance) * (od ? 1.25 : 1), crit, h.point, shotDir.clone(), zone, PLAYER_ENT, id); if (w.status) applyStatus(r, w.status, PLAYER_ENT);
+            wallHit = null; break; }
+          const th = penThrough(h, shotDir), loss = PEN_LOSS[id] ?? 1.4;
+          wallHit = h; if (th < 0 || pellets > 1 && id !== 'breacher') break;
+          mult *= 1 - th * loss; if (mult < .12) break;
+          through++; skipTo = h.distance + th + .01;
+          decal(_pv.copy(h.point).addScaledVector(shotDir, th), shotDir, .7, 'hole');   // the exit hole on the far side
+        }
       }
       if (wallHit && (pellets === 1 || pi % 3 === 0)) {
         const h = wallHit, n = h.face ? _v2.copy(h.face.normal).transformDirection(h.object.matrixWorld) : _v2.set(0, 1, 0);
@@ -3847,7 +3902,7 @@ function damageBot(r, dmg, crit, point, dir, zone, attacker, weapon) {
     // the other player's machine owns their health: send the hit, show feedback now
     if (!byMe) return;
     if (r.shield > 0) { hitmarker(false, false); sfx.hit(false, true); return; }
-    netHit(dmg, crit, weapon, r.netId); r.hitT = .35; r.flinch = 1; G.dmg = (G.dmg || 0) + Math.min(dmg, 100); if (crit) G.headHits = (G.headHits || 0) + 1;
+    netHit(dmg, crit, weapon, r.netId, r.wbT && G.time - r.wbT < .05); r.hitT = .35; r.flinch = 1; G.dmg = (G.dmg || 0) + Math.min(dmg, 100); if (crit) G.headHits = (G.headHits || 0) + 1;
     hitmarker(crit, r.hp - dmg <= 0); sfx.hit(crit); damageNumber(point, dmg, crit);
     for (let i = 0; i < (crit ? 12 : 7); i++) FX.spawn(point, -dir.x * 3 + rand(-3, 3), rand(0, 4), -dir.z * 3 + rand(-3, 3), 7, 4.2, 1.6, rand(.025, .05), rand(.15, .35), 12, 1);
     return;
@@ -3874,10 +3929,12 @@ function killEntity(v, k, weapon, crit, dir) {
   const first = !G.firstBlood && k && k !== v; if (k && k !== v) G.firstBlood = true;
   if (k && k !== v) { k.kills++; k.streak++; if (k.isPlayer) G.bestStreak = Math.max(G.bestStreak || 0, k.streak); k.score += 100 + (crit ? 50 : 0); if (crit) k.heads++; announceStreak(k); }
   else v.score = Math.max(0, v.score - 50);
-  kfeed(k, v, weapon, crit);
+  const wb = !!(v.wbT && G.time - v.wbT < .05 && v.wbBy === k); v.wbT = 0;
+  kfeed(k, v, weapon, crit, wb);
   v.deathW = weapon;
   if (v.isPlayer) playerDie(k, weapon, crit); else botDie(v, dir || _v1.set(0, 0, 1), crit, k === PLAYER_ENT);
-  if (k === PLAYER_ENT && k !== v) playerKillFx(v, crit, weapon, dir, { streak: vStreak, first });
+  if (k === PLAYER_ENT && k !== v) playerKillFx(v, crit, weapon, dir, { streak: vStreak, first, wb });
+  if (v === PLAYER_ENT) NET.killWB = wb;
   if (v === PLAYER_ENT && k && k !== v) P.lastKiller = k;
   if (k && k.kills >= KILL_LIMIT) setTimeout(() => endMatch(k), 1200);
   updateHud();
@@ -3972,6 +4029,7 @@ function playerKillFx(r, crit, weapon, dir, ex = {}) {
   hitstop = weapon === 'sniper' || weapon === 'helix' ? .08 : crit ? .06 : .045; P.fov -= 2.5;
   G.combo = Math.min(4, G.combo + .5); G.comboT = 4; G.multi++; G.multiT = 2.4;
   const medals = [];
+  if (ex.wb) medals.push('wallbang');
   if (crit) medals.push(weapon === 'knife' ? 'backstab' : 'headshot');
   if (G.multi >= 2) medals.push(['', '', 'double', 'triple', 'multi', 'rampage'][Math.min(G.multi, 5)]);
   if (ex.first) medals.push('firstblood');
@@ -3983,7 +4041,7 @@ function playerKillFx(r, crit, weapon, dir, ex = {}) {
   if ((P.collat || 0) > 1) medals.push('collateral');
   if ((weapon === 'sniper' || weapon === 'helix') && P.ads < .5 && near > 8) medals.push('noscope');
   if (!P.onGround && weapon !== 'nade') medals.push('airborne');
-  const pts = Math.round(100 * (1 + G.combo * .5) * (crit ? 1.5 : 1)) + medals.length * 25; G.score += pts; G.kills++; if (crit) G.heads++;
+  const pts = Math.round(100 * (1 + G.combo * .5) * (crit ? 1.5 : 1)) + medals.length * 25 + (ex.wb ? 50 : 0); G.score += pts; G.kills++; if (crit) G.heads++;
   feed(`${crit ? 'Headshot' : 'Eliminated'} ${r.name}  +${pts}`, crit);
   showKillBadge(r, pts, medals.slice(0, 4));
   sfx.killConfirm(crit, G.multi);
@@ -4421,6 +4479,7 @@ function peerEntry(id, pr) {
   E = { id, r, last: { shot: pr.sh | 0, hit: pr.hs | 0, nade: pr.ns | 0, proj: Array.isArray(pr.pj) ? pr.pj[0] : 0 }, pres: null };
   r.dead = !!pr.dd; targetsDirty = true; NET.peers.set(id, E);
   if (state === 'play' || state === 'dead') { kfeedText(`${nick} joined the match`); sfx.wave(); }
+  if (NET.peers.size === 1) setTimeout(warmShaders, 0);   // prepare the look of players (and their dissolving deaths) once
   updateHud(); return E;
 }
 function dropPeer(id, announce) {
@@ -4467,7 +4526,7 @@ function netReceive(E, pr) {
   // their hits on you (they aimed at you on their screen: shooter-side hit detection)
   if (Array.isArray(pr.hl)) for (const h of pr.hl) {
     if (!h || (h.s | 0) <= L.hit) continue; L.hit = h.s | 0; if (h.t && h.t !== NET.room.myId) continue;   // a hit on someone else
-    if (state === 'play' && !P.dead) { hurtPlayer(clamp(+h.a || 0, 0, 250), r.root.position, r, !!h.h, NET_W[h.w | 0] || 'carbine'); if (h.st) applyStatus(PLAYER_ENT, h.st === 1 ? 'chill' : 'burn', r); }
+    if (state === 'play' && !P.dead) { if (h.wb) { PLAYER_ENT.wbT = G.time; PLAYER_ENT.wbBy = r; } hurtPlayer(clamp(+h.a || 0, 0, 250), r.root.position, r, !!h.h, NET_W[h.w | 0] || 'carbine'); if (h.st) applyStatus(PLAYER_ENT, h.st === 1 ? 'chill' : 'burn', r); }
   }
   if ((pr.ns | 0) > L.nade && Array.isArray(pr.nv)) { L.nade = pr.ns | 0; const f = new THREE.Vector3(+pr.nv[0], +pr.nv[1], +pr.nv[2]), v = new THREE.Vector3(+pr.nv[3], +pr.nv[4], +pr.nv[5]); if (pr.nv[6]) launchRocket(r, f, v.normalize()); else throwNade(r, f, v); }
   if (Array.isArray(pr.pj) && pr.pj[0] > (L.proj || 0)) { L.proj = pr.pj[0]; const k = ['bolt', 'disc', 'missile', 'boom'][pr.pj[1] | 0] || 'bolt', f = new THREE.Vector3(+pr.pj[2], +pr.pj[3], +pr.pj[4]), v = new THREE.Vector3(+pr.pj[5], +pr.pj[6], +pr.pj[7]); if (k === 'boom') { remoteBoom(r, f, v); } else spawnProj(k, r, f, v, true, k === 'missile' ? projTarget(r, f, v.clone().normalize()) : null); if (k === 'missile') sfx.seeker(); else if (k !== 'boom') (sfx[{ bolt: 'crossbow', disc: 'disc' }[k]] || sfx.shot)(); }
@@ -4476,10 +4535,10 @@ function netReceive(E, pr) {
     const mine = pr.kb === NET.room.myId, killer = mine ? PLAYER_ENT : remoteById(pr.kb), w2 = NET_W[pr.kw | 0] || 'carbine';
     r.deaths = pr.D | 0;
     if (mine) { PLAYER_ENT.kills++; PLAYER_ENT.streak++; PLAYER_ENT.score += 100 + (pr.kh ? 50 : 0); if (pr.kh) PLAYER_ENT.heads++; announceStreak(PLAYER_ENT); }
-    kfeed(killer, r, w2, !!pr.kh);
+    kfeed(killer, r, w2, !!pr.kh, !!pr.kwb);
     const dir = _v3.subVectors(r.root.position, killer && killer !== PLAYER_ENT ? killer.root.position : P.pos).setY(0).normalize();
     r.deathW = w2; if (r.netW && r.netW !== 'knife') r.weapon = r.netW; botDie(r, dir, !!pr.kh, mine); r.respawnT = 1e9;
-    if (mine) playerKillFx(r, !!pr.kh, w2, dir);
+    if (mine) playerKillFx(r, !!pr.kh, w2, dir, { wb: !!pr.kwb });
     if (PLAYER_ENT.kills >= KILL_LIMIT) setTimeout(() => endMatch(PLAYER_ENT), 1200);
     updateHud();
   } else if (!pr.dd && r.dead) {
@@ -4494,11 +4553,11 @@ function netSend(dt) {
   const st = {
     v: 1, mp: CUR_MAP, jt: NET.joinT, n: NET.nick, c: NET.color | 0, x: [R2(P.pos.x), R2(P.pos.y), R2(P.pos.z)], yw: R2(P.yaw + Math.PI), pt: R2(P.pitch), cr: R2(P.crouch), g: P.onGround ? 1 : 0,
     w: Math.max(0, NET_W.indexOf(P.weapon)), rl: P.reload > 0 ? 1 : 0, hp: Math.round(P.hp), sd: R2(P.shield), dd: P.dead ? 1 : 0, D: PLAYER_ENT.deaths, K: PLAYER_ENT.kills,
-    kb: P.killer ? (P.killer.netId || 's') : 's', kw: NET.killW | 0, kh: NET.killH ? 1 : 0, pj: NET.proj || null, sF: G.fired | 0, sH: G.hits | 0, sHH: G.headHits | 0, sh: NET.seq.shot, sx: NET.shot || null, hs: NET.seq.hit, hl: NET.hits, ns: NET.seq.nade, nv: NET.nade || null };
+    kb: P.killer ? (P.killer.netId || 's') : 's', kw: NET.killW | 0, kh: NET.killH ? 1 : 0, kwb: NET.killWB ? 1 : 0, pj: NET.proj || null, sF: G.fired | 0, sH: G.hits | 0, sHH: G.headHits | 0, sh: NET.seq.shot, sx: NET.shot || null, hs: NET.seq.hit, hl: NET.hits, ns: NET.seq.nade, nv: NET.nade || null };
   NET.room.presence(st).catch(() => {});
 }
 function netShot(from, to) { if (!NET.on) return; NET.seq.shot++; const R2 = v => Math.round(v * 100) / 100; NET.shot = [R2(from.x), R2(from.y), R2(from.z), R2(to.x), R2(to.y), R2(to.z)]; }
-function netHit(dmg, crit, weapon, target) { NET.seq.hit++; NET.hits.push({ s: NET.seq.hit, t: target || null, a: Math.round(dmg), h: crit ? 1 : 0, w: Math.max(0, NET_W.indexOf(weapon)) }); if (NET.hits.length > 6) NET.hits.shift(); }
+function netHit(dmg, crit, weapon, target, wb) { NET.seq.hit++; NET.hits.push({ s: NET.seq.hit, t: target || null, a: Math.round(dmg), h: crit ? 1 : 0, w: Math.max(0, NET_W.indexOf(weapon)), wb: wb ? 1 : 0 }); if (NET.hits.length > 6) NET.hits.shift(); }
 function netNade(from, v, rocket) { if (!NET.on) return; NET.seq.nade++; const R2 = x => Math.round(x * 100) / 100; NET.nade = [R2(from.x), R2(from.y), R2(from.z), R2(v.x), R2(v.y), R2(v.z), rocket ? 1 : 0]; }
 // draw the opponent ~100 ms in the past, interpolated between received states: smooth motion despite network jitter
 function updateRemote(r, dt) {
@@ -4833,6 +4892,9 @@ function restoreReplay() {
 
 /* ================= update: player ================= */
 const fwd = V3(), right = V3(), wish = V3();
+// every movement number in one place (exported to data/move.json for the Unity version)
+const MOVE = { run: 5.6, sprint: 8.8, adsSpeed: 3.0, crouchSpeed: 2.8, accelGround: 11, accelAir: 1.6, slideFriction: 1.3, jump: 7.2, doubleJump: 7.6, coyoteTime: .1,
+  gravity: 20, dashGravity: 6, height: 1.8, crouchHeight: 1.2, radius: .4, stepUp: STEP, regenDelay: 5, regenRate: 8, overdriveSpeed: 1.25, knifeSpeed: 1.12, chillSpeed: .55, chargeSpeed: .75 };
 function updatePlayer(dt, rdt) {
   P.slideT = Math.max(0, P.slideT - dt); P.dashT = Math.max(0, P.dashT - dt); P.dashCd = Math.max(0, P.dashCd - dt); P.shield = Math.max(0, P.shield - dt); P.jumpQ = Math.max(0, P.jumpQ - dt);
   if (P.nades < 2) { P.nadeT -= dt; if (P.nadeT <= 0) { P.nades++; P.nadeT = 9; } }
@@ -4844,21 +4906,21 @@ function updatePlayer(dt, rdt) {
   if (keys.KeyW) wish.add(fwd); if (keys.KeyS) wish.sub(fwd); if (keys.KeyD) wish.add(right); if (keys.KeyA) wish.sub(right);
   const sprint = (keys.ShiftLeft || keys.ShiftRight) && keys.KeyW && !keys.KeyS && P.reload <= 0 && !adsHeld && !crouching && P.onGround;
   P.sprint = !!sprint;
-  let speed = (sprint ? 8.8 : 5.6) * (W().move || 1); speed = lerp(speed, 3.0, P.ads); speed = lerp(speed, 2.8, P.crouch); if (P.odT > 0) speed *= 1.25; if (P.weapon === 'knife') speed *= 1.12; if (P.chillT > 0) speed *= .55; if (P.charge > 0) speed *= .75;
+  let speed = (sprint ? MOVE.sprint : MOVE.run) * (W().move || 1); speed = lerp(speed, MOVE.adsSpeed, P.ads); speed = lerp(speed, MOVE.crouchSpeed, P.crouch); if (P.odT > 0) speed *= MOVE.overdriveSpeed; if (P.weapon === 'knife') speed *= MOVE.knifeSpeed; if (P.chillT > 0) speed *= MOVE.chillSpeed; if (P.charge > 0) speed *= MOVE.chargeSpeed;
   if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(speed);
   const MM = mapMods(P.pos.x, P.pos.z); speed *= MM.slow; if (wish.lengthSq() > 0) wish.setLength(speed);
-  const accel = P.onGround ? 11 * MM.fric : 1.6;
-  if (P.slideT > 0) { P.vel.x = damp(P.vel.x, 0, 1.3, dt); P.vel.z = damp(P.vel.z, 0, 1.3, dt); }
+  const accel = P.onGround ? MOVE.accelGround * MM.fric : MOVE.accelAir;
+  if (P.slideT > 0) { P.vel.x = damp(P.vel.x, 0, MOVE.slideFriction, dt); P.vel.z = damp(P.vel.z, 0, MOVE.slideFriction, dt); }
   else if (P.dashT <= 0) { P.vel.x = damp(P.vel.x, wish.x, accel, dt); P.vel.z = damp(P.vel.z, wish.z, accel, dt); }
   if (P.onGround) P.lastGround = G.time;
   if (P.jumpQ > 0) {
-    if (P.onGround || G.time - P.lastGround < .1) { P.vel.y = 7.2; P.onGround = false; P.jumpQ = 0; P.airJumps = 0; P.crouchHold = false; P.slideT = 0; P.lastGround = -9; }
-    else if (P.airJumps < 1) { P.vel.y = 7.6; P.airJumps = 1; P.jumpQ = 0; thrusterFx(_v1.set(P.pos.x, P.pos.y + .1, P.pos.z)); sfx.thrust(); springs.land.v += .9; }
+    if (P.onGround || G.time - P.lastGround < MOVE.coyoteTime) { P.vel.y = MOVE.jump; P.onGround = false; P.jumpQ = 0; P.airJumps = 0; P.crouchHold = false; P.slideT = 0; P.lastGround = -9; }
+    else if (P.airJumps < 1) { P.vel.y = MOVE.doubleJump; P.airJumps = 1; P.jumpQ = 0; thrusterFx(_v1.set(P.pos.x, P.pos.y + .1, P.pos.z)); sfx.thrust(); springs.land.v += .9; }
   }
-  const h = lerp(1.8, 1.2, P.crouch);
-  const nx = P.pos.x + P.vel.x * dt; if (!blocked(nx, P.pos.z, P.pos.y, .4, h)) P.pos.x = nx; else P.vel.x = 0;
-  const nz2 = P.pos.z + P.vel.z * dt; if (!blocked(P.pos.x, nz2, P.pos.y, .4, h)) P.pos.z = nz2; else P.vel.z = 0;
-  P.vel.y -= (P.dashT > 0 ? 6 : 20) * MM.g * dt; P.pos.y += P.vel.y * dt;
+  const h = lerp(MOVE.height, MOVE.crouchHeight, P.crouch);
+  const nx = P.pos.x + P.vel.x * dt; if (!blocked(nx, P.pos.z, P.pos.y, MOVE.radius, h)) P.pos.x = nx; else P.vel.x = 0;
+  const nz2 = P.pos.z + P.vel.z * dt; if (!blocked(P.pos.x, nz2, P.pos.y, MOVE.radius, h)) P.pos.z = nz2; else P.vel.z = 0;
+  P.vel.y -= (P.dashT > 0 ? MOVE.dashGravity : MOVE.gravity) * MM.g * dt; P.pos.y += P.vel.y * dt;
   // if anything ever leaves you inside a wall/object, step out to the closest free spot
   if (blocked(P.pos.x, P.pos.z, P.pos.y, .38, h)) {
     let found = false;
@@ -4876,7 +4938,7 @@ function updatePlayer(dt, rdt) {
   const hs = Math.hypot(P.vel.x, P.vel.z);
   if (P.onGround && hs > 1 && P.slideT <= 0) { P.stepAcc += hs * dt; const stride = sprint ? 2.5 : 1.9; if (P.stepAcc > stride) { P.stepAcc = 0; sfx.step(sprint, false, P.crouch > .5); } }
   // regen + heartbeat
-  if (G.time - P.lastHurt > 5 && P.hp < 100) { P.hp = Math.min(100, P.hp + 8 * dt); updateHud(); }
+  if (G.time - P.lastHurt > MOVE.regenDelay && P.hp < 100) { P.hp = Math.min(100, P.hp + MOVE.regenRate * dt); updateHud(); }
   if (P.hp < 30) { G.heartT -= dt; if (G.heartT <= 0) { sfx.heart(); G.heartT = .85; } }
   // ADS
   const adsT = adsHeld && P.reload <= 0 && !sprint && P.switchT <= 0 && P.weapon !== 'knife' && P.weapon !== 'boomerang' ? 1 : 0;
@@ -5624,12 +5686,12 @@ async function boot() {
   for (const sc of [gunScene]) sc.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { if (m.envMapIntensity !== undefined) m.envMapIntensity *= .55; }); });
   applyQuality(); syncSettings(); showBest();
   menuScene(); setState('menu');
-  try { renderer.compile(scene, camera); renderer.compile(gunScene, gunCam); } catch (e) {}
+  try { renderer.compile(scene, camera); } catch (e) {} warmShaders();
   try { if (!joinFromLink()) { const sv = JSON.parse(localStorage.getItem('sector9-room') || 'null'); if (sv && sv.code && sv.nick && Date.now() - sv.t < 3 * 3600e3) { $('onlinePanel').hidden = false; NET.nick = sv.nick; $('nick').value = sv.nick; openRoom(false, sv.code); startBrowsing(); } } } catch (e) {}
   $('loading').remove();
   requestAnimationFrame(t => { last = t; frame(t); });
   window.__snd = { GUN_VOICE, gsBuild, hitSample };
-  window.__s9 = { SLOTS, get CAMPS() { return CAMPS; }, get HALF() { return HALF; }, gunCam, P, G, robots, hurtPlayer, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS, AU, initAudio, loadMap, MAPS, REC, GUN_IDS, get CUR_MAP() { return CUR_MAP; }, get SPAWNS() { return SPAWNS; }, get MAPFX() { return MAPFX; }, get MAPROOT() { return MAPROOT; }, killBot(r, crit) { damageBot(r, 999, !!crit, r.root.position.clone().setY(r.root.position.y + 1.2), new THREE.Vector3(0, 0, 1), 'body', PLAYER_ENT, P.weapon); }, DROPS, pickNearDrop, BOOM, RBOOMS, NET, openRoom, leaveOnline, boomRoute, lineOfSight };
+  window.__s9 = { PF, MKIT, MKMETA, MKLOG, MOVE, get WEAPONS() { return WEAPONS; }, get BOTW() { return BOTW; }, get MAPS() { return MAPS; }, SLOTS, get CAMPS() { return CAMPS; }, get HALF() { return HALF; }, gunCam, P, G, robots, hurtPlayer, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS, AU, initAudio, loadMap, MAPS, REC, GUN_IDS, get CUR_MAP() { return CUR_MAP; }, get SPAWNS() { return SPAWNS; }, get MAPFX() { return MAPFX; }, get MAPROOT() { return MAPROOT; }, killBot(r, crit) { damageBot(r, 999, !!crit, r.root.position.clone().setY(r.root.position.y + 1.2), new THREE.Vector3(0, 0, 1), 'body', PLAYER_ENT, P.weapon); }, DROPS, pickNearDrop, BOOM, RBOOMS, NET, openRoom, leaveOnline, boomRoute, lineOfSight };
 }
 requestAnimationFrame(() => setTimeout(boot, 30));
 })();
