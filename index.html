@@ -342,6 +342,16 @@ tr.me td{color:#ffd27a;background:rgba(255,154,60,.08)} td:nth-child(n+3),th:nth
         <div class="ohead"><b id="oRoomName"></b><span class="note" id="oRoomInfo"></span></div>
         <div class="oplayers" id="oPlayers"></div>
         <div class="note" id="oWait" hidden></div>
+        <div id="oEdit" hidden>
+          <div class="ohead"><b>Room settings</b><span class="note" id="oEditMsg">Change anything, your invite link stays the same.</span></div>
+          <div class="ocreate">
+            <label>Room name<input id="eName" maxlength="24" autocomplete="off" spellcheck="false"></label>
+            <label>Players<select id="eSize"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+            <label>Map<select id="eMap"></select></label>
+            <label>Kills to win<select id="eKills"><option>10</option><option>15</option><option>20</option><option>30</option></select></label>
+            <button class="ghost" id="btnSaveRoom">Save changes</button>
+          </div>
+        </div>
         <div class="row"><button class="go" id="btnStart" hidden>Start match</button><button class="ghost" id="btnCopy">Copy invite link</button><button class="ghost" id="btnLeave">Leave room</button></div>
       </div>
       <div class="row"><button class="go" id="btnJoinInvite" hidden>Join invite</button><span class="note" id="onlineMsg"></span></div>
@@ -359,6 +369,7 @@ tr.me td{color:#ffd27a;background:rgba(255,154,60,.08)} td:nth-child(n+3),th:nth
     <div class="row">
       <button class="go" id="btnResume">Resume</button>
       <button class="ghost" id="btnArsenal2">Arsenal</button>
+      <button class="ghost" id="btnLobby" hidden>Back to room lobby</button>
       <button class="ghost" id="btnQuit">Abandon run</button>
     </div>
     <div class="settings" id="setPause"></div>
@@ -2784,7 +2795,7 @@ function initAudio() {
   if (AU.ctx) { if (AU.ctx.state === 'suspended') AU.ctx.resume(); return; }
   try {
     const c = new (window.AudioContext || window.webkitAudioContext)(); AU.ctx = c;
-    const comp = c.createDynamicsCompressor(); comp.threshold.value = -9; comp.knee.value = 10; comp.ratio.value = 3; comp.attack.value = .003; comp.release.value = .3; AU.out = c.createGain(); AU.out.gain.value = state === 'paused' ? 0 : 1; comp.connect(AU.out); AU.out.connect(c.destination);
+    const comp = c.createDynamicsCompressor(); comp.threshold.value = -9; comp.knee.value = 10; comp.ratio.value = 3; comp.attack.value = .003; comp.release.value = .3; AU.out = c.createGain(); AU.out.gain.value = 0; audioOn = null; comp.connect(AU.out); AU.out.connect(c.destination);
     AU.master = c.createGain(); AU.master.gain.value = CFG.vol; AU.master.connect(comp);
     AU.dry = c.createGain(); AU.dry.connect(AU.master);
     const ir = (dur, decay) => { const len = c.sampleRate * dur, b = c.createBuffer(2, len, c.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); } return b; };
@@ -2800,7 +2811,7 @@ function initAudio() {
     setTimeout(() => { try { AU.hitBuf = { body: hitSample('body'), head: hitSample('head'), shield: hitSample('shield') }; warmGunVoices(); } catch (e) {} }, 300);
   } catch (e) { AU.ctx = null; }
 }
-const VOICES = { bot: [0, 0, 9], step: [0, 0, 5], impact: [0, 0, 6], whiz: [0, 0, 3], misc: [0, 0, 8] };
+const VOICES = { bot: [0, 0, 9], step: [0, 0, 5], foestep: [0, 0, 12], impact: [0, 0, 6], whiz: [0, 0, 3], misc: [0, 0, 8] };
 function voice(kind, pos) {
   if (!AU.ctx) return false;
   if (pos && camera.position.distanceTo(pos) > 55) return false;
@@ -2808,11 +2819,11 @@ function voice(kind, pos) {
   if (now - v[0] >= .5) { v[0] = now; v[1] = 0; }
   if (v[1] >= v[2] / 2) return false; v[1]++; return true;
 }
-function bus({ pos = null, verb = 0, echo = 0, ref = 4, vol = 1 } = {}) {
+function bus({ pos = null, verb = 0, echo = 0, ref = 4, vol = 1, hrtf = false, roll = 1.1 } = {}) {
   AU.count = (AU.count || 0) + 1;
   const c = AU.ctx, g = c.createGain(); g.gain.value = vol; let out = g;
   if (pos) {
-    const p = c.createPanner(); p.panningModel = 'equalpower'; p.distanceModel = 'inverse'; p.refDistance = ref; p.rolloffFactor = 1.1; p.maxDistance = 120;
+    const p = c.createPanner(); p.panningModel = hrtf ? 'HRTF' : 'equalpower'; p.distanceModel = 'inverse'; p.refDistance = ref; p.rolloffFactor = roll; p.maxDistance = 120;
     if (p.positionX) { p.positionX.value = pos.x; p.positionY.value = pos.y; p.positionZ.value = pos.z; } else p.setPosition(pos.x, pos.y, pos.z);
     g.connect(p); out = p;
   }
@@ -2897,6 +2908,12 @@ const sfx = {
     nz(d, t, land ? .16 : .085, 'lowpass', 170 * p, .9, 1.0, .002); osc(d, t, land ? .12 : .07, 'sine', 105 * p, 50, .8);
     nz(d, t + .012, .055, 'bandpass', rand(1700, 2600), 1.3, .4, .002); nz(d, t + .03, .045, 'highpass', 4800, .7, .14);
     if (land) nz(d, t + .02, .2, 'bandpass', 900, 1, .35, .01); },
+  // an enemy's footstep, placed in 3D (HRTF, so you hear front/back too): boot thud + gear rattle, sprint louder, crouch-walk near silent
+  foeStep(pos, sprint, land, crouch) { if (!AU.ctx || !voice('foestep', pos)) return; const t = AU.ctx.currentTime, p = rand(.88, 1.08);
+    const v = (land ? 1.5 : sprint ? 1.25 : .9) * (crouch ? .3 : 1), d = bus({ pos, hrtf: true, ref: 3, roll: 1.25, verb: .14, vol: v });
+    nz(d, t, land ? .17 : .1, 'lowpass', 210 * p, 1, 1.1, .002); osc(d, t, land ? .13 : .08, 'sine', 92 * p, 46, .9);
+    nz(d, t + .01, .06, 'bandpass', rand(1500, 2300), 1.4, .55, .002); nz(d, t + .035, .05, 'highpass', 4200, .8, .22);
+    if (sprint || land) nz(d, t + .05, .07, 'bandpass', rand(3000, 4200), 4, .18, .004); },
   equip() { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, .12, 'lowpass', 800, 1, .12, .03); nz(AU.dry, t + .2, .05, 'bandpass', 2800, 5, .35); osc(AU.dry, t + .21, .05, 'square', 1100, 700, .08); },
   sniper() { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ verb: .55, echo: .45 });
     nz(d, t, .035, 'highpass', 3000, .7, .9); nz(d, t, .3, 'bandpass', 700, .7, 1.2, .001, 260); nz(d, t, .7, 'lowpass', 300, .7, .8, .004);
@@ -5111,6 +5128,76 @@ function roomTransport(code, create) {
     } else join();
   });
 }
+/* ================= game server: one WebSocket per player (room list + passes state between players) =================
+   The main route for online play. Nobody needs a direct link to anyone else, so it works on any home, office or
+   mobile network and for any number of players. If the server can't be reached, the old peer-to-peer + bus route
+   below is used instead. */
+const SRV = { url: new URLSearchParams(location.search).get('srv') || 'wss://sector-nine-server-production.up.railway.app', ws: null, ready: null, on: new Set(), rtt: null, listing: false, pingT: null };
+function srvInit() {
+  if (SRV.ws && SRV.ws.readyState === 1) return Promise.resolve(true);
+  if (SRV.ready) return SRV.ready;
+  return (SRV.ready = new Promise(res => {
+    let ws; try { ws = new WebSocket(SRV.url); } catch (e) { SRV.ready = null; return res(false); }
+    const t = setTimeout(() => { try { ws.close(); } catch (e) {} }, 7000);
+    ws.onopen = () => { clearTimeout(t); SRV.ws = ws; if (SRV.listing) srvSend({ k: 'list' }); res(true);
+      clearInterval(SRV.pingT); SRV.pingT = setInterval(() => srvSend({ k: 'pi', t: performance.now() }), 1000); srvSend({ k: 'pi', t: performance.now() }); };
+    ws.onmessage = e => { let d; try { d = JSON.parse(e.data); } catch (x) { return; } if (!d) return;
+      if (d.k === 'po') { const r0 = performance.now() - d.t; if (r0 >= 0 && r0 < 5000) SRV.rtt = SRV.rtt === null ? r0 : SRV.rtt + (r0 - SRV.rtt) * .2; return; }
+      if (d.k === 'rooms') { LOBBY.srv = d.rooms || []; if (LOBBY.onList) LOBBY.onList(lobbyRooms()); return; }
+      for (const f of [...SRV.on]) try { f(d); } catch (x) { console.error(x); } };
+    ws.onclose = () => { clearTimeout(t); const was = SRV.ws === ws; if (was) { SRV.ws = null; clearInterval(SRV.pingT); } SRV.ready = null; res(false);
+      if (was) { for (const f of [...SRV.on]) try { f({ k: '_closed' }); } catch (x) {} if (SRV.listing) setTimeout(() => { if (SRV.listing) srvInit(); }, 2000); } };
+    ws.onerror = () => {};
+  }));
+}
+const srvOn = () => !!(SRV.ws && SRV.ws.readyState === 1);
+function srvSend(o) { if (srvOn()) try { SRV.ws.send(typeof o === 'string' ? o : JSON.stringify(o)); } catch (e) {} }
+function serverTransport(code, create) {
+  return new Promise(resolve => {
+    let settled = false, closed = false, handler = null, pres = {}, pending = null, lastSend = 0, seq = 0, myId = null, retry = false;
+    const remotes = new Map(), lastQ = new Map();
+    const done = v => { if (!settled) { settled = true; resolve(v); } };
+    const peersList = () => [{ peer: myId || 'me', isMe: true, presence: pres }, ...[...remotes].map(([k, v]) => ({ peer: k, isMe: false, presence: v }))];
+    const fire = (joined = [], left = []) => handler && handler({ peers: peersList(), joined, left });
+    const stop = () => { closed = true; SRV.on.delete(onMsg); };
+    const api = {
+      name: code, code, meta: null, onMeta: null, onClosed: null, server: true, relayed: false,
+      get isHost() { return !!(api.meta && myId && api.meta.hostId === myId); }, get myId() { return myId; },
+      ping: () => SRV.rtt === null ? 0 : Math.round(SRV.rtt), pingTo: k => { const p = remotes.get(k); return p && p.pg ? p.pg | 0 : null; }, direct: () => false,
+      presence(patch) { pres = Object.assign({}, pres, patch); if (!pending) pending = setTimeout(sendState, Math.max(0, 33 - (performance.now() - lastSend))); return Promise.resolve(); },
+      peers: peersList, onPeers(h) { handler = h; setTimeout(() => fire(), 0); return () => { handler = null; }; }, connected: srvOn,
+      setMeta(patch) { if (!api.isHost) return; Object.assign(api.meta, patch); srvSend({ k: 'meta', m: patch }); },
+      leave() { if (!closed) srvSend({ k: 'leave' }); stop(); clearTimeout(pending); return Promise.resolve(); }
+    };
+    function sendState() { pending = null; if (closed) return; lastSend = performance.now(); pres.q = ++seq; pres.ts = Math.round(lastSend); pres.pg = api.ping(); srvSend({ k: 'st', p: pres }); }
+    function forget(k) { remotes.delete(k); lastQ.delete(k); }
+    // newest state wins: anything older than what we already have is ignored
+    function accept(k, p) { if (!p || k === myId) return; const q = p.q | 0; if (q && q <= (lastQ.get(k) || 0)) return; if (q) lastQ.set(k, q); const isNew = !remotes.has(k); remotes.set(k, p); fire(isNew ? [{ peer: k }] : [], []); }
+    function onMeta(m) { api.meta = m; const ids = new Set(m.players.map(p => p.id)); for (const k of [...remotes.keys()]) if (!ids.has(k)) { forget(k); fire([], [{ peer: k }]); } api.onMeta && api.onMeta(m); }
+    function onMsg(d) {
+      if (closed) return;
+      if (d.k === 'st') { if (d.f && d.p) accept(d.f, d.p); }
+      else if (d.k === 'meta') onMeta(d.m);
+      else if (d.k === 'left') { if (remotes.has(d.id)) { forget(d.id); fire([], [{ peer: d.id }]); } }
+      else if (d.k === 'welcome') { myId = d.id; retry = false; done(api); onMeta(d.meta); fire(); }
+      else if (d.k === 'taken') { stop(); done({ error: 'taken' }); }
+      else if (d.k === 'full') { stop(); if (settled) api.onClosed && api.onClosed('That room is full.'); else done({ error: 'That room is full.' }); }
+      else if (d.k === 'err') { stop(); if (settled) api.onClosed && api.onClosed(d.e); else done({ error: d.e }); }
+      else if (d.k === '_closed') reconnect();
+    }
+    // the connection dropped (wifi blip, phone switching networks): reconnect and step back into the same room
+    function reconnect() {
+      if (!settled) { stop(); done({ error: 'Lost the connection to the game server. Try again.' }); return; }
+      if (retry) return; retry = true; const t0 = performance.now();
+      const tryIt = async () => { if (closed) return; if (await srvInit()) { srvSend({ k: 'join', code, n: NET.nick, c: NET.color | 0 }); setTimeout(() => { if (retry && !closed) { retry = false; reconnect(); } }, 6000); return; }
+        if (performance.now() - t0 > 25000) { stop(); api.onClosed && api.onClosed('Lost the connection to the game server.'); return; } setTimeout(tryIt, 1500); };
+      setTimeout(tryIt, 400);
+    }
+    SRV.on.add(onMsg);
+    srvSend(create ? { k: 'create', code, meta: create, n: NET.nick, c: NET.color | 0 } : { k: 'join', code, n: NET.nick, c: NET.color | 0 });
+    setTimeout(() => { if (!settled) { stop(); done({ error: 'The game server did not answer. Try again.' }); } }, 10000);
+  });
+}
 /* ================= message bus: free public MQTT servers over secure websockets =================
    Two independent servers at once (if one is down the other carries everything); every message has an id so a copy
    that arrives through both is handled once. Used for the public room list and as the backup route when two
@@ -5127,7 +5214,7 @@ function busInit() {
   return (BUS.ready = (async () => {
     const lib = await loadBusLib(); if (!lib) { BUS.ready = null; return false; }
     const cid = 's9' + Math.random().toString(36).slice(2, 10);
-    for (const url of BUS_URLS.slice(0, 2)) {
+    for (const url of BUS_URLS) {
       let c; try { c = lib.connect(url, { clientId: cid + BUS.cs.length, reconnectPeriod: 2500, connectTimeout: 9000, keepalive: 30, clean: true }); } catch (e) { continue; }
       c.on('connect', () => { for (const t of BUS.subs.keys()) c.subscribe(t); });
       c.on('message', (t, m) => busDispatch(t, m));
@@ -5136,8 +5223,6 @@ function busInit() {
     }
     // ready as soon as one server answers (or give up after 10 s)
     const t0 = performance.now(); while (!BUS.cs.some(c => c.connected) && performance.now() - t0 < 10000) await new Promise(r => setTimeout(r, 100));
-    if (!BUS.cs.some(c => c.connected)) { const third = lib.connect(BUS_URLS[2], { clientId: cid + 'x', reconnectPeriod: 2500, connectTimeout: 9000 }); third.on('connect', () => { for (const t of BUS.subs.keys()) third.subscribe(t); }); third.on('message', (t, m) => busDispatch(t, m)); third.on('error', () => {}); BUS.cs.push(third);
-      const t1 = performance.now(); while (!third.connected && performance.now() - t1 < 8000) await new Promise(r => setTimeout(r, 100)); }
     return BUS.cs.some(c => c.connected);
   })());
 }
@@ -5166,18 +5251,29 @@ function busConn(peerId, outTopic, inTopic, from) {
 const RTOP = code => 's9g/v1/r/' + code;
 
 // the public room list: every open room is a retained message on the bus that its host refreshes every 3 s
-const LOBBY = { rooms: new Map(), onList: null, reg: null, timer: null, unsub: null };
+const LOBBY = { rooms: new Map(), beats: new Map(), onList: null, reg: null, timer: null, unsub: null };
 function lobbyEnsure() {
   if (LOBBY.unsub) return;
-  LOBBY.unsub = busSub('s9g/v1/rooms/+', (r, t) => { const code = t.split('/').pop(); if (!r || !r.code) { LOBBY.rooms.delete(code); return; } LOBBY.rooms.set(r.code, r); if (LOBBY.onList) LOBBY.onList(lobbyRooms()); });
+  // judge freshness by OUR clock (when we last heard from the host), so a friend whose PC clock is off still sees the room.
+  // A saved (retained) entry is trusted at once only if its time looks recent; otherwise it shows as soon as the host's next beat arrives.
+  LOBBY.unsub = busSub('s9g/v1/rooms/+', (r, t) => { const code = t.split('/').pop(); if (!r || !r.code) { LOBBY.rooms.delete(code); LOBBY.beats.delete(code); if (LOBBY.onList) LOBBY.onList(lobbyRooms()); return; }
+    const now = Date.now(), b = LOBBY.beats.get(code) || { n: 0 }; b.n++; b.at = now; if (Math.abs(now - (r.t || 0)) < 20000 || b.n > 1) b.ok = true; LOBBY.beats.set(code, b);
+    if (b.ok) LOBBY.rooms.set(r.code, r); if (LOBBY.onList) LOBBY.onList(lobbyRooms()); });
 }
-function lobbyRooms() { const now = Date.now(); for (const [k, r] of LOBBY.rooms) if (!(Math.abs(now - (r.t || 0)) < 20000)) LOBBY.rooms.delete(k); return [...LOBBY.rooms.values()]; }
-function lobbyTick() {
-  clearTimeout(LOBBY.timer); LOBBY.timer = setTimeout(lobbyTick, 3000);
+function lobbyRooms() { if (srvOn() && LOBBY.srv) return LOBBY.srv.slice(); const now = Date.now(); for (const [k] of LOBBY.rooms) { const b = LOBBY.beats.get(k); if (!b || now - b.at > 40000) { LOBBY.rooms.delete(k); LOBBY.beats.delete(k); } } return [...LOBBY.rooms.values()]; }
+// the host's beat runs on a worker clock: a normal timer is slowed to once a minute when the tab sits in the background
+function lobbyClock() {
+  if (LOBBY.clock !== undefined) return LOBBY.clock;
+  try { const w = new Worker(URL.createObjectURL(new Blob(['setInterval(()=>postMessage(0),3000)'], { type: 'text/javascript' }))); w.onmessage = () => lobbyTick(true); LOBBY.clock = w; } catch (e) { LOBBY.clock = null; }
+  return LOBBY.clock;
+}
+function lobbyTick(fromClock) {
+  if (fromClock !== true) { clearTimeout(LOBBY.timer); if (!lobbyClock()) LOBBY.timer = setTimeout(lobbyTick, 3000); }
   const reg = LOBBY.reg && LOBBY.reg();
   if (reg && busOn()) busPub('s9g/v1/rooms/' + reg.code, Object.assign({}, reg, { t: Date.now() }), true);
   if (LOBBY.onList) LOBBY.onList(lobbyRooms());
 }
+addEventListener('pagehide', () => { try { const r = NET.room; if (r && r.isHost) lobbyUnregister(r.code); } catch (e) {} });
 function lobbyUnregister(code) { if (busOn()) busPub('s9g/v1/rooms/' + code, null, true); LOBBY.rooms.delete(code); }
 
 /* ---- game side: one remote fighter per player in the room ---- */
@@ -5200,7 +5296,7 @@ function dropPeer(id, announce) {
 }
 function onNetPeers() {
   if (!NET.room || !NET.inMatch) return;
-  for (const p of NET.room.peers()) { if (p.isMe || !p.presence || p.presence.v !== 1) continue; const E = peerEntry(p.peer, p.presence); if (E.pres !== p.presence) { E.pres = p.presence; netReceive(E, p.presence); } }
+  for (const p of NET.room.peers()) { if (p.isMe || !p.presence || p.presence.v !== 1) continue; if (p.presence.lob) { if (NET.peers.has(p.peer)) dropPeer(p.peer, true); continue; } const E = peerEntry(p.peer, p.presence); if (E.pres !== p.presence) { E.pres = p.presence; netReceive(E, p.presence); } }
 }
 // what TAB shows in the ping column: real round-trip times online (each player's own average to everyone), 'BOT' for bots
 function pingOf(e) { if (!NET.on || !NET.room || !NET.room.ping) return null; if (e.isPlayer) return NET.room.ping(); if (e.remote) return e.ping || NET.room.pingTo(e.netId); return null; }
@@ -5212,10 +5308,11 @@ function netReceive(E, pr) {
   const now = performance.now();
   // place each state on the sender's own clock (mapped to ours), so uneven packet arrival doesn't make them stutter
   let st = now;
-  if (pr.ts) { const d = now - pr.ts; if (E.off === undefined || d < E.off) E.off = d; else E.off += (d - E.off) * .002; st = pr.ts + E.off;
-    const J = Math.abs(d - E.off); E.jit = E.jit === undefined ? J : E.jit + (J - E.jit) * .1;
+  // states are kept on the SENDER's clock; updateRemote plays them back on a steady clock of its own (see there)
+  if (pr.ts) { st = pr.ts; const d = now - pr.ts; if (E.base === undefined || d < E.base) E.base = d; else E.base += (d - E.base) * .002;
+    const J = d - E.base; E.jit = E.jit === undefined ? J : E.jit + (J - E.jit) * (J > E.jit ? .2 : .02);   // rises fast on lag spikes, settles slowly
     if (E.lts) { const iv = pr.ts - E.lts; if (iv > 0 && iv < 500) E.iv = E.iv === undefined ? iv : E.iv + (iv - E.iv) * .1; } E.lts = pr.ts;
-    r.idelay = clamp((E.iv || 33) * 1.6 + (E.jit || 0) * 2 + 8, 45, 170); }
+    r.target = clamp((E.iv || 33) * 1.5 + (E.jit || 0) * 1.5 + 15, 60, 350); }
   if (!r.snaps.length || st > r.snaps[r.snaps.length - 1].t) { r.snaps.push({ t: st, x: +pr.x[0], y: +pr.x[1], z: +pr.x[2], yaw: +pr.yw, pitch: +pr.pt }); if (r.snaps.length > 30) r.snaps.shift(); }
   r.ping = pr.pg | 0;
   if ((pr.K | 0) >= KILL_LIMIT && !G.ended && NET.inMatch) setTimeout(() => endMatch(r), 1200);
@@ -5252,7 +5349,7 @@ function netReceive(E, pr) {
     if (PLAYER_ENT.kills >= KILL_LIMIT) setTimeout(() => endMatch(PLAYER_ENT), 1200);
     updateHud();
   } else if (!pr.dd && r.dead) {
-    r.dead = false; r.root.visible = true; r.gun.visible = true; r.hp = 100; r.visor.emissive.copy(r.color); for (const m of [r.body, r.visor]) { m.opacity = 1; m.transparent = false; m.depthWrite = true; m.needsUpdate = true; } r.body.emissive.setRGB(0, 0, 0); r.act.death.stop(); r.act.death.w = 0; r.act.death.setEffectiveWeight(0); resetDeathFx(r); r.snaps = []; targetsDirty = true;
+    r.dead = false; r.root.visible = true; r.gun.visible = true; r.hp = 100; r.visor.emissive.copy(r.color); for (const m of [r.body, r.visor]) { m.opacity = 1; m.transparent = false; m.depthWrite = true; m.needsUpdate = true; } r.body.emissive.setRGB(0, 0, 0); r.act.death.stop(); r.act.death.w = 0; r.act.death.setEffectiveWeight(0); resetDeathFx(r); r.snaps = []; r.lastN = null; r.rt = undefined; targetsDirty = true;
   }
 }
 // what the other player needs to draw you: absolute state, every frame (the platform coalesces to ~30 Hz)
@@ -5261,7 +5358,7 @@ function netSend(dt) {
   NET.saveT = (NET.saveT || 0) - dt; if (NET.saveT <= 0 && NET.inMatch) { NET.saveT = 2; try { localStorage.setItem('sector9-room', JSON.stringify({ nick: NET.nick, code: NET.code, t: Date.now() })); } catch (e) {} }
   const R2 = v => Math.round(v * 100) / 100;
   const st = {
-    v: 1, mp: CUR_MAP, jt: NET.joinT, n: NET.nick, c: NET.color | 0, x: [R2(P.pos.x), R2(P.pos.y), R2(P.pos.z)], yw: R2(P.yaw + Math.PI), pt: R2(P.pitch), cr: R2(P.crouch), g: P.onGround ? 1 : 0,
+    v: 1, lob: NET.inMatch ? 0 : 1, mp: CUR_MAP, jt: NET.joinT, n: NET.nick, c: NET.color | 0, x: [R2(P.pos.x), R2(P.pos.y), R2(P.pos.z)], yw: R2(P.yaw + Math.PI), pt: R2(P.pitch), cr: R2(P.crouch), g: P.onGround ? 1 : 0,
     w: Math.max(0, NET_W.indexOf(P.weapon)), rl: P.reload > 0 ? 1 : 0, hp: Math.round(P.hp), sd: R2(P.shield), dd: P.dead ? 1 : 0, D: PLAYER_ENT.deaths, K: PLAYER_ENT.kills,
     kb: P.killer ? (P.killer.netId || 's') : 's', kw: NET.killW | 0, kh: NET.killH ? 1 : 0, kwb: NET.killWB ? 1 : 0, pj: NET.proj || null, sF: G.fired | 0, sH: G.hits | 0, sHH: G.headHits | 0, sh: NET.seq.shot, sx: NET.shot || null, hs: NET.seq.hit, hl: NET.hits, ns: NET.seq.nade, nv: NET.nade || null };
   NET.room.presence(st).catch(() => {});
@@ -5271,15 +5368,28 @@ function netHit(dmg, crit, weapon, target, wb) { NET.seq.hit++; NET.hits.push({ 
 function netNade(from, v, rocket) { if (!NET.on) return; NET.seq.nade++; const R2 = x => Math.round(x * 100) / 100; NET.nade = [R2(from.x), R2(from.y), R2(from.z), R2(v.x), R2(v.y), R2(v.z), rocket ? 1 : 0]; }
 // draw the opponent ~100 ms in the past, interpolated between received states: smooth motion despite network jitter
 function updateRemote(r, dt) {
-  const S = r.snaps || [], t = performance.now() - (r.idelay || 100);
+  // a steady playback clock (like Source / Valorant): it runs a safe distance behind the newest state and speeds up or
+  // slows down by at most 35% to keep that distance. A lag spike makes the player slow down a little, never freeze or pop.
+  const S = r.snaps || [];
   if (S.length) {
+    const latest = S[S.length - 1].t, tg = r.target || 100;
+    if (r.rt === undefined || latest - r.rt > tg + 1500 || latest - r.rt < -2500) r.rt = latest - tg;
+    r.rt += dt * 1000 * (1 + clamp((latest - r.rt - tg) / 400, -.35, .35));
+    const t = r.rt;
     let a = S[0], b = S[S.length - 1];
     for (let i = 0; i < S.length - 1; i++) if (S[i].t <= t && S[i + 1].t >= t) { a = S[i]; b = S[i + 1]; break; }
-    // ran out of fresh states (a lost burst): keep them moving along their last direction for up to 120 ms instead of freezing
-    if (t > b.t && S.length > 1) a = S[S.length - 2];
-    const k = b.t > a.t ? clamp((t - a.t) / (b.t - a.t), 0, t > b.t ? 1 + 120 / Math.max(20, b.t - a.t) : 1) : 1, p = r.root.position;
-    const nx = lerp(a.x, b.x, k), ny = lerp(a.y, b.y, k), nz = lerp(a.z, b.z, k);
-    if (p.distanceTo(_v1.set(nx, ny, nz)) > 6) p.set(nx, ny, nz);
+        if (t > b.t && S.length > 1) a = S[S.length - 2];
+    // past the newest state they keep going but ease to a stop (no hard freeze, no sudden halt) when someone's connection stalls
+    const span = Math.max(20, b.t - a.t), over = t - b.t;
+    const k = b.t > a.t ? (over > 0 ? 1 + 150 * (1 - Math.exp(-over / 150)) / span : clamp((t - a.t) / span, 0, 1)) : 1, p = r.root.position;
+    let nx = lerp(a.x, b.x, k), ny = lerp(a.y, b.y, k), nz = lerp(a.z, b.z, k);
+    // when late data corrects where they really are, glide there over ~0.15 s instead of popping (respawns/teleports still snap)
+    const C = r.corr || (r.corr = new THREE.Vector3());
+    if (r.lastN && p.distanceTo(_v1.set(nx, ny, nz)) < 6) { const jx = nx - r.lastN.x, jy = ny - r.lastN.y, jz = nz - r.lastN.z, lim = 14 * dt + .05;
+      if (jx * jx + jy * jy + jz * jz > lim * lim) C.set(p.x - nx, p.y - ny, p.z - nz); } else C.set(0, 0, 0);
+    (r.lastN || (r.lastN = new THREE.Vector3())).set(nx, ny, nz);
+    { const L = C.length(); if (L < .002) C.set(0, 0, 0); else C.multiplyScalar(Math.max(0, L - Math.min(L * (1 - Math.exp(-dt * 8)), 6.5 * dt) - .001) / L); }
+    nx += C.x; ny += C.y; nz += C.z;
     const vx = (nx - p.x) / Math.max(dt, 1e-3), vz = (nz - p.z) / Math.max(dt, 1e-3);
     r.vel.x = damp(r.vel.x, vx, 12, dt); r.vel.z = damp(r.vel.z, vz, 12, dt);
     p.set(nx, ny, nz);
@@ -5619,7 +5729,7 @@ function restoreReplay() {
 /* ================= update: player ================= */
 const fwd = V3(), right = V3(), wish = V3();
 // every movement number in one place (exported to data/move.json for the Unity version)
-const MOVE = { run: 5.6, sprint: 8.8, adsSpeed: 3.0, crouchSpeed: 2.8, accelGround: 11, accelAir: 1.6, slideFriction: 1.3, jump: 7.2, doubleJump: 7.6, coyoteTime: .1,
+const MOVE = { run: 5.6, sprint: 8.8, adsSpeed: 3.0, crouchSpeed: 2.8, accelGround: 11, accelAir: 1.6, slideFriction: 1.3, jump: 7.9, doubleJump: 7.9, coyoteTime: .1,
   gravity: 20, dashGravity: 6, height: 1.8, crouchHeight: 1.2, radius: .4, stepUp: STEP, regenDelay: 5, regenRate: 8, overdriveSpeed: 1.25, knifeSpeed: 1.12, chillSpeed: .55, chargeSpeed: .75 };
 function updatePlayer(dt, rdt) {
   P.slideT = Math.max(0, P.slideT - dt); P.dashT = Math.max(0, P.dashT - dt); P.dashCd = Math.max(0, P.dashCd - dt); P.shield = Math.max(0, P.shield - dt); P.jumpQ = Math.max(0, P.jumpQ - dt);
@@ -6089,6 +6199,17 @@ function updateRobots(dt, menu) {
     r.thinkT -= dt; if (r.thinkT <= 0) { r.thinkT = rand(.3, .55); think(r, ents); }
     moveBot(r, dt); combatBot(r, dt); if (!kcLive()) animateBot(r, dt);
   }
+  if (!menu && !kcLive()) for (const r of robots) foeSteps(r, dt);
+}
+// enemy footsteps: one step per stride while they move on the ground, a heavier thump when they land from a jump
+function foeSteps(r, dt) {
+  if (r.dead) { r.fsAcc = 0; return; }
+  const p = r.root.position, hs = Math.hypot(r.vel.x, r.vel.z), ground = r.onGround !== false;
+  if (ground && r.fsAir && (r.fsVy || 0) < -4) sfx.foeStep(p, false, true, false);
+  r.fsAir = !ground; r.fsVy = r.remote ? ((p.y - (r.fsY ?? p.y)) / Math.max(dt, 1e-3)) : r.vy; r.fsY = p.y;
+  if (!ground || hs < 1.2 || r.dashT > 0) return;
+  const sprint = hs > 5, stride = sprint ? 2.4 : 1.85;
+  r.fsAcc = (r.fsAcc || 0) + hs * dt; if (r.fsAcc > stride) { r.fsAcc = 0; sfx.foeStep(p, sprint, false, (r.crouch || 0) > .5); }
 }
 // floating name tags + health for players you can see
 function updateTags() {
@@ -6132,11 +6253,19 @@ function updateDebris(dt) {
 }
 
 /* ================= flow ================= */
+// game sound only while you are actually in the match: paused, Esc pressed while dead, back at the menu, or tab hidden = silence
+let audioOn = null;
+function syncAudio() {
+  const on = !document.hidden && (state === 'play' || state === 'matchend' || (state === 'dead' && !P.pauseOnRespawn));
+  if (!AU.ctx || !AU.out || on === audioOn) return; audioOn = on;
+  const g = AU.out.gain, t = AU.ctx.currentTime; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(on ? 1 : 0, t + (on ? .25 : .06));
+}
+document.addEventListener('visibilitychange', syncAudio);
 function setState(s) {
   state = s;
   // paused = total silence (wind, ambience, echoes, everything); sound fades back in when you resume
-  if (AU.ctx && AU.out) { const g = AU.out.gain, t = AU.ctx.currentTime; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(s === 'paused' ? 0 : 1, t + (s === 'paused' ? .08 : .25)); }
-  $('menu').hidden = s !== 'menu'; $('pause').hidden = s !== 'paused'; $('mend').hidden = s !== 'matchend';
+  syncAudio();
+  $('menu').hidden = s !== 'menu'; $('pause').hidden = s !== 'paused'; $('btnLobby').hidden = !(NET.on && NET.room && NET.inMatch); $('mend').hidden = s !== 'matchend';
   $('hud').hidden = !(s === 'play' || s === 'paused' || s === 'dead');
   if (s !== 'dead') { $('death').hidden = true; if (typeof stopKillcam === 'function') stopKillcam(); if (typeof stopDeathcam === 'function') stopDeathcam(); } if (s !== 'play') $('board').hidden = true;
   if (s !== 'play') { mouseDown = false; adsHeld = false; for (const k in keys) keys[k] = false; }
@@ -6168,7 +6297,9 @@ function onlineMsg(t, err) { const m = $('onlineMsg'); m.textContent = t || ''; 
 function needNick() { const n = cleanNick($('nick').value); if (!n) { onlineMsg('Type a nickname first.', true); $('nick').focus(); return null; } NET.nick = n; try { localStorage.setItem('sector9-nick', n); } catch (e) {} let h = 0; for (const ch of n) h = (h * 31 + ch.charCodeAt(0)) >>> 0; NET.color = h % 6; return n; }
 async function startBrowsing() {
   onlineMsg('Looking for rooms...');
-  const [ok] = await Promise.all([busInit(), PeerLib ? null : loadPeerLib().then(l => { PeerLib = l; })]);
+  SRV.listing = true;
+  let ok = await srvInit(); if (ok) srvSend({ k: 'list' });
+  else [ok] = await Promise.all([busInit(), PeerLib ? null : loadPeerLib().then(l => { PeerLib = l; })]);
   if (!ok) { onlineMsg('Could not reach the room servers. Check your internet and try again.', true); return; }
   onlineMsg(''); LOBBY.onList = renderRoomList; lobbyEnsure(); lobbyTick();
 }
@@ -6182,20 +6313,24 @@ function renderRoomList(rooms) {
 async function openRoom(create, code) {
   if (!needNick()) return false;
   initAudio(); onlineMsg('Connecting...'); for (const b of document.querySelectorAll('#onlinePanel button')) b.disabled = true;
-  const [busOk] = await Promise.all([busInit(), PeerLib ? null : loadPeerLib().then(l => { PeerLib = l; })]);
+  const useSrv = await srvInit();
+  const [busOk] = useSrv ? [false] : await Promise.all([busInit(), PeerLib ? null : loadPeerLib().then(l => { PeerLib = l; })]);
   let room = null;
-  if (busOk || PeerLib) for (let tries = 0; tries < 4; tries++) {
+  if (useSrv || busOk || PeerLib) for (let tries = 0; tries < 4; tries++) {
     const c = create ? randCode() : code;
     const settings = create ? { name: cleanNick($('rName').value).slice(0, 24) || `${NET.nick}'s room`, size: +$('rSize').value || 4, map: $('rMap').value, kills: +$('rKills').value || 15, host: NET.nick } : null;
-    room = await roomTransport(c, settings); if (!(room.error === 'taken' && create)) break;
+    room = await (useSrv ? serverTransport : roomTransport)(c, settings); if (!(room.error === 'taken' && create)) break;
   }
   for (const b of document.querySelectorAll('#onlinePanel button')) b.disabled = false;
   if (!room || room.error) { onlineMsg(room ? room.error : 'Could not reach the matchmaking server.', true); return false; }
   NET.room = room; NET.on = true; NET.code = room.code; NET.inMatch = false; NET.peers.clear(); NET.hits = []; NET.seq = { shot: 0, hit: 0, nade: 0 }; NET.joinT = Date.now();
   room.onPeers(ch => { if (NET.room !== room) return; for (const p of ch.left) dropPeer(p.peer, true); onNetPeers(); });
-  room.onMeta = m => { if (NET.room !== room) return; renderRoom(m); if (m.started && !NET.inMatch && !NET.starting) beginRoomMatch(m); };
+  room.onMeta = m => { if (NET.room !== room) return; const was = room.wasStarted; room.wasStarted = !!m.started; renderRoom(m);
+    if (m.started && !NET.inMatch && !NET.starting && (!was || !room.stepOut)) beginRoomMatch(m);
+    else if (!m.started && was && NET.inMatch && !room.isHost) toRoomLobby('The host ended the match. Waiting for the next one...');
+    if (!m.started) room.stepOut = false; };
   room.onClosed = why => { if (NET.room !== room) return; leaveOnline(); if (state !== 'menu') { menuScene(); setState('menu'); } $('onlinePanel').hidden = false; onlineMsg(why, true); };
-  if (room.isHost) LOBBY.reg = () => { const m = room.meta; return { code: room.code, name: m.name, host: m.host || NET.nick, map: m.map, size: m.size, count: m.count, kills: m.kills, started: !!m.started }; };
+  if (room.isHost && !room.server) LOBBY.reg = () => { const m = room.meta; return { code: room.code, name: m.name, host: m.host || NET.nick, map: m.map, size: m.size, count: m.count, kills: m.kills, started: !!m.started }; };
   try { history.replaceState(null, '', '#room=' + room.code); localStorage.setItem('sector9-room', JSON.stringify({ nick: NET.nick, code: room.code, t: Date.now() })); } catch (e) {}
   $('oBrowse').hidden = true; $('oRoom').hidden = false; onlineMsg('');
   if (room.meta) renderRoom(room.meta); else $('oPlayers').innerHTML = '<div class="note">Joining...</div>';
@@ -6208,7 +6343,9 @@ function renderRoom(m) {
   $('oRoomInfo').textContent = `${mapName(m.map)} · first to ${m.kills} · ${m.count}/${m.size} players${m.started ? ' · match running' : ''}`;
   $('oPlayers').innerHTML = m.players.map(p => { const c = NET_COLORS[(p.c | 0) % NET_COLORS.length].map(x => Math.round(Math.min(1, x) * 255)); return `<div class="oplayer"><i style="background:rgb(${c})"></i><b>${escH(p.n)}</b>${p.host ? '<em>Host</em>' : ''}${NET.room && p.id === NET.room.myId ? '<span>you</span>' : ''}</div>`; }).join('')
     + Array.from({ length: Math.max(0, m.size - m.count) }, () => '<div class="oplayer empty"><i></i><b>Open slot</b></div>').join('');
-  $('btnStart').hidden = !host; $('btnStart').disabled = m.count < 2 && !m.started; $('btnStart').textContent = m.started ? 'Rejoin match' : m.count < 2 ? 'Waiting for players' : 'Start match';
+  $('oEdit').hidden = !host || m.started;
+  if (host && !$('oEdit').contains(document.activeElement) && !$('oEdit').dataset.dirty) { $('eName').value = m.name; $('eSize').value = String(m.size); $('eMap').value = m.map; $('eKills').value = String(m.kills); }
+  $('btnStart').hidden = !host && !m.started; $('btnStart').disabled = m.count < 2 && !m.started; $('btnStart').textContent = m.started ? 'Rejoin match' : m.count < 2 ? 'Waiting for players' : 'Start match';
   $('oWait').hidden = host || m.started; $('oWait').textContent = 'Waiting for the host to start the match...';
 }
 async function beginRoomMatch(m) {
@@ -6227,12 +6364,26 @@ function leaveOnline() {
   $('oRoom').hidden = true; $('oBrowse').hidden = false;
 }
 $('btnOnline').addEventListener('click', () => { const p = $('onlinePanel'); p.hidden = !p.hidden; if (!p.hidden) { $('nick').value = NET.nick; $('rName').placeholder = 'e.g. Friday night'; startBrowsing(); } });
-$('rMap').innerHTML = MAPS.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+$('rMap').innerHTML = $('eMap').innerHTML = MAPS.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+for (const id of ['eName', 'eSize', 'eMap', 'eKills']) $(id).addEventListener('input', () => { $('oEdit').dataset.dirty = '1'; $('oEditMsg').textContent = 'Unsaved changes'; });
+// the host edits the open room in place: same code, same invite link, everyone in the lobby sees the new settings at once
+$('btnSaveRoom').addEventListener('click', () => { const r = NET.room; if (!r || !r.isHost) return;
+  const size = Math.max(+$('eSize').value || 4, r.meta.count || 1), kills = +$('eKills').value || 15;
+  r.setMeta({ name: cleanNick($('eName').value).slice(0, 24) || r.meta.name, size, map: $('eMap').value, kills });
+  delete $('oEdit').dataset.dirty; $('oEditMsg').textContent = size > +$('eSize').value ? `Saved. Players kept at ${size}: that many are already in the room.` : 'Saved. Your invite link stays the same.'; renderRoom(r.meta); lobbyTick(); });
+// back to the room lobby: the host ends the match for everyone (to change settings and start again); others just step out and can rejoin
+function toRoomLobby(msg) {
+  for (const id of [...NET.peers.keys()]) dropPeer(id, false);
+  NET.inMatch = false; NET.starting = false; menuScene(); setState('menu');
+  $('onlinePanel').hidden = false; $('oBrowse').hidden = true; $('oRoom').hidden = false; onlineMsg(msg || '');
+  if (NET.room && NET.room.meta) renderRoom(NET.room.meta);
+}
+$('btnLobby').addEventListener('click', () => { const r = NET.room; if (!r) return; if (r.isHost) r.setMeta({ started: false }); else r.stepOut = true; toRoomLobby(r.isHost ? 'Match ended. Change the settings or start again.' : ''); });
 $('btnCreate').addEventListener('click', () => openRoom(true));
 $('roomList').addEventListener('click', e => { const b = e.target.closest('[data-room]'); if (b) openRoom(false, b.dataset.room); });
 $('btnLeave').addEventListener('click', () => { leaveOnline(); onlineMsg('You left the room.'); });
 $('btnCopy').addEventListener('click', () => { const url = location.origin + location.pathname + '#room=' + (NET.room ? NET.room.code : ''); try { navigator.clipboard.writeText(url); onlineMsg('Invite link copied. Anyone with it can join.'); } catch (e) { onlineMsg(url); } });
-$('btnStart').addEventListener('click', () => { const r = NET.room; if (!r || !r.isHost) return; if (r.meta.started) { beginRoomMatch(r.meta); return; } r.setMeta({ started: true }); });
+$('btnStart').addEventListener('click', () => { const r = NET.room; if (!r || !r.meta) return; if (r.meta.started) { r.stepOut = false; beginRoomMatch(r.meta); return; } if (r.isHost) r.setMeta({ started: true }); });
 $('btnResume').addEventListener('click', () => { setTimeout(() => { $('pause').querySelector('.kicker').textContent = 'Paused'; $('pause').querySelector('h2').innerHTML = 'Holding<br>position'; $('btnResume').textContent = 'Resume'; }, 200); });
 // invite links: #room=CODE drops you straight into that room's lobby
 function joinFromLink() {
@@ -6313,6 +6464,7 @@ let last = performance.now(), menuT = 0, frameAvg = 16, prTimer = 0, fpsT = 0, f
 const xh = { u: document.querySelector('#xh .u'), d: document.querySelector('#xh .d'), l: document.querySelector('#xh .l'), r: document.querySelector('#xh .r') };
 const perf = { upd: 0, render: 0, bots: 0, hist: [] };
 function frame(now) {
+  syncAudio();
   requestAnimationFrame(frame);
   let rdt = (now - last) / 1000; last = now; rdt = Math.min(rdt, 1 / 20);
   // adaptive resolution keeps the frame rate smooth
@@ -6428,7 +6580,7 @@ async function boot() {
   $('loading').remove();
   requestAnimationFrame(t => { last = t; frame(t); });
   window.__snd = { GUN_VOICE, gsBuild, hitSample };
-  window.__s9 = { PF, MKIT, MKMETA, MKLOG, MOVE, get WEAPONS() { return WEAPONS; }, get BOTW() { return BOTW; }, get MAPS() { return MAPS; }, SLOTS, get CAMPS() { return CAMPS; }, get HALF() { return HALF; }, gunCam, P, G, robots, hurtPlayer, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS, AU, initAudio, loadMap, MAPS, REC, GUN_IDS, get CUR_MAP() { return CUR_MAP; }, get SPAWNS() { return SPAWNS; }, get MAPFX() { return MAPFX; }, get MAPROOT() { return MAPROOT; }, killBot(r, crit) { damageBot(r, 999, !!crit, r.root.position.clone().setY(r.root.position.y + 1.2), new THREE.Vector3(0, 0, 1), 'body', PLAYER_ENT, P.weapon); }, DROPS, pickNearDrop, BOOM, RBOOMS, NET, openRoom, leaveOnline, boomRoute, lineOfSight, explode, damageEntity, scene, world };
+  window.__s9 = { get world() { return world; }, PF, sfx, MKIT, MKMETA, MKLOG, MOVE, get WEAPONS() { return WEAPONS; }, get BOTW() { return BOTW; }, get MAPS() { return MAPS; }, SLOTS, get CAMPS() { return CAMPS; }, get HALF() { return HALF; }, gunCam, P, G, robots, hurtPlayer, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS, AU, initAudio, loadMap, MAPS, REC, GUN_IDS, get CUR_MAP() { return CUR_MAP; }, get SPAWNS() { return SPAWNS; }, get MAPFX() { return MAPFX; }, get MAPROOT() { return MAPROOT; }, killBot(r, crit) { damageBot(r, 999, !!crit, r.root.position.clone().setY(r.root.position.y + 1.2), new THREE.Vector3(0, 0, 1), 'body', PLAYER_ENT, P.weapon); }, DROPS, pickNearDrop, BOOM, RBOOMS, NET, openRoom, leaveOnline, boomRoute, lineOfSight, explode, damageEntity, scene, world };
 }
 requestAnimationFrame(() => setTimeout(boot, 30));
 })();
