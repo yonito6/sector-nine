@@ -5756,7 +5756,9 @@ function updatePlayer(dt, rdt) {
   const h = lerp(MOVE.height, MOVE.crouchHeight, P.crouch);
   const nx = P.pos.x + P.vel.x * dt; if (!blocked(nx, P.pos.z, P.pos.y, MOVE.radius, h)) P.pos.x = nx; else P.vel.x = 0;
   const nz2 = P.pos.z + P.vel.z * dt; if (!blocked(P.pos.x, nz2, P.pos.y, MOVE.radius, h)) P.pos.z = nz2; else P.vel.z = 0;
-  P.vel.y -= (P.dashT > 0 ? MOVE.dashGravity : MOVE.gravity) * MM.g * dt; P.pos.y += P.vel.y * dt;
+  P.vel.y -= (P.dashT > 0 ? MOVE.dashGravity : MOVE.gravity) * MM.g * dt;
+  // head bump: jumping into a ceiling stops you under it (instead of ending up inside it and being pushed out somewhere else)
+  { const y0 = P.pos.y; P.pos.y += P.vel.y * dt; if (P.vel.y > 0 && blocked(P.pos.x, P.pos.z, P.pos.y, .38, h) && !blocked(P.pos.x, P.pos.z, y0, .38, h)) { P.pos.y = y0; P.vel.y = 0; } }
   // if anything ever leaves you inside a wall/object, step out to the closest free spot
   if (blocked(P.pos.x, P.pos.z, P.pos.y, .38, h)) {
     let found = false;
@@ -6075,7 +6077,7 @@ function moveBot(r, dt) {
   // gravity, jumps and the air double-jump
   r.vy -= 20 * mapMods(p.x, p.z).g * dt;
   if (!r.onGround && r.wantDouble && r.vy < 1.5 && r.airJumps === 0) { r.vy = 6.4; r.airJumps = 1; r.wantDouble = false; thrusterFx(_a3.set(p.x, p.y + .2, p.z), r.color); }
-  p.y += r.vy * dt;
+  { const y0 = p.y; p.y += r.vy * dt; if (r.vy > 0 && blocked(p.x, p.z, p.y, .35, 1.8) && !blocked(p.x, p.z, y0, .35, 1.8)) { p.y = y0; r.vy = 0; } }
   const g = groundAt(p.x, p.z, p.y, .4);
   if (p.y <= g) { p.y = g; r.vy = 0; r.onGround = true; r.airJumps = 0; } else r.onGround = p.y - g < .05 && r.vy <= 0;
   mapTriggers(r, dt);
