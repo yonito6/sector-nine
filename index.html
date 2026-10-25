@@ -173,7 +173,7 @@ button.ghost:focus-visible{outline:2px solid var(--sodium);outline-offset:3px}
 #death[hidden]{display:none}
 #death.kc{align-content:end;padding-bottom:12vh;background:none}
 #death.kc .huge{display:none}
-#hud.kcview>:not(#death):not(#killcam){visibility:hidden}
+#hud.kcview>:not(#death):not(#killcam):not(#scope){visibility:hidden}
 .pg-good{color:#5dff9a}.pg-ok{color:#ffd166}.pg-bad{color:#ff6b5d}
 #killcam{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 3px rgba(255,74,61,.55);background:radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.35))}
 #killcam[hidden]{display:none}
@@ -1351,18 +1351,91 @@ function mapkitMats(theme, key) {
 }
 // build a map's structures: put(name, x, z, quarterTurns, y) places a piece; everything is merged at the end
 const MKLOG = {};   // every placement per map, exported to data/maps/<id>.json for the Unity version
+// bullets, sight lines and the boomerang hit what you SEE: a ray that enters a collision box is checked against the
+// real shape of the piece inside it (a railing, a lamp post, a tank) and only stops where it touches that shape.
+// Boxes that are completely filled by their piece (walls, blocks) skip the check.
+const MKFILL = {}, _mkHits = [];
+const MK_HITMAT = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+function mkBoxFilled(name, i) {
+  const k = name + ':' + i; if (k in MKFILL) return MKFILL[k];
+  const T = mkBoxGeo(name, i), bx = MKMETA[name] && MKMETA[name].b[i]; if (!T || !bx) return (MKFILL[k] = !bx);
+  const mn = new THREE.Vector3(bx[0], bx[1], bx[2]), mx = new THREE.Vector3(bx[3], bx[4], bx[5]), sz = mx.clone().sub(mn), R = new THREE.Ray(), o = new THREE.Vector3(), d = new THREE.Vector3();
+  for (let ax = 0; ax < 3; ax++) { const a1 = (ax + 1) % 3, a2 = (ax + 2) % 3;
+    for (let u = .03; u < 1; u += .188) for (let w = .03; w < 1; w += .188) {
+      // from both sides: the piece's surface must sit right on the box face (a rock or a tank inside its box doesn't count)
+      for (const sd of [-1, 1]) {
+        o.copy(mn); o.setComponent(a1, mn.getComponent(a1) + sz.getComponent(a1) * u); o.setComponent(a2, mn.getComponent(a2) + sz.getComponent(a2) * w); o.setComponent(ax, sd < 0 ? mn.getComponent(ax) - .02 : mx.getComponent(ax) + .02);
+        d.set(0, 0, 0).setComponent(ax, -sd); R.set(o, d);
+        if (!bvhHit(T, R, 0, .1)) return (MKFILL[k] = false); } } }   // only a box the piece fills face to face skips the precise check
+  return (MKFILL[k] = true);
+}
+// the piece's triangles that lie inside one of its collision boxes (built once per piece type, shared by every copy),
+// sorted into a small box tree so a bullet only tests the few triangles along its path
+const MKBOXGEO = {}, _tb = new THREE.Box3(), _t0 = new THREE.Vector3(), _t1 = new THREE.Vector3(), _t2 = new THREE.Vector3(), _t3 = new THREE.Vector3();
+function mkBoxGeo(name, i) {
+  const k = name + ':' + i; if (k in MKBOXGEO) return MKBOXGEO[k];
+  const bx = MKMETA[name].b[i], B = new THREE.Box3(new THREE.Vector3(bx[0], bx[1], bx[2]), new THREE.Vector3(bx[3], bx[4], bx[5])).expandByScalar(.05), pos = [];
+  for (const { geo } of MKIT[name]) { const P = geo.attributes.position, I = geo.index, n = I ? I.count : P.count;
+    for (let t = 0; t < n; t += 3) { const ia = I ? I.getX(t) : t, ib = I ? I.getX(t + 1) : t + 1, ic = I ? I.getX(t + 2) : t + 2;
+      _t0.fromBufferAttribute(P, ia); _t1.fromBufferAttribute(P, ib); _t2.fromBufferAttribute(P, ic); _tb.makeEmpty().expandByPoint(_t0).expandByPoint(_t1).expandByPoint(_t2);
+      if (_tb.intersectsBox(B)) pos.push(_t0.x, _t0.y, _t0.z, _t1.x, _t1.y, _t1.z, _t2.x, _t2.y, _t2.z); } }
+  if (!pos.length) return (MKBOXGEO[k] = null);
+  const cen = (t, ax) => pos[t * 9 + ax] + pos[t * 9 + 3 + ax] + pos[t * 9 + 6 + ax];
+  const build = list => { const b = new THREE.Box3(); for (const t of list) for (let v = 0; v < 3; v++) b.expandByPoint(_t0.set(pos[t * 9 + v * 3], pos[t * 9 + v * 3 + 1], pos[t * 9 + v * 3 + 2]));
+    if (list.length <= 10) return { b, list };
+    const sz = b.getSize(_t1), ax = sz.x >= sz.y && sz.x >= sz.z ? 0 : sz.y >= sz.z ? 1 : 2; list.sort((p, q) => cen(p, ax) - cen(q, ax)); const h = list.length >> 1;
+    return { b, l: build(list.slice(0, h)), r: build(list.slice(h)) }; };
+  return (MKBOXGEO[k] = { pos, root: build([...Array(pos.length / 9).keys()]) });
+}
+// closest triangle hit of a local-space ray in a box tree: [distance, triangle] or null
+const _bvhStack = [];
+function bvhHit(T, ray, near, far) {
+  let best = far, bt = -1; const st = _bvhStack; st.length = 0; st.push(T.root);
+  while (st.length) { const nd = st.pop(); const e = ray.intersectBox(nd.b, _t3); if (!e || e.distanceTo(ray.origin) > best) continue;
+    if (nd.list) { const p = T.pos; for (const t of nd.list) { const o = t * 9; _t0.set(p[o], p[o + 1], p[o + 2]); _t1.set(p[o + 3], p[o + 4], p[o + 5]); _t2.set(p[o + 6], p[o + 7], p[o + 8]);
+        const q = ray.intersectTriangle(_t0, _t1, _t2, false, _t3); if (q) { const d = q.distanceTo(ray.origin); if (d >= near && d < best) { best = d; bt = t; } } } }
+    else st.push(nd.l, nd.r); }
+  return bt < 0 ? null : [best, bt];
+}
+const _lray = new THREE.Ray(), _imat = new THREE.Matrix4();
+// real shots (bullets, boomerang) use the precise check; bots' sight checks stay on the boxes (much cheaper)
+function shotHits(objs, rec) { ray.precise = true; try { return ray.intersectObjects(objs, rec); } finally { ray.precise = false; } }
+function mkPreciseRaycast(owners) {
+  return function (rc, out) {
+    if (!rc.precise) return THREE.Mesh.prototype.raycast.call(this, rc, out);
+    _mkHits.length = 0; THREE.Mesh.prototype.raycast.call(this, rc, _mkHits);
+    if (!_mkHits.length) return;
+    const hits = _mkHits.slice().sort((a, b) => a.distance - b.distance), done = new Set(); let first = Infinity;
+    for (const h of hits) {
+      const bi = Math.floor(h.faceIndex / 12), o = owners[bi];
+      if (h.distance > first + 4) { out.push(h); continue; }   // far behind the first surface: the box is close enough (wallbang checks)
+      if (!o || mkBoxFilled(o.inst.name, o.bi)) { out.push(h); first = Math.min(first, h.distance); continue; }
+      if (done.has(o)) continue; done.add(o);   // one check per box (a ray can enter a box's mesh twice)
+      const T = mkBoxGeo(o.inst.name, o.bi); if (!T) continue;   // an empty box (nothing visible inside): bullets pass
+      if (!o.inst.Mi) o.inst.Mi = _imat.copy(o.inst.M).invert().clone();
+      _lray.copy(rc.ray).applyMatrix4(o.inst.Mi);   // rigid transform: distances stay the same
+      const r = bvhHit(T, _lray, rc.near, rc.far); if (!r) continue;
+      const p = T.pos, q = r[1] * 9; _t0.set(p[q], p[q + 1], p[q + 2]); _t1.set(p[q + 3], p[q + 4], p[q + 5]); _t2.set(p[q + 6], p[q + 7], p[q + 8]);
+      const nrm = new THREE.Vector3().subVectors(_t2, _t1).cross(_t3.subVectors(_t0, _t1)).normalize().transformDirection(o.inst.M); if (nrm.dot(rc.ray.direction) > 0) nrm.negate();
+      out.push({ distance: r[0], point: rc.ray.at(r[0], new THREE.Vector3()), face: { a: 0, b: 0, c: 0, normal: nrm, materialIndex: 0 }, faceIndex: h.faceIndex, object: this, mkWhy: o.inst.name + "#" + o.bi });
+      first = Math.min(first, r[0]);
+    }
+  };
+}
 function mkBuild(theme, key, fn) {
-  const mats = mapkitMats(theme, key), geos = {}, proxy = [], penProxy = [], v = new THREE.Vector3(), c = new THREE.Vector3(), log = (MKLOG[key] = { theme, pieces: [] });
-  const box = (b, opts = {}) => { world.colliders.push(b); if (opts.pen) { b.pen = opts.pen; penProxy.push(b); } else proxy.push(b); if (opts.walk) b.walk = true; return b; };
+  const mats = mapkitMats(theme, key), geos = {}, proxy = [], penProxy = [], owners = [], penOwners = [], v = new THREE.Vector3(), c = new THREE.Vector3(), log = (MKLOG[key] = { theme, pieces: [] });
+  // owner = which placed piece (and which of its boxes) a collision box belongs to, so a bullet can check the real shape
+  const box = (b, opts = {}, owner = null) => { world.colliders.push(b); if (opts.pen) { b.pen = opts.pen; penProxy.push(b); penOwners.push(owner); } else { proxy.push(b); owners.push(owner); } if (opts.walk) b.walk = true; return b; };
   const put = (name, x, z, rq = 0, y = 0) => {
     const parts = MKIT[name], meta = MKMETA[name]; if (!parts || !meta) return; log.pieces.push({ piece: name, x, z, quarterTurns: rq, y });
     const a = rq * Math.PI / 2, M = new THREE.Matrix4().makeRotationY(a).setPosition(x, y, z), ca = Math.round(Math.cos(a)), sa = Math.round(Math.sin(a));
+    const inst = { name, M };
     for (const { m, geo } of parts) (geos[m] = geos[m] || []).push(geo.clone().applyMatrix4(M));
     meta.b.forEach((bx, i) => {
       const xs = [bx[0], bx[3]], zs = [bx[2], bx[5]], X = [], Z = [];
       for (const px of xs) for (const pz of zs) { X.push(px * ca + pz * sa + x); Z.push(-px * sa + pz * ca + z); }
       const b = new THREE.Box3(new THREE.Vector3(Math.min(...X), bx[1] + y, Math.min(...Z)), new THREE.Vector3(Math.max(...X), bx[4] + y, Math.max(...Z)));
-      box(b, { walk: (MK_NAV[name] || meta.n) && meta.w.includes(i) && bx[4] < 8 && !(meta.nw || []).includes(i), pen: MK_PEN[name] || meta.p });
+      box(b, { walk: (MK_NAV[name] || meta.n) && meta.w.includes(i) && bx[4] < 8 && !(meta.nw || []).includes(i), pen: MK_PEN[name] || meta.p }, { inst, bi: i });
     });
   };
   // a plain solid block (e.g. the core under a raised deck), drawn with a kit material
@@ -1382,7 +1455,10 @@ function mkBuild(theme, key, fn) {
     if (!list.length) continue;
     const bg = THREE.BufferGeometryUtils.mergeBufferGeometries(list.map(b => { b.getSize(v); b.getCenter(c); return new THREE.BoxGeometry(Math.max(v.x, .01), Math.max(v.y, .01), Math.max(v.z, .01)).translate(c.x, c.y, c.z); }));
     const pm = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ visible: false })); pm.visible = false; pm.userData.surface = 'metal'; pm.userData.dyn = true; if (pen) pm.userData.penBoxes = list; pm.updateMatrixWorld(); scene.add(pm); world.meshes.push(pm);
+    pm.raycast = mkPreciseRaycast(pen ? penOwners : owners);
   }
+  // prepare every piece's precise shapes now (map loading) instead of on the first shot that hits it (a hitch)
+  for (const o of owners.concat(penOwners)) if (o) mkBoxFilled(o.inst.name, o.bi);
 }
 
 /* ---------- Sector Nine Yard (72 m): three lanes round a raised fortress ----------
@@ -2140,12 +2216,12 @@ function templeLayout() {
     const d = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), sandM); d.scale.set(s, .32, s * .7); d.position.set(x, -.02, z); d.receiveShadow = true; scene.add(d);
   }
 }
-MAP_DEFS.dunes = { id: 'dunes', name: 'Sunken Temple', tag: 'King of the hill · stepped pyramid · sunken courtyards · 4-8 players', tex: ['sand_02', 'sandstone_blocks_08', 'large_sandstone_blocks'],
+MAP_DEFS.dunes = { exposure: 0.66, id: 'dunes', name: 'Sunken Temple', tag: 'King of the hill · stepped pyramid · sunken courtyards · 4-8 players', tex: ['sand_02', 'sandstone_blocks_08', 'large_sandstone_blocks'],
   station: [6, 2.4, -10], kit: ['mapkit', 'kit_temple'], size: 76,
   spawns: [[-34, -10], [-34, 10], [34, -10], [34, 10], [-10, -34], [10, -34], [-10, 34], [10, 34], [-33, -33], [33, 33], [-33, 33], [33, -33], [-18, -6], [18, 6], [-6, 18], [6, -18]],
   camps: [[0, 7.2, -1.9, 3.14], [0, 7.2, 1.9, 0], [-6.5, 4.8, -6.5, -2.36], [6.5, 4.8, 6.5, .79], [-22.6, 0, -16.9, 0], [22.6, 0, 16.9, 3.14], [22, 1.2, -28.8, -.65], [-22, 1.2, 28.8, 2.49], [-31.2, 0, 8.5, 1.57], [31.2, 0, -8.5, -1.57]],
-  build: themed({ sky: { zen: [.12, .3, .62], mid: [.42, .6, .82], hor: [.95, .78, .55], low: [.7, .55, .4], sunDir: [.4, .55, -.7], sunCol: [1, .92, .75], sunSize: 700, sunGlow: .7, cloud: [1, .95, .9], cloudAmt: .25 },
-    fog: [.86, .74, .58, .009], hemi: [0xbfdcff, 0xc49a62, 1.1], sunLight: [0xfff0d0, 2.6], skyline: ['dunes', [.78, .6, .42]], weather: 'sand', accents: [[[2.4, 2, 1.5], 0, 20, 10]],
+  build: themed({ sky: { zen: [.12, .3, .62], mid: [.42, .6, .82], hor: [.8, .64, .45], low: [.7, .55, .4], sunDir: [.4, .55, -.7], sunCol: [1, .92, .75], sunSize: 700, sunGlow: .7, cloud: [.85, .8, .74], cloudAmt: .25 },
+    fog: [.6, .5, .38, .007], hemi: [0xbfdcff, 0xc49a62, .62], sunLight: [0xfff0d0, 1.75], skyline: ['dunes', [.78, .6, .42]], weather: 'sand', accents: [[[2.4, 2, 1.5], 0, 20, 10]],
     build() {
       mFloor(RM('sand_02', 6, { color: 0xf0d9b5, envMapIntensity: .2 }), 0xc9a878);
       const stone = RM('sandstone_blocks_08', 3, { color: 0xe8d4b4 }), block = RM('large_sandstone_blocks', 2.5, { color: 0xf0dcc0 }); MAT.step = block;
@@ -2252,12 +2328,12 @@ function glacierLayout() {
   mZone('ice', -12, 14, 8, 9); mZone('ice', 12, -14, 8, 9); mZone('ice', 0, -32, 10, 5); mZone('ice', 0, 32, 10, 5);
   mJumpPad(-27, -9, 14); mJumpPad(27, 9, 14); mJumpPad(-27, 25, 14); mJumpPad(27, -25, 14);
 }
-MAP_DEFS.glacier = { id: 'glacier', name: 'Glacier Station', tag: 'Long-range snowfield · research towers · crashed dropship · 6-8 players', tex: ['snow_floor', 'rock_wall_08'],
+MAP_DEFS.glacier = { exposure: 0.7, id: 'glacier', name: 'Glacier Station', tag: 'Long-range snowfield · research towers · crashed dropship · 6-8 players', tex: ['snow_floor', 'rock_wall_08'],
   size: 100, kit: ['mapkit', 'kit_glacier'], station: [-6, 0, -30],
   spawns: [[-44, -20], [44, 20], [-44, 20], [44, -20], [-20, -45], [20, 45], [20, -45], [-20, 45], [-45, 0], [45, 0], [-36, -40], [36, 40], [-10, -24], [10, 24], [-33, 33], [33, -33]],
   camps: [[0, 3.6, -41, 0], [0, 3.6, 41, Math.PI], [-6.5, .3, 2.7, 0], [-1.5, .3, -2.7, Math.PI], [-16, .2, -2, Math.PI / 2], [16, .2, 2, -Math.PI / 2], [-10, 0, 33.5, Math.PI], [10, 0, -33.5, 0]],
-  build: themed({ sky: { zen: [.08, .16, .3], mid: [.35, .5, .66], hor: [.78, .86, .92], low: [.5, .58, .66], sunDir: [.6, .25, -.75], sunCol: [1, .95, .85], sunSize: 900, sunGlow: .6, cloud: [.85, .9, .98], cloudAmt: .55, aurora: [.2, 1, .6], auroraAmt: .25 },
-    fog: [.5, .58, .68, .009], hemi: [0xb8d0f0, 0x4a5868, .8], sunLight: [0xfff1dc, 1.35], skyline: ['mountains', [.3, .36, .45]], weather: 'snow', accents: [[[1.5, 1.8, 2.2], 0, 14, 20]],
+  build: themed({ sky: { zen: [.08, .16, .3], mid: [.35, .5, .66], hor: [.6, .68, .76], low: [.5, .58, .66], sunDir: [.6, .25, -.75], sunCol: [1, .95, .85], sunSize: 900, sunGlow: .6, cloud: [.7, .76, .84], cloudAmt: .55, aurora: [.2, 1, .6], auroraAmt: .25 },
+    fog: [.34, .41, .5, .008], hemi: [0xb8d0f0, 0x4a5868, .58], sunLight: [0xfff1dc, 1.15], skyline: ['mountains', [.3, .36, .45]], weather: 'snow', accents: [[[1.5, 1.8, 2.2], 0, 14, 20]],
     build() {
       mFloor(RM('snow_floor', 5, { color: 0xc8d4e2, envMapIntensity: .25 }), 0xaebccc);
       const rock = RM('rock_wall_08', 4, { color: 0xb8cadc, envMapIntensity: .3 }), snowCap = new THREE.MeshStandardMaterial({ color: 0xf4f8ff, roughness: .9 });
@@ -2505,12 +2581,12 @@ function shrineLayout() {
   });
   mZone('water', 0, 26, 30, 10);
 }
-MAP_DEFS.shrine = { id: 'shrine', name: 'Sakura Shrine', tag: 'Uphill fight · five terraces · shrine hall on top · 4-8 players', tex: ['wood_floor_deck', 'japanese_stone_wall', 'forest_ground_06'],
+MAP_DEFS.shrine = { exposure: 0.72, id: 'shrine', name: 'Sakura Shrine', tag: 'Uphill fight · five terraces · shrine hall on top · 4-8 players', tex: ['wood_floor_deck', 'japanese_stone_wall', 'forest_ground_06'],
   station: [-36, 3.2, 0], kit: ['mapkit', 'kit_shrine'], size: 84,
   spawns: [[-36, 39], [36, 39], [-20, 40], [20, 40], [0, 40], [-38, 22], [38, 24], [-36, -39], [36, -39], [-22, -40], [22, -40], [-38, -2], [38, 0], [-38, 8], [38, -16]],
   camps: [[0, 7.3, -32.5, 0], [-3.5, 7.3, -30.5, .3], [3.5, 7.3, -30.5, -.3], [-20, 6.4, -26.5, .2], [20, 6.4, -26.5, -.2], [-24, 3.2, -0.9, 0], [28, 3.2, -2.9, 0], [-6, 4.8, -21.5, 0], [8, 0, 34, 3.14]],
-  build: themed({ sky: { zen: [.15, .1, .3], mid: [.6, .3, .45], hor: [1, .55, .35], low: [.4, .2, .25], sunDir: [-.2, .1, -.97], sunCol: [1, .6, .35], sunSize: 400, sunGlow: 1, cloud: [1, .62, .55], cloudAmt: .5 },
-    fog: [.6, .38, .4, .011], hemi: [0xffc0b0, 0x403040, 1.05], sunLight: [0xffb080, 2.2], skyline: ['pagoda', [.22, .12, .2]], weather: 'petals', accents: [[[2.6, 1.4, 1], 0, 4, -20]],
+  build: themed({ sky: { zen: [.15, .1, .3], mid: [.6, .3, .45], hor: [.85, .46, .3], low: [.4, .2, .25], sunDir: [-.2, .1, -.97], sunCol: [1, .6, .35], sunSize: 400, sunGlow: 1, cloud: [.85, .52, .46], cloudAmt: .5 },
+    fog: [.44, .28, .3, .01], hemi: [0xffc0b0, 0x403040, .72], sunLight: [0xffb080, 1.7], skyline: ['pagoda', [.22, .12, .2]], weather: 'petals', accents: [[[2.6, 1.4, 1], 0, 4, -20]],
     build() {
       mFloor(RM('forest_ground_06', 3, { color: 0x8a7a68, envMapIntensity: .2, metalness: 0 }), 0x2a1c18);
       const stone = RM('japanese_stone_wall', 3, { color: 0xb0a8a0 }), roof = new THREE.MeshStandardMaterial({ color: 0x2a2a34, roughness: .5, metalness: .4 }); MAT.step = stone;
@@ -2539,6 +2615,7 @@ async function loadMap(id) {
   clearMap(); CUR_MAP = def.id; HALF = (def.size || 64) / 2; CAMPS = (def.camps || []).map(([x, y, z, yaw]) => ({ x, y, z, yaw, by: null }));
   MAPFX = { pads: [], tele: [], hazards: [], zones: [], lasers: [], spin: [], weather: null, update: null };
   if (def.kit && !(await Promise.all((Array.isArray(def.kit) ? def.kit : ['mapkit']).map(f => loadMapKit(f)))).every(Boolean)) { ov.querySelector('span').textContent = 'Could not load the map parts. Refresh to try again.'; return; }
+  grade.uniforms.uExposure.value = def.exposure || .9;   // per-map brightness (sunny maps sit a bit lower)
   intoMap(() => { def.build(); buildStation(...def.station); });
   buildNav();
   for (const hz of MAPFX.hazards) for (let j = 0; j < NAV.N; j++) for (let i = 0; i < NAV.N; i++) { const c = j * NAV.N + i, x = cellX(c), z = cellZ(c); if (x > hz.x0 - .4 && x < hz.x1 + .4 && z > hz.z0 - .4 && z < hz.z1 + .4 && NAV.h[c] < .2) NAV.ok[c] = 0; }
@@ -2707,7 +2784,7 @@ function initAudio() {
   if (AU.ctx) { if (AU.ctx.state === 'suspended') AU.ctx.resume(); return; }
   try {
     const c = new (window.AudioContext || window.webkitAudioContext)(); AU.ctx = c;
-    const comp = c.createDynamicsCompressor(); comp.threshold.value = -9; comp.knee.value = 10; comp.ratio.value = 3; comp.attack.value = .003; comp.release.value = .3; comp.connect(c.destination);
+    const comp = c.createDynamicsCompressor(); comp.threshold.value = -9; comp.knee.value = 10; comp.ratio.value = 3; comp.attack.value = .003; comp.release.value = .3; AU.out = c.createGain(); AU.out.gain.value = state === 'paused' ? 0 : 1; comp.connect(AU.out); AU.out.connect(c.destination);
     AU.master = c.createGain(); AU.master.gain.value = CFG.vol; AU.master.connect(comp);
     AU.dry = c.createGain(); AU.dry.connect(AU.master);
     const ir = (dur, decay) => { const len = c.sampleRate * dur, b = c.createBuffer(2, len, c.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); } return b; };
@@ -4028,7 +4105,7 @@ function fireArc() {
     damageEntity(best, w.dmg * od, false, c0.clone(), shotDir.clone(), 'body', PLAYER_ENT, 'arc');
     let from = c0, chained = new Set([best]);
     for (let j = 0; j < 2; j++) { let nx = null, nd = 7; for (const e of entities()) { if (e === PLAYER_ENT || chained.has(e) || !entAlive(e)) continue; const c = entChest(e, _b1), d = c.distanceTo(from); if (d < nd && lineOfSight(from, c)) { nd = d; nx = e; } } if (!nx) break; const c = entChest(nx, new THREE.Vector3()); zap(from, c, col); damageEntity(nx, w.dmg * .6 * od, false, c.clone(), shotDir.clone(), 'body', PLAYER_ENT, 'arc'); chained.add(nx); from = c; }
-  } else { ray.set(camera.position, shotDir); ray.far = w.range; const h = ray.intersectObjects(world.meshes, false)[0]; ray.far = Infinity; const end = h ? h.point : camera.position.clone().addScaledVector(shotDir, w.range); zap(muzzleW, end, col); if (P.shotIdx % 3 === 0) netShot(muzzleW, end); }
+  } else { ray.set(camera.position, shotDir); ray.far = w.range; const h = shotHits(world.meshes, false)[0]; ray.far = Infinity; const end = h ? h.point : camera.position.clone().addScaledVector(shotDir, w.range); zap(muzzleW, end, col); if (P.shotIdx % 3 === 0) netShot(muzzleW, end); }
   if (P.shotIdx++ % 4 === 0) sfx.arc(); P.trauma = Math.min(1, P.trauma + .01); muzzleFlash.visible = true; P.flashT = .03;
   if (P.shotIdx % 8 === 0) updateHud();
 }
@@ -4272,7 +4349,7 @@ function updateBoom(dt) {
   if (o.phase === 'out') {
     // test the real surfaces it flew past this frame (not just collision boxes): any wall, prop or floor sends it straight back
     const seg = _b3.subVectors(o.p, prev), sl = seg.length(); let wall = o.p.y < groundAt(o.p.x, o.p.z, o.p.y + .3, .1) + .05, wn = null;
-    if (sl > 1e-4) { ray.set(prev, seg.divideScalar(sl)); ray.far = sl + .28; const h = ray.intersectObjects(boomSolids(), false)[0]; ray.far = Infinity;
+    if (sl > 1e-4) { ray.set(prev, seg.divideScalar(sl)); ray.far = sl + .28; const h = shotHits(boomSolids(), false)[0]; ray.far = Infinity;
       if (h) { wall = true; wn = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : seg.clone().negate(); o.p.copy(h.point).addScaledVector(wn, .25); } }
     if (!wall) for (const c of world.colliders) if (c.containsPoint(o.p)) { wall = true; o.p.copy(prev); break; }
     if (!wall && (Math.abs(o.p.x) > HALF || Math.abs(o.p.z) > HALF)) wall = true;
@@ -4409,7 +4486,7 @@ const _pb = new THREE.Box3(), _pv = new THREE.Vector3();
 function penThrough(h, dir) {
   const L = h.object.userData.penBoxes;
   if (!L) return h.object.userData.surface === 'wood' ? .15 : -1;
-  for (const b of L) { _pb.copy(b).expandByScalar(.03); if (!_pb.containsPoint(h.point)) continue;
+  for (const b of L) { _pb.copy(b).expandByScalar(.12); if (!_pb.containsPoint(h.point)) continue;
     if (b.pen === 'hollow') return .12;
     let t = Infinity; for (const ax of ['x', 'y', 'z']) { const d = dir[ax]; if (Math.abs(d) < 1e-5) continue; const e = ((d > 0 ? b.max[ax] : b.min[ax]) - h.point[ax]) / d; if (e >= 0) t = Math.min(t, e); }
     return isFinite(t) ? Math.max(.05, t) : -1; }
@@ -4448,7 +4525,7 @@ function fireShot() {
       const a = Math.random() * 6.283, m = Math.sqrt(Math.random()) * cone;
       shotDir.copy(base).addScaledVector(camRight, Math.cos(a) * m).addScaledVector(camUp, Math.sin(a) * m).normalize();
       ray.set(camera.position, shotDir); ray.far = 250;
-      const hits = ray.intersectObjects(targets, false);
+      const hits = shotHits(targets, false);
       end = _v3.copy(camera.position).addScaledVector(shotDir, 150);
       let wallHit = null;
       if (w.pierce) {
@@ -4644,7 +4721,7 @@ function resetDeathFx(r) {
 function botDie(r, dir, crit, byMe) {
   if (byMe) { r.root.updateMatrixWorld(true); spawnDrop(r.weapon, r.root.position, r.gun.getWorldPosition(new THREE.Vector3()), dir); }   // only your own kills drop a gun
   r.gun.visible = false;
-  r.dead = true; r.deadT = 0; r.respawnT = rand(3.2, 4.6); r.target = null; targetsDirty = true; r.tag.style.opacity = 0; r.shield = 0; r.glint.visible = false;
+  r.dead = true; r.deadT = 0; r.fallVy = r.vel ? Math.min(r.vel.y || 0, 3) : 0; r.respawnT = rand(3.2, 4.6); r.target = null; targetsDirty = true; r.tag.style.opacity = 0; r.shield = 0; r.glint.visible = false;
   for (const k in r.act) if (k !== 'death') { r.act[k].w = 0; r.act[k].setEffectiveWeight(0); }
   r.act.death.reset(); r.act.death.setEffectiveWeight(1); r.act.death.w = 1; r.act.death.play();
   r.deathVel = new THREE.Vector3(dir.x, 0, dir.z).normalize().multiplyScalar(crit ? 1.6 : 2.6);
@@ -4703,7 +4780,7 @@ function hurtPlayer(dmg, from, attacker, crit, weapon) {
 }
 function playerDie(killer, weapon, crit) {
   NET.killW = NET_W.indexOf(weapon); if (NET.killW < 0) NET.killW = 0; NET.killH = !!crit;
-  P.dead = true; state = 'dead'; gunVisible = false; P.dieT = 0; P.killer = killer && killer !== PLAYER_ENT ? killer : null; mouseDown = false; adsHeld = false; P.ads = 0;
+  P.dead = true; state = 'dead'; gunVisible = false; P.dieT = 0; P.fallVy = Math.min(P.vel.y, 3); P.killer = killer && killer !== PLAYER_ENT ? killer : null; mouseDown = false; adsHeld = false; P.ads = 0;
   for (const k in keys) keys[k] = false;
   $('deathBy').innerHTML = P.killer ? `Eliminated by <b style="color:${P.killer.cssCol}">${P.killer.name}</b>${crit ? ' · headshot' : ''}${P.killer.hp > 0 ? ` · they had ${Math.ceil(P.killer.hp)} HP` : ''}` : 'You eliminated yourself';
   $('death').hidden = false; $('banner').style.opacity = 0; bannerT = 0; sfx.death(); startKillcam(P.killer); startDeathcam();
@@ -4726,7 +4803,7 @@ function rayCapsule(o, d, pos, top, rad) {
 }
 function traceShot(o, d, shooter, far) {
   ray.set(o, d); ray.far = far; if (targetsDirty) rebuildTargets();
-  const hits = ray.intersectObjects(targets, false); let best = null;
+  const hits = shotHits(targets, false); let best = null;
   for (const h of hits) { const b = h.object.userData.robot; if (b === shooter || (b && b.dead)) continue; best = h; break; }
   ray.far = Infinity;
   if (shooter !== PLAYER_ENT && state === 'play' && !P.dead) {
@@ -5208,7 +5285,7 @@ function updateRemote(r, dt) {
     p.set(nx, ny, nz);
     r.aimYaw = a.yaw + wrapPi(b.yaw - a.yaw) * k; r.aimPitch = lerp(a.pitch, b.pitch, k);
   }
-  if (r.dead) { if (r.preQ) [r.B.hips, r.B.spine, r.B.spine1, r.B.spine2, r.B.neck].forEach((b, i) => b && b.quaternion.copy(r.preQ[i])); r.preQ = null; if (r.dq) { for (const [b, q] of r.dq) b.quaternion.copy(q); r.dq = null; } r.deadT += dt; r.mixer.update(dt); r.gun.visible = false; if (!updateDeathFx(r, dt)) derez(r); return; }
+  if (r.dead) { fallDead(r.root.position, r, dt); if (r.preQ) [r.B.hips, r.B.spine, r.B.spine1, r.B.spine2, r.B.neck].forEach((b, i) => b && b.quaternion.copy(r.preQ[i])); r.preQ = null; if (r.dq) { for (const [b, q] of r.dq) b.quaternion.copy(q); r.dq = null; } r.deadT += dt; r.mixer.update(dt); r.gun.visible = false; if (!updateDeathFx(r, dt)) derez(r); return; }
   r.crouch = damp(r.crouch, r.netCrouch || 0, 12, dt); r.onGround = r.netGround !== false; r.targetVis = true; r.lastSeenT = G.time; r.mode = 'fight';
   r.firedT -= dt; r.flashT -= dt; r.shotKick = Math.max(0, r.shotKick - dt * 9);
   NET.losT -= dt; if (NET.losT <= 0) { NET.losT = .2; r.seesPlayer = !P.dead && lineOfSight(entEye(r, _a1), _a2.set(P.pos.x, P.pos.y + P.camY, P.pos.z)); }
@@ -5284,7 +5361,7 @@ function knifeHitCheck() {
   for (const [ox, oy] of [[0, 0], [-.12, 0], [.12, 0], [0, -.1], [-.22, -.05], [.22, -.05], [0, -.2]]) {
     const d = _v3.copy(shotDir).addScaledVector(camRight, ox).addScaledVector(camUp, oy).normalize();
     ray.set(camera.position, d); ray.far = 2.6;
-    const hits = ray.intersectObjects(targets, false); ray.far = Infinity;
+    const hits = shotHits(targets, false); ray.far = Infinity;
     const h = hits[0]; if (!h) continue;
     const r = h.object.userData.robot;
     if (!r || r.dead) { if (h.distance < 2) { sfx.impact(h.point, true); for (let i = 0; i < 8; i++) FX.spawn(h.point, rand(-2, 2), rand(0, 3), rand(-2, 2), 6, 4, 2, .03, .25, 12, 1); } return; }
@@ -5379,7 +5456,7 @@ function startDeathcam() {
 }
 function updateDeathcam(dt) {
   if (!DC.body || !DC.body.visible) return false;
-  DC.mixer.update(dt); DC.body.updateMatrixWorld(true);
+  DC.body.position.y = P.pos.y; DC.mixer.update(dt); DC.body.updateMatrixWorld(true);
   if (DC.gun && DC.rhand) { DC.rhand.getWorldPosition(DC.gun.position); DC.gun.rotation.set(0, DC.body.rotation.y, Math.min(1.4, P.dieT * 2), 'YXZ'); }
   if (P.dieT > DC.T && REC.on) return false;   // the killcam takes over from here
   // swing out of your eyes to an over-the-shoulder view that slowly circles the body
@@ -5398,7 +5475,8 @@ function stopDeathcam() { if (DC.body) DC.body.visible = false; if (DC.gun) { sc
 const REC = { frames: [], shots: [], on: false, deathT: 0, killer: null, ki: -1, avatar: null, saved: [], lastRt: -1e9 };
 function recFrame() {
   const f = { t: G.time, me: [P.pos.x, P.pos.y, P.pos.z, P.yaw, P.pitch, P.crouch], b: [] };
-  for (const r of robots) f.b.push(r.dead || !r.root.visible ? null : [r.root.position.x, r.root.position.y, r.root.position.z, r.bodyYaw, r.aimYaw, r.aimPitch, r.crouch, r.viewYaw ?? r.aimYaw, r.viewPitch ?? r.aimPitch]);
+  for (const r of robots) f.b.push(r.dead || !r.root.visible ? null : [r.root.position.x, r.root.position.y, r.root.position.z, r.bodyYaw, r.aimYaw, r.aimPitch, r.crouch, r.viewYaw ?? r.aimYaw, r.viewPitch ?? r.aimPitch,
+    r.ads || 0, r.reload > 0 ? clamp(1 - r.reload / ((BOTW[r.weapon] || {}).reload || 2), 0, 1) : -1]);
   REC.frames.push(f);
   while (REC.frames.length && G.time - REC.frames[0].t > 4.5) REC.frames.shift();
   while (REC.shots.length && G.time - REC.shots[0].t > 4.5) REC.shots.shift();
@@ -5424,7 +5502,7 @@ function startKillcam(killer) {
   $('kcName').textContent = killer.name; $('kcName').style.color = killer.cssCol; REC.kcw = WEAPONS[killer.netW || killer.weapon] ? (WEAPONS[killer.netW || killer.weapon].name) : '';
   const xc = $('kcCross'); xc.style.color = killer.cssCol;
 }
-function stopKillcam() { REC.on = false; $('killcam').hidden = true; $('death').classList.remove('kc'); $('hud').classList.remove('kcview'); if (REC.avatar) { REC.avatar.g.visible = false; REC.avatar.gun.visible = false; } }
+function stopKillcam() { REC.on = false; setStyle($('scope'), 'opacity', '0'); $('killcam').hidden = true; $('death').classList.remove('kc'); $('hud').classList.remove('kcview'); if (REC.avatar) { REC.avatar.g.visible = false; REC.avatar.gun.visible = false; } }
 const _kq = new THREE.Vector3();
 const kcLive = () => state === 'dead' && REC.on && P.dieT > DC.T;
 const _rp0 = new THREE.Vector3(), _rp1 = new THREE.Vector3(), _rp2 = new THREE.Vector3();
@@ -5473,8 +5551,9 @@ function applyReplay() {
   const av = REC.avatar; if (av) {
     const mx = lerpRec(a.me, b.me, k, 0), my = lerpRec(a.me, b.me, k, 1), mz = lerpRec(a.me, b.me, k, 2), yw = lerpAng(a.me[3], b.me[3], k);
     av.g.position.set(mx, my, mz); av.g.rotation.y = yw + Math.PI; av.g.visible = true; av.g.updateMatrixWorld(true);
-    if (rt >= REC.deathT - .12 && !REC.avDead) { REC.avDead = true; av.idle.forEach(x => x.stop()); av.da.reset().play(); }
-    { const nt = performance.now(), fd = Math.min(.05, (nt - (REC.lt || nt)) / 1000); REC.lt = nt; if (REC.avDead) { av.mx.update(fd * .85); av.gun.visible = false; }
+    if (rt >= REC.deathT - .12 && !REC.avDead) { REC.avDead = true; REC.avFall = { y: my, vy: Math.min(recVel(F, rt, -1, _rp2).y, 3) }; av.idle.forEach(x => x.stop()); av.da.reset().play(); }
+    if (REC.avDead && REC.avFall) av.g.position.y = REC.avFall.y;   // died in mid air: you drop to the floor in the replay too
+    { const nt = performance.now(), fd = Math.min(.05, (nt - (REC.lt || nt)) / 1000); REC.lt = nt; if (REC.avDead) { av.mx.update(fd * .85); av.gun.visible = false; if (REC.avFall) { const q = av.g.position, o = { fallVy: REC.avFall.vy }; fallDead(q, o, fd * (REC.slow ? .5 : 1)); REC.avFall.y = q.y; REC.avFall.vy = o.fallVy; } }
       else {   // legs follow how you really moved
         const v = recVel(F, rt, -1, _rp2), hs = Math.hypot(v.x, v.z), cr = lerpRec(a.me, b.me, k, 5) > .5, air = Math.abs(v.y) > 1.5, sd = fd * (REC.slow ? .5 : 1);
         const W = { idle: 0, walk: 0, jog: 0, sprint: 0, cidle: 0, cwalk: 0, air: 0 }; if (air) W.air = 1; else if (cr) W[hs > .4 ? 'cwalk' : 'cidle'] = 1; else if (hs < .4) W.idle = 1; else if (hs < 2.6) W.walk = 1; else if (hs < 5.6) W.jog = 1; else W.sprint = 1;
@@ -5492,33 +5571,47 @@ function applyReplay() {
   if (KA) {
     const ky = lerpRec(KA, KB, k, 1) + lerp(1.62, 1.12, lerpRec(KA, KB, k, 6));
     camera.position.set(lerpRec(KA, KB, k, 0), ky, lerpRec(KA, KB, k, 2));
-    const vy = KA[7] !== undefined ? lerpAng(KA[7], KB[7], k) : lerpAng(KA[4], KB[4], k), vp = KA[8] !== undefined ? lerpRec(KA, KB, k, 8) : lerpRec(KA, KB, k, 5);
-    if (REC.cy === null || rt < REC.lastRt) { REC.cy = vy; REC.cp = vp; } else { REC.cy += wrapPi(vy - REC.cy) * .22; REC.cp += (vp - REC.cp) * .22; }
+    // look where their gun really pointed (it turns at a human rate), smoothed a little like a player's mouse
+    const vy = lerpAng(KA[4], KB[4], k), vp = lerpRec(KA, KB, k, 5), sm = 1 - Math.exp(-18 * Math.max(adt, .001));
+    if (REC.cy === null || rt < REC.lastRt) { REC.cy = vy; REC.cp = vp; } else { REC.cy += wrapPi(vy - REC.cy) * sm; REC.cp += (vp - REC.cp) * sm; }
     let kick = 0; for (const ft of REC.frozenFires || []) if (ft <= rt && rt - ft < .35) kick += Math.exp(-(rt - ft) * 14);
     REC.kick = Math.min(kick, 1.6);
-    const av2 = REC.avatar; if (av2 && av2.g.visible !== undefined) { const w = clamp((rt - (REC.deathT - 1.2)) / .5, 0, 1); if (w > 0) { const tx = av2.g.position.x, ty = av2.g.position.y + 1.15, tz = av2.g.position.z, cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
-      const yawT = Math.atan2(tx - cx, tz - cz), pitT = Math.atan2(ty - cy, Math.hypot(tx - cx, tz - cz)), ew = w * w * (3 - 2 * w); REC.cy += wrapPi(yawT - REC.cy) * ew * .35; REC.cp += (pitT - REC.cp) * ew * .35; } }
-    camera.rotation.set(REC.cp + REC.kick * .012, REC.cy + Math.PI, 0);
-    { const z = REC.slow ? clamp((rt - (REC.deathT - .3)) / .15, 0, 1) : 0, fv = lerp(72, 46, z * z * (3 - 2 * z)); if (Math.abs(camera.fov - fv) > .01) { camera.fov = fv; camera.updateProjectionMatrix(); } }
+    // how they moved and aimed: aiming down sights, walking/running bob, in the air, reloading
+    const kads = KA[9] !== undefined ? lerpRec(KA, KB, k, 9) : 0, krl = KA[10] !== undefined && KA[10] >= 0 ? (KB[10] >= 0 ? lerpRec(KA, KB, k, 10) : KA[10]) : -1;
+    const kv = recVel(F, rt, REC.ki, _rp2), khs = Math.hypot(kv.x, kv.z), kair = Math.abs(kv.y) > 1.5;
+    if (!kair) REC.bob = (REC.bob || 0) + adt * khs * 1.45;
+    const kbob = clamp(khs / 6, 0, 1.3) * (1 - kads * .85); REC.kads = kads; REC.krl = krl; REC.kbobAmt = kbob;
+    camera.position.y += Math.sin((REC.bob || 0) * 2) * .04 * kbob;
+    camera.rotation.set(REC.cp + REC.kick * .012 * (1 - kads * .5), REC.cy + Math.PI, Math.sin(REC.bob || 0) * .008 * kbob, 'YXZ');
+    { const KW = WEAPONS[REC.killer && REC.killer.weapon] || {}, base = lerp(78, KW.adsFov || 60, kads);
+      const z = REC.slow ? clamp((rt - (REC.deathT - .3)) / .15, 0, 1) : 0, fv = lerp(base, Math.min(base, 46), z * z * (3 - 2 * z)); if (Math.abs(camera.fov - fv) > .01) { camera.fov = fv; camera.updateProjectionMatrix(); }
+      const gf = lerp(60, 50, kads); if (Math.abs(gunCam.fov - gf) > .01) { gunCam.fov = gf; gunCam.updateProjectionMatrix(); } }
   }
   // their shots as they happened
-  for (const s of REC.frozenShots) if (s.t > REC.lastRt && s.t <= rt) tracer(s.a, s.b, s.c, s.w, s.l);
+  // the killer's own shots leave from their gun on screen (not from inside the camera); aimed down sights = from the middle
+  for (const s of REC.frozenShots) if (s.t > REC.lastRt && s.t <= rt) {
+    if (s.a.distanceTo(camera.position) < 2.5) { const d = _rp1.subVectors(s.b, camera.position).normalize(), ka = REC.kads || 0, rv = _rp2.set(1, 0, 0).applyQuaternion(camera.quaternion), uv = _kq.set(0, 1, 0).applyQuaternion(camera.quaternion);
+      const a = camera.position.clone().addScaledVector(d, ka > .75 ? 4 : 1.1).addScaledVector(rv, .16 * (1 - ka)).addScaledVector(uv, -.13 * (1 - ka)); tracer(a, s.b, s.c, s.w * (ka > .75 ? .6 : 1), s.l); }
+    else tracer(s.a, s.b, s.c, s.w, s.l); }
   REC.lastRt = rt;
   setText('kcTime', rt >= REC.deathT - .05 ? 'ELIMINATED' : REC.slow ? 'SLOW MOTION' : `-${(REC.deathT - rt).toFixed(1)}s`);
-  // the killer's weapon in their hands, kicking with each shot
+  // the killer's weapon in their hands: at the hip or up at their sights, bobbing as they move, kicking with each shot
   REC.kick = REC.kick || 0;
-  const kvm = WM[REC.killer && REC.killer.weapon] || WM.carbine;
-  REC.vmSave = { gv: gunVisible, vis: Object.keys(WM).map(id => [WM[id].group, WM[id].group.visible]), pos: kvm.group.position.clone(), rot: kvm.group.rotation.clone(), fl: kvm.flash.visible };
+  const kwid = WM[REC.killer && REC.killer.weapon] ? REC.killer.weapon : 'carbine', kvm = WM[kwid], KWd = WEAPONS[kwid] || {};
+  const kads = REC.kads || 0, kb = REC.kbobAmt || 0, bb = REC.bob || 0, rl = REC.krl >= 0 ? Math.sin(Math.PI * clamp(REC.krl * 1.05, 0, 1)) : 0;
+  REC.vmSave = { gv: gunVisible, vis: Object.keys(WM).map(id => [WM[id].group, WM[id].group.visible]), pos: kvm.group.position.clone(), rot: kvm.group.rotation.clone(), fl: kvm.flash.visible, ret: kvm.reticle ? kvm.reticle.visible : null };
   for (const id in WM) WM[id].group.visible = false;
-  const bob = Math.sin(rt * 7.5);
-  kvm.group.visible = true; gunVisible = true;
-  kvm.group.position.set(kvm.hip.x + bob * .004, kvm.hip.y + Math.abs(bob) * .004, kvm.hip.z + REC.kick * .04);
-  kvm.group.rotation.set(REC.kick * .07, .1, 0);
-  kvm.flash.visible = REC.kick > 1.1; if (kvm.flash.visible) kvm.flash.rotation.z = rand(0, 6.28);
+  const scoped = !!KWd.scope && kads > .75 && rl === 0;
+  kvm.group.visible = !scoped; gunVisible = !scoped; setStyle($('scope'), 'opacity', scoped ? '1' : '0');
+  const base = _rp0.copy(kvm.hip).lerp(kvm.adsPos || kvm.hip, kads);
+  kvm.group.position.set(base.x + Math.sin(bb) * .014 * kb, base.y + Math.abs(Math.cos(bb)) * .012 * kb - rl * .05, base.z + REC.kick * .035 * (1 - kads * .4));
+  kvm.group.rotation.set(REC.kick * .06 * (1 - kads * .5) + rl * .35, (1 - kads) * .1, rl * .55);
+  if (kvm.reticle) kvm.reticle.visible = kads > .5;
+  kvm.flash.visible = REC.kick > 1.1 && !scoped; if (kvm.flash.visible) kvm.flash.rotation.z = rand(0, 6.28);
   return true;
 }
 function restoreReplay() {
-  const v = REC.vmSave; if (v) { const kvm = WM[REC.killer && REC.killer.weapon] || WM.carbine; kvm.group.position.copy(v.pos); kvm.group.rotation.copy(v.rot); kvm.flash.visible = v.fl; for (const [g, vis] of v.vis) g.visible = vis; gunVisible = v.gv; REC.vmSave = null; }
+  const v = REC.vmSave; if (v) { const kvm = WM[REC.killer && REC.killer.weapon] || WM.carbine; kvm.group.position.copy(v.pos); kvm.group.rotation.copy(v.rot); kvm.flash.visible = v.fl; if (kvm.reticle && v.ret !== null) kvm.reticle.visible = v.ret; for (const [g, vis] of v.vis) g.visible = vis; gunVisible = v.gv; REC.vmSave = null; }
   for (const [r, pos, ry, vis, gp, gr, gv, op, rx, rz, bo, vo, em, bc] of REC.saved) { r.root.position.copy(pos); r.root.rotation.set(rx, ry, rz); r.root.visible = vis; r.gun.position.copy(gp); r.gun.rotation.copy(gr); r.gun.visible = gv; r.tag.style.opacity = op; r.body.opacity = bo; r.visor.opacity = vo; r.body.emissive.copy(em); r.body.color.copy(bc); }
   REC.saved.length = 0;
 }
@@ -5892,6 +5985,7 @@ function combatBot(r, dt) {
   if (aimP) { desYaw = Math.atan2(aimP.x - eye.x, aimP.z - eye.z); desPitch = Math.atan2(aimP.y - eye.y, Math.hypot(aimP.x - eye.x, aimP.z - eye.z)); }
   else if (r.lookYaw !== undefined && (r.hasGoal || r.mode === 'camp')) desYaw = r.lookYaw;
   r.viewYaw = aimP ? desYaw : r.aimYaw; r.viewPitch = aimP ? desPitch : r.aimPitch;
+  { const want = !!(t && r.targetVis && r.reload <= 0 && !(r.dashT > 0) && Math.hypot(r.vel.x, r.vel.z) < 5.2 && r.reactT < .15); r.ads = damp(r.ads || 0, want ? 1 : 0, want ? 6 : 9, dt); }
   const turn = (r.targetVis ? 6 : 2.6) * (.55 + r.skill * .55) * dt, dy = wrapPi(desYaw - r.aimYaw);
   r.aimYaw = wrapPi(r.aimYaw + clamp(dy, -turn, turn)); r.aimPitch = damp(r.aimPitch, clamp(desPitch, -.9, .9), 8, dt);
   // sniper telegraph: a lens glint while they line up the shot
@@ -5966,7 +6060,13 @@ function derez(r) {
   if (k < 1 && camera.position.distanceTo(r.root.position) < 60) for (let i = 0; i < 6; i++) { const bs = r.meshes[(Math.random() * r.meshes.length) | 0]; bs.getWorldPosition(_dz); _dz.x += rand(-.15, .15); _dz.z += rand(-.15, .15); FX.spawn(_dz, rand(-.3, .3), rand(.8, 2.2), rand(-.3, .3), r.color.r * 3, r.color.g * 3, r.color.b * 3, rand(.03, .06), rand(.5, 1), -1.2, 1.5, 0); }
   if (k >= 1) r.root.visible = false;
 }
+// a body that died in mid air falls to the floor under normal gravity
+function fallDead(p, o, dt) {
+  const g = groundAt(p.x, p.z, p.y + .05, .3);
+  if (p.y > g + .001) { o.fallVy = Math.min(o.fallVy || 0, 3) - MOVE.gravity * dt; p.y = Math.max(g, p.y + o.fallVy * dt); if (p.y <= g) o.fallVy = 0; } else o.fallVy = 0;
+}
 function updateDeadBot(r, dt) {
+  fallDead(r.root.position, r, dt);
   if (r.preQ) [r.B.hips, r.B.spine, r.B.spine1, r.B.spine2, r.B.neck].forEach((b, i) => b && b.quaternion.copy(r.preQ[i]));
   if (r.dq) { for (const [b, q] of r.dq) b.quaternion.copy(q); r.dq = null; }
   if (kcLive()) { r.preQ = null; r.deadT += dt; if (r.deadT > r.respawnT) respawnBot(r); return; }   // the replay is posing this body
@@ -6034,6 +6134,8 @@ function updateDebris(dt) {
 /* ================= flow ================= */
 function setState(s) {
   state = s;
+  // paused = total silence (wind, ambience, echoes, everything); sound fades back in when you resume
+  if (AU.ctx && AU.out) { const g = AU.out.gain, t = AU.ctx.currentTime; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(s === 'paused' ? 0 : 1, t + (s === 'paused' ? .08 : .25)); }
   $('menu').hidden = s !== 'menu'; $('pause').hidden = s !== 'paused'; $('mend').hidden = s !== 'matchend';
   $('hud').hidden = !(s === 'play' || s === 'paused' || s === 'dead');
   if (s !== 'dead') { $('death').hidden = true; if (typeof stopKillcam === 'function') stopKillcam(); if (typeof stopDeathcam === 'function') stopDeathcam(); } if (s !== 'play') $('board').hidden = true;
@@ -6237,6 +6339,7 @@ function frame(now) {
     G.comboT -= dt; if (G.comboT <= 0) G.combo = 0; G.multiT -= dt; if (G.multiT <= 0) G.multi = 0;
   } else if (state === 'dead') {
     G.time += dt; G.matchT -= dt; P.dieT += rdt;
+    fallDead(P.pos, P, dt);   // died in mid air: your body drops to the floor (others see it fall too)
     updateRobots(dt, false); updatePads(dt); updateNades(dt); updateRockets(dt); updateProj(dt); updateDecals(); updateDrops(dt); updateBoom(dt); updateRemoteBooms(dt);
     const kl = P.killer && !P.killer.dead ? P.killer.root.position : null;
     if (REC.on && P.dieT > DC.T && $('killcam').hidden) { $('killcam').hidden = false; $('death').classList.add('kc'); $('hud').classList.add('kcview'); stopDeathcam(); }
@@ -6325,7 +6428,7 @@ async function boot() {
   $('loading').remove();
   requestAnimationFrame(t => { last = t; frame(t); });
   window.__snd = { GUN_VOICE, gsBuild, hitSample };
-  window.__s9 = { PF, MKIT, MKMETA, MKLOG, MOVE, get WEAPONS() { return WEAPONS; }, get BOTW() { return BOTW; }, get MAPS() { return MAPS; }, SLOTS, get CAMPS() { return CAMPS; }, get HALF() { return HALF; }, gunCam, P, G, robots, hurtPlayer, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS, AU, initAudio, loadMap, MAPS, REC, GUN_IDS, get CUR_MAP() { return CUR_MAP; }, get SPAWNS() { return SPAWNS; }, get MAPFX() { return MAPFX; }, get MAPROOT() { return MAPROOT; }, killBot(r, crit) { damageBot(r, 999, !!crit, r.root.position.clone().setY(r.root.position.y + 1.2), new THREE.Vector3(0, 0, 1), 'body', PLAYER_ENT, P.weapon); }, DROPS, pickNearDrop, BOOM, RBOOMS, NET, openRoom, leaveOnline, boomRoute, lineOfSight, explode, damageEntity };
+  window.__s9 = { PF, MKIT, MKMETA, MKLOG, MOVE, get WEAPONS() { return WEAPONS; }, get BOTW() { return BOTW; }, get MAPS() { return MAPS; }, SLOTS, get CAMPS() { return CAMPS; }, get HALF() { return HALF; }, gunCam, P, G, robots, hurtPlayer, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS, AU, initAudio, loadMap, MAPS, REC, GUN_IDS, get CUR_MAP() { return CUR_MAP; }, get SPAWNS() { return SPAWNS; }, get MAPFX() { return MAPFX; }, get MAPROOT() { return MAPROOT; }, killBot(r, crit) { damageBot(r, 999, !!crit, r.root.position.clone().setY(r.root.position.y + 1.2), new THREE.Vector3(0, 0, 1), 'body', PLAYER_ENT, P.weapon); }, DROPS, pickNearDrop, BOOM, RBOOMS, NET, openRoom, leaveOnline, boomRoute, lineOfSight, explode, damageEntity, scene, world };
 }
 requestAnimationFrame(() => setTimeout(boot, 30));
 })();
