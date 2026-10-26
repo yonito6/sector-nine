@@ -1,0 +1,96 @@
+{
+  "about": "What's New feed shown in the game (modules/news.js). Newest first is not required: the game sorts by date + version. Fields: id (unique), date YYYY-MM-DD, version, title, items[], big (highlighted card), image (optional, relative path like assets/ui/news/x.jpg). Written by the release manager (qa/release) when a big feature goes live.",
+  "entries": [
+    {
+      "id": "mod-killcam",
+      "date": "2026-10-26",
+      "version": "2026.10.26-r1",
+      "title": "Killcam 2.0",
+      "big": true,
+      "items": [
+        "See your death through your killer's eyes: their gun, their scope, their aim",
+        "Slow motion on the final shot, banner with their weapon and HP left",
+        "Final killcam at the end of every match",
+        "Press Space to skip"
+      ]
+    },
+    {
+      "id": "mod-graphics",
+      "date": "2026-10-26",
+      "version": "2026.10.26-r1",
+      "title": "Sharper graphics",
+      "big": true,
+      "items": [
+        "Smoother edges and sharper detail",
+        "Richer colours and better shading on every map",
+        "Four quality levels, picked for your graphics card automatically"
+      ]
+    },
+    {
+      "id": "mod-settings",
+      "date": "2026-10-26",
+      "version": "2026.10.26-r1",
+      "title": "Full settings menu",
+      "big": true,
+      "items": [
+        "New Settings screen (main menu and pause menu): gameplay, controls, mouse, crosshair, video and audio",
+        "Re-bind any key, separate aim-down-sights mouse speed, invert Y",
+        "Build your own crosshair with a live preview and share it with a code",
+        "Field of view, brightness, camera shake and colour-blind enemy colours",
+        "Separate volume for effects and ambience, louder enemy footsteps option"
+      ]
+    },
+    {
+      "id": "2026-10-25-ceiling",
+      "date": "2026-10-25",
+      "version": "2026.10.25b",
+      "title": "Ceiling bump fix",
+      "big": false,
+      "items": [
+        "Jumping into a low ceiling no longer throws you out of the room (Temple summit room and every other low ceiling)"
+      ]
+    },
+    {
+      "id": "2026-10-25-server",
+      "date": "2026-10-25",
+      "version": "2026.10.25a",
+      "title": "Our own game server and public rooms",
+      "big": true,
+      "items": [
+        "Sector Nine now runs on its own game server: a public room list, rooms for 3 to 8 players, the host role moves on if the host leaves, and you reconnect if your connection drops",
+        "Smooth movement even when the connection lags, like pro shooters do it",
+        "Real ping shown on the scoreboard (Tab)",
+        "You can hear enemy footsteps",
+        "Pausing is silent everywhere",
+        "Editing a room keeps the same invite link",
+        "Higher jump"
+      ]
+    },
+    {
+      "id": "2026-10-25-hits",
+      "date": "2026-10-25",
+      "version": "2026.10.25",
+      "title": "Sharper hits and a better killcam",
+      "big": false,
+      "items": [
+        "Bullets hit exactly what you see, on every map",
+        "Killcam shows your killer's real aim: sights, sniper scope, movement and reloads",
+        "Bodies fall to the ground when killed in mid-air",
+        "Calmer lighting on Temple, Glacier and Shrine"
+      ]
+    },
+    {
+      "id": "2026-10-24-maps",
+      "date": "2026-10-24",
+      "version": "2026.10.24",
+      "title": "All 10 maps rebuilt",
+      "big": true,
+      "image": "assets/ui/map_foundry.jpg",
+      "items": [
+        "Every map rebuilt from scratch, each with its own layout, size and landmarks",
+        "Wallbangs: shoot through thin walls, pods and crates (damage depends on thickness)",
+        "No more freezes in the middle of a match"
+      ]
+    }
+  ]
+}

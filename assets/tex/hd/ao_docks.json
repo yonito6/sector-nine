@@ -1,0 +1,1 @@
+{"map": "docks", "voxel": 0.5, "min": [-49.0, -0.5, -49.0], "size": [98.0, 18.5, 98.0], "dims": [196, 37, 196], "cols": 7, "layout": "tiles = Y slices (index j), left-to-right then top-to-bottom; in a tile x = column (i), z = row (k, top = min z); grey = openness 0..1", "rays": 40, "reach": 4.0, "tris": 197210}

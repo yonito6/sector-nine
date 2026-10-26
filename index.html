@@ -417,7 +417,7 @@ if (navigator.webdriver) { let plEl = null; const plFire = () => setTimeout(() =
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/utils/BufferGeometryUtils.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
-(() => {
+// (no wrapper: add-on modules in modules/*.js hook into these globals)
 'use strict';
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -2634,6 +2634,7 @@ async function loadMap(id) {
   if (DUST) DUST.visible = def.id === 'yard';
   renderer.shadowMap.needsUpdate = true; targetsDirty = true;
   try { renderer.compile(scene, camera); } catch (e) {}
+  if (window.FOOTSTEPS && FOOTSTEPS.onMapLoaded) FOOTSTEPS.onMapLoaded();   // surface map for footsteps, built behind the loading screen
   ov.hidden = true;
 }
 let CAMPS = [];   // camping spots on a map: sniper perches, bunkers, balconies (bots use them too)
@@ -5138,7 +5139,7 @@ function srvInit() {
   if (SRV.ready) return SRV.ready;
   return (SRV.ready = new Promise(res => {
     let ws; try { ws = new WebSocket(SRV.url); } catch (e) { SRV.ready = null; return res(false); }
-    const t = setTimeout(() => { try { ws.close(); } catch (e) {} }, 7000);
+    const t = setTimeout(() => { try { ws.close(); } catch (e) {} }, 12000);   // slow PCs / mobile networks need longer than 7 s
     ws.onopen = () => { clearTimeout(t); SRV.ws = ws; if (SRV.listing) srvSend({ k: 'list' }); res(true);
       clearInterval(SRV.pingT); SRV.pingT = setInterval(() => srvSend({ k: 'pi', t: performance.now() }), 1000); srvSend({ k: 'pi', t: performance.now() }); };
     ws.onmessage = e => { let d; try { d = JSON.parse(e.data); } catch (x) { return; } if (!d) return;
@@ -5161,7 +5162,8 @@ function serverTransport(code, create) {
     const fire = (joined = [], left = []) => handler && handler({ peers: peersList(), joined, left });
     const stop = () => { closed = true; SRV.on.delete(onMsg); };
     const api = {
-      name: code, code, meta: null, onMeta: null, onClosed: null, server: true, relayed: false,
+      name: code, code, meta: null, onMeta: null, onClosed: null, onMatch: null, onNote: null, match: null, server: true, relayed: false,
+      send(o) { srvSend(o); },
       get isHost() { return !!(api.meta && myId && api.meta.hostId === myId); }, get myId() { return myId; },
       ping: () => SRV.rtt === null ? 0 : Math.round(SRV.rtt), pingTo: k => { const p = remotes.get(k); return p && p.pg ? p.pg | 0 : null; }, direct: () => false,
       presence(patch) { pres = Object.assign({}, pres, patch); if (!pending) pending = setTimeout(sendState, Math.max(0, 33 - (performance.now() - lastSend))); return Promise.resolve(); },
@@ -5176,7 +5178,10 @@ function serverTransport(code, create) {
     function onMeta(m) { api.meta = m; const ids = new Set(m.players.map(p => p.id)); for (const k of [...remotes.keys()]) if (!ids.has(k)) { forget(k); fire([], [{ peer: k }]); } api.onMeta && api.onMeta(m); }
     function onMsg(d) {
       if (closed) return;
-      if (d.k === 'st') { if (d.f && d.p) accept(d.f, d.p); }
+      if (d.k === 'S') { for (const k in d.s) accept(k, d.s[k]); }   // one bundle per server tick with everyone who moved
+      else if (d.k === 'st') { if (d.f && d.p) accept(d.f, d.p); }
+      else if (d.k === 'mx') { api.match = d.v || null; if (api.onMatch) api.onMatch(d); else (api.mxQueue = api.mxQueue || []).push(d); }   // kept until the modes add-on attaches
+      else if (d.k === 'note') { api.onNote && api.onNote(d.e); }
       else if (d.k === 'meta') onMeta(d.m);
       else if (d.k === 'left') { if (remotes.has(d.id)) { forget(d.id); fire([], [{ peer: d.id }]); } }
       else if (d.k === 'welcome') { myId = d.id; retry = false; done(api); onMeta(d.meta); fire(); }
@@ -5740,6 +5745,7 @@ function updatePlayer(dt, rdt) {
   fwd.set(-Math.sin(P.yaw), 0, -Math.cos(P.yaw)); right.set(Math.cos(P.yaw), 0, -Math.sin(P.yaw));
   wish.set(0, 0, 0);
   if (keys.KeyW) wish.add(fwd); if (keys.KeyS) wish.sub(fwd); if (keys.KeyD) wish.add(right); if (keys.KeyA) wish.sub(right);
+  if (window.MODE_frozen && MODE_frozen()) wish.set(0, 0, 0);   // demolition freeze time / planting
   const sprint = (keys.ShiftLeft || keys.ShiftRight) && keys.KeyW && !keys.KeyS && P.reload <= 0 && !adsHeld && !crouching && P.onGround;
   P.sprint = !!sprint;
   let speed = (sprint ? MOVE.sprint : MOVE.run) * (W().move || 1); speed = lerp(speed, MOVE.adsSpeed, P.ads); speed = lerp(speed, MOVE.crouchSpeed, P.crouch); if (P.odT > 0) speed *= MOVE.overdriveSpeed; if (P.weapon === 'knife') speed *= MOVE.knifeSpeed; if (P.chillT > 0) speed *= MOVE.chillSpeed; if (P.charge > 0) speed *= MOVE.chargeSpeed;
@@ -5832,6 +5838,7 @@ function tryDash() {
   if (P.dashCd > 0 || state !== 'play') return;
   fwd.set(-Math.sin(P.yaw), 0, -Math.cos(P.yaw)); right.set(Math.cos(P.yaw), 0, -Math.sin(P.yaw)); wish.set(0, 0, 0);
   if (keys.KeyW) wish.add(fwd); if (keys.KeyS) wish.sub(fwd); if (keys.KeyD) wish.add(right); if (keys.KeyA) wish.sub(right);
+  if (window.MODE_frozen && MODE_frozen()) wish.set(0, 0, 0);   // demolition freeze time / planting
   if (wish.lengthSq() < .01) wish.copy(fwd); wish.normalize();
   P.vel.x = wish.x * 21; P.vel.z = wish.z * 21; P.vel.y = Math.max(P.vel.y, .5); P.dashT = .17; P.dashCd = 2; P.fov += 9; P.trauma = Math.min(1, P.trauma + .1);
   sfx.dash(); for (let i = 0; i < 18; i++) FX.spawn(_v1.set(P.pos.x, P.pos.y + rand(.2, 1.4), P.pos.z), -wish.x * rand(2, 6) + rand(-1, 1), rand(-.5, .5), -wish.z * rand(2, 6) + rand(-1, 1), .5, 1.8, 3, rand(.03, .06), rand(.15, .3), 0, 4, 1);
@@ -6300,7 +6307,7 @@ function needNick() { const n = cleanNick($('nick').value); if (!n) { onlineMsg(
 async function startBrowsing() {
   onlineMsg('Looking for rooms...');
   SRV.listing = true;
-  let ok = await srvInit(); if (ok) srvSend({ k: 'list' });
+  let ok = await srvInit() || await srvInit(); if (ok) srvSend({ k: 'list' });
   else [ok] = await Promise.all([busInit(), PeerLib ? null : loadPeerLib().then(l => { PeerLib = l; })]);
   if (!ok) { onlineMsg('Could not reach the room servers. Check your internet and try again.', true); return; }
   onlineMsg(''); LOBBY.onList = renderRoomList; lobbyEnsure(); lobbyTick();
@@ -6310,17 +6317,17 @@ function renderRoomList(rooms) {
   rooms = rooms.filter(r => !NET.room || r.code !== NET.room.code).sort((a, b) => (a.started - b.started) || (b.count - a.count));
   $('oCount').textContent = rooms.length ? `${rooms.length} open room${rooms.length > 1 ? 's' : ''}` : 'No open rooms yet. Create one below.';
   $('roomList').innerHTML = rooms.map(r => { const full = r.count >= r.size;
-    return `<div class="oroom"><div><b>${escH(r.name)}</b><span>${escH(r.host || '')} · ${escH(mapName(r.map))} · first to ${r.kills | 0}</span></div><em class="${r.started ? 'live' : ''}">${r.started ? 'In match' : 'Waiting'}</em><i>${r.count | 0}/${r.size | 0}</i><button class="go" data-room="${escH(r.code)}"${full ? ' disabled' : ''}>${full ? 'Full' : 'Join'}</button></div>`; }).join('');
+    return `<div class="oroom"><div><b>${escH(r.name)}</b><span>${escH(({ ffa: 'Free for all', tdm: 'Team deathmatch', demo: 'Demolition' })[r.mode] || 'Free for all')} · ${escH(r.host || '')} · ${escH(mapName(r.map))}${r.mode === 'demo' ? '' : ` · first to ${r.kills | 0}`}</span></div><em class="${r.started ? 'live' : ''}">${r.started ? 'In match' : 'Waiting'}</em><i>${r.count | 0}/${r.size | 0}</i><button class="go" data-room="${escH(r.code)}"${full ? ' disabled' : ''}>${full ? 'Full' : 'Join'}</button></div>`; }).join('');
 }
 async function openRoom(create, code) {
   if (!needNick()) return false;
   initAudio(); onlineMsg('Connecting...'); for (const b of document.querySelectorAll('#onlinePanel button')) b.disabled = true;
-  const useSrv = await srvInit();
+  let useSrv = await srvInit(); if (!useSrv) { onlineMsg('Still connecting to the game server...'); useSrv = await srvInit(); }   // retry once before the old peer-to-peer fallback (it can't reach server rooms)
   const [busOk] = useSrv ? [false] : await Promise.all([busInit(), PeerLib ? null : loadPeerLib().then(l => { PeerLib = l; })]);
   let room = null;
   if (useSrv || busOk || PeerLib) for (let tries = 0; tries < 4; tries++) {
     const c = create ? randCode() : code;
-    const settings = create ? { name: cleanNick($('rName').value).slice(0, 24) || `${NET.nick}'s room`, size: +$('rSize').value || 4, map: $('rMap').value, kills: +$('rKills').value || 15, host: NET.nick } : null;
+    const settings = create ? { name: cleanNick($('rName').value).slice(0, 24) || `${NET.nick}'s room`, size: +$('rSize').value || 4, map: $('rMap').value, kills: +$('rKills').value || 15, host: NET.nick, mode: ($('rMode') || {}).value || 'ffa' } : null;
     room = await (useSrv ? serverTransport : roomTransport)(c, settings); if (!(room.error === 'taken' && create)) break;
   }
   for (const b of document.querySelectorAll('#onlinePanel button')) b.disabled = false;
@@ -6371,7 +6378,7 @@ for (const id of ['eName', 'eSize', 'eMap', 'eKills']) $(id).addEventListener('i
 // the host edits the open room in place: same code, same invite link, everyone in the lobby sees the new settings at once
 $('btnSaveRoom').addEventListener('click', () => { const r = NET.room; if (!r || !r.isHost) return;
   const size = Math.max(+$('eSize').value || 4, r.meta.count || 1), kills = +$('eKills').value || 15;
-  r.setMeta({ name: cleanNick($('eName').value).slice(0, 24) || r.meta.name, size, map: $('eMap').value, kills });
+  r.setMeta({ name: cleanNick($('eName').value).slice(0, 24) || r.meta.name, size, map: $('eMap').value, kills, mode: ($('eMode') || {}).value || r.meta.mode || 'ffa' });
   delete $('oEdit').dataset.dirty; $('oEditMsg').textContent = size > +$('eSize').value ? `Saved. Players kept at ${size}: that many are already in the room.` : 'Saved. Your invite link stays the same.'; renderRoom(r.meta); lobbyTick(); });
 // back to the room lobby: the host ends the match for everyone (to change settings and start again); others just step out and can rejoin
 function toRoomLobby(msg) {
@@ -6385,7 +6392,7 @@ $('btnCreate').addEventListener('click', () => openRoom(true));
 $('roomList').addEventListener('click', e => { const b = e.target.closest('[data-room]'); if (b) openRoom(false, b.dataset.room); });
 $('btnLeave').addEventListener('click', () => { leaveOnline(); onlineMsg('You left the room.'); });
 $('btnCopy').addEventListener('click', () => { const url = location.origin + location.pathname + '#room=' + (NET.room ? NET.room.code : ''); try { navigator.clipboard.writeText(url); onlineMsg('Invite link copied. Anyone with it can join.'); } catch (e) { onlineMsg(url); } });
-$('btnStart').addEventListener('click', () => { const r = NET.room; if (!r || !r.meta) return; if (r.meta.started) { r.stepOut = false; beginRoomMatch(r.meta); return; } if (r.isHost) r.setMeta({ started: true }); });
+$('btnStart').addEventListener('click', () => { const r = NET.room; if (!r || !r.meta) return; if (r.meta.started) { r.stepOut = false; beginRoomMatch(r.meta); return; } if (r.isHost) r.setMeta(Object.assign({ started: true }, window.MODE ? MODE.startExtras(r.meta) : {})); });
 $('btnResume').addEventListener('click', () => { setTimeout(() => { $('pause').querySelector('.kicker').textContent = 'Paused'; $('pause').querySelector('h2').innerHTML = 'Holding<br>position'; $('btnResume').textContent = 'Resume'; }, 200); });
 // invite links: #room=CODE drops you straight into that room's lobby
 function joinFromLink() {
@@ -6512,8 +6519,9 @@ function frame(now) {
   } else if (state === 'menu') {
     G.time += rdt; updateNades(rdt); updatePads(rdt);
     menuT += rdt * (reduceMotion ? .015 : .05);
-    camera.position.set(Math.sin(menuT) * 21, 5.2, Math.cos(menuT) * 21); camera.lookAt(0, 1.6, 0);
-    if (camera.fov !== 70) { camera.fov = 70; camera.updateProjectionMatrix(); }
+    if (window.__s9cam) { const c = window.__s9cam; camera.position.set(...c.pos); camera.lookAt(...c.look); if (camera.fov !== (c.fov || 70)) { camera.fov = c.fov || 70; camera.updateProjectionMatrix(); } }   // tests: fixed camera for map pictures
+    else { camera.position.set(Math.sin(menuT) * 21, 5.2, Math.cos(menuT) * 21); camera.lookAt(0, 1.6, 0);
+    if (camera.fov !== 70) { camera.fov = 70; camera.updateProjectionMatrix(); } }
     updateRobots(rdt, true);
   }
   if (state !== 'paused') { updateDebris(dt); FX.update(dt); SMOKE.update(dt); }
@@ -6546,9 +6554,11 @@ function frame(now) {
   updateListener();
   if (NET.on) netSend(rdt);
   const tR = performance.now(); perf.upd = lerp(perf.upd, tR - now, .05);
+  if (window.MODE_preRender) MODE_preRender(rdt);   // game modes: plant/defuse input, beeps, HUD, spectating
   const replaying = state === 'dead' && REC.on && P.dieT > DC.T && applyReplay();
   composer.render(rdt);
   if (replaying) restoreReplay();
+  if (window.MODE_postRender) MODE_postRender();
   perf.render = lerp(perf.render, performance.now() - tR, .05); perf.hist.push(rdt * 1000); if (perf.hist.length > 600) perf.hist.shift();
 }
 
@@ -6582,10 +6592,13 @@ async function boot() {
   $('loading').remove();
   requestAnimationFrame(t => { last = t; frame(t); });
   window.__snd = { GUN_VOICE, gsBuild, hitSample };
-  window.__s9 = { get world() { return world; }, PF, sfx, MKIT, MKMETA, MKLOG, MOVE, get WEAPONS() { return WEAPONS; }, get BOTW() { return BOTW; }, get MAPS() { return MAPS; }, SLOTS, get CAMPS() { return CAMPS; }, get HALF() { return HALF; }, gunCam, P, G, robots, hurtPlayer, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS, AU, initAudio, loadMap, MAPS, REC, GUN_IDS, get CUR_MAP() { return CUR_MAP; }, get SPAWNS() { return SPAWNS; }, get MAPFX() { return MAPFX; }, get MAPROOT() { return MAPROOT; }, killBot(r, crit) { damageBot(r, 999, !!crit, r.root.position.clone().setY(r.root.position.y + 1.2), new THREE.Vector3(0, 0, 1), 'body', PLAYER_ENT, P.weapon); }, DROPS, pickNearDrop, BOOM, RBOOMS, NET, openRoom, leaveOnline, boomRoute, lineOfSight, explode, damageEntity, scene, world };
+  window.__s9 = { get world() { return world; }, menuScene, get scene() { return scene; }, get SPAWNS() { return SPAWNS; }, cellOf, cellX, cellZ, nearestOk, groundAt, PF, sfx, MKIT, MKMETA, MKLOG, MOVE, get WEAPONS() { return WEAPONS; }, get BOTW() { return BOTW; }, get MAPS() { return MAPS; }, SLOTS, get CAMPS() { return CAMPS; }, get HALF() { return HALF; }, gunCam, P, G, robots, hurtPlayer, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS, AU, initAudio, loadMap, MAPS, REC, GUN_IDS, get CUR_MAP() { return CUR_MAP; }, get SPAWNS() { return SPAWNS; }, get MAPFX() { return MAPFX; }, get MAPROOT() { return MAPROOT; }, killBot(r, crit) { damageBot(r, 999, !!crit, r.root.position.clone().setY(r.root.position.y + 1.2), new THREE.Vector3(0, 0, 1), 'body', PLAYER_ENT, P.weapon); }, DROPS, pickNearDrop, BOOM, RBOOMS, NET, openRoom, leaveOnline, boomRoute, lineOfSight, explode, damageEntity, scene, world };
 }
 requestAnimationFrame(() => setTimeout(boot, 30));
-})();
+</script>
+<script>/* add-on modules: the release list modules/manifest.json decides which finished features are live; loaded in order */
+(function () { const load = (list, v) => { let i = 0; const next = () => { if (i >= list.length) { window.dispatchEvent(new Event('s9modules')); return; } const sc = document.createElement('script'); sc.src = 'modules/' + list[i++] + '.js?v=' + encodeURIComponent(v || ''); sc.onload = sc.onerror = next; document.body.appendChild(sc); }; next(); };
+  fetch('modules/manifest.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(m => load(m.modules || [], m.v)).catch(() => load([], '')); })();
 </script>
 
 </html>

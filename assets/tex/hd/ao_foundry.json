@@ -1,0 +1,1 @@
+{"map": "foundry", "voxel": 0.5, "min": [-29.0, -0.5, -29.0], "size": [58.0, 15.5, 58.0], "dims": [116, 31, 116], "cols": 6, "layout": "tiles = Y slices (index j), left-to-right then top-to-bottom; in a tile x = column (i), z = row (k, top = min z); grey = openness 0..1", "rays": 40, "reach": 4.0, "tris": 94666}

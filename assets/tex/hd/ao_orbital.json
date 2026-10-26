@@ -1,0 +1,1 @@
+{"map": "orbital", "voxel": 0.5, "min": [-37.0, -0.5, -37.0], "size": [74.0, 13.0, 74.0], "dims": [148, 26, 148], "cols": 6, "layout": "tiles = Y slices (index j), left-to-right then top-to-bottom; in a tile x = column (i), z = row (k, top = min z); grey = openness 0..1", "rays": 40, "reach": 4.0, "tris": 159534}

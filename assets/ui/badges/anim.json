@@ -1,0 +1,22 @@
+{
+ "frame": 256,
+ "cols": 6,
+ "rows": 5,
+ "frames": 30,
+ "fps": 30,
+ "sheets": {
+  "levelup": "levelup_sheet.png",
+  "fx": "levelup_fx_sheet.png",
+  "rank0": "rankup_sheet_0.png",
+  "rank1": "rankup_sheet_1.png",
+  "rank2": "rankup_sheet_2.png",
+  "rank3": "rankup_sheet_3.png",
+  "rank4": "rankup_sheet_4.png",
+  "rank5": "rankup_sheet_5.png",
+  "rank6": "rankup_sheet_6.png",
+  "rank7": "rankup_sheet_7.png",
+  "rank8": "rankup_sheet_8.png",
+  "rank9": "rankup_sheet_9.png"
+ },
+ "about": "Sprite sheets: frames of `frame` px laid out left-to-right, top-to-bottom in a cols x rows grid, played at fps. levelup = generic level-up token, fx = burst only (to overlay any badge), rank<i> = rank-up to rank i."
+}

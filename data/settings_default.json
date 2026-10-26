@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "gameplay": { "damageNumbers": true, "killFeedSize": "normal", "hitSound": true, "colorblind": "off" },
+  "controls": {
+    "adsMode": "hold",
+    "binds": {
+      "forward": ["KeyW", ""], "back": ["KeyS", ""], "left": ["KeyA", ""], "right": ["KeyD", ""],
+      "jump": ["Space", ""], "crouch": ["KeyC", ""], "crouchHold": ["ControlLeft", "ControlRight"], "sprint": ["ShiftLeft", "ShiftRight"], "dash": ["KeyE", ""],
+      "fire": ["Mouse0", ""], "ads": ["Mouse2", ""], "reload": ["KeyR", ""], "grenade": ["KeyG", ""], "overdrive": ["KeyF", ""],
+      "primary": ["Digit1", ""], "secondary": ["Digit2", ""], "knife": ["Digit3", ""], "weapon4": ["Digit4", ""], "swap": ["KeyQ", ""],
+      "interact": ["KeyX", ""], "scoreboard": ["Tab", ""], "pause": ["Escape", ""], "ptt": ["KeyV", ""]
+    }
+  },
+  "mouse": { "sens": 1, "adsMult": 1, "invertY": false },
+  "crosshair": { "style": "crossdot", "color": "#ece6d8", "length": 9, "thickness": 2, "gap": 5, "outline": true, "outlineThickness": 1, "outlineOpacity": 0.5, "dot": 2, "opacity": 1, "dynamic": true, "adsShow": false },
+  "video": { "fov": 78, "quality": "medium", "fps": true, "shake": 1, "brightness": 1, "gamma": 1 },
+  "audio": { "master": 0.8, "effects": 1, "ambience": 1, "footsteps": 1, "voice": 1, "muteUnfocused": false }
+}

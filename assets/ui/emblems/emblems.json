@@ -1,0 +1,146 @@
+[
+ {
+  "id": "nine_core",
+  "name": "Sector Nine",
+  "unlock": "Default",
+  "rarity": "common"
+ },
+ {
+  "id": "robot_cat",
+  "name": "Robo Cat",
+  "unlock": "Reach level 2",
+  "rarity": "common"
+ },
+ {
+  "id": "rocket_taco",
+  "name": "Rocket Taco",
+  "unlock": "Win 3 matches",
+  "rarity": "common"
+ },
+ {
+  "id": "alien_shades",
+  "name": "Too Cool Alien",
+  "unlock": "Reach level 5",
+  "rarity": "common"
+ },
+ {
+  "id": "skull_antenna",
+  "name": "Signal Skull",
+  "unlock": "Get 100 kills",
+  "rarity": "rare"
+ },
+ {
+  "id": "neon_dragon",
+  "name": "Neon Dragon",
+  "unlock": "Reach Sergeant",
+  "rarity": "epic"
+ },
+ {
+  "id": "banana_astronaut",
+  "name": "Banana Astronaut",
+  "unlock": "Play 10 matches",
+  "rarity": "common"
+ },
+ {
+  "id": "pizza_ufo",
+  "name": "Pizza UFO",
+  "unlock": "Win 10 matches",
+  "rarity": "rare"
+ },
+ {
+  "id": "cyber_duck",
+  "name": "Cyber Duck",
+  "unlock": "Get 25 headshots",
+  "rarity": "rare"
+ },
+ {
+  "id": "brain_jar",
+  "name": "Big Brain",
+  "unlock": "Win 5 Demolition rounds",
+  "rarity": "rare"
+ },
+ {
+  "id": "donut_planet",
+  "name": "Donut Planet",
+  "unlock": "Reach level 10",
+  "rarity": "common"
+ },
+ {
+  "id": "ghost_wifi",
+  "name": "Lag Ghost",
+  "unlock": "Play 5 online matches",
+  "rarity": "common"
+ },
+ {
+  "id": "laser_shark",
+  "name": "Laser Shark",
+  "unlock": "Get a 5-kill streak",
+  "rarity": "epic"
+ },
+ {
+  "id": "octo_hacker",
+  "name": "Octo Hacker",
+  "unlock": "Get 50 assists",
+  "rarity": "rare"
+ },
+ {
+  "id": "toaster_jet",
+  "name": "Jet Toaster",
+  "unlock": "Reach Corporal",
+  "rarity": "common"
+ },
+ {
+  "id": "eyeball_drone",
+  "name": "Eye Drone",
+  "unlock": "Get 10 long-range kills",
+  "rarity": "rare"
+ },
+ {
+  "id": "frog_pilot",
+  "name": "Ace Frog",
+  "unlock": "Reach Lieutenant",
+  "rarity": "rare"
+ },
+ {
+  "id": "dino_jetpack",
+  "name": "Jetpack Rex",
+  "unlock": "Get 3 MVPs",
+  "rarity": "epic"
+ },
+ {
+  "id": "penguin_ninja",
+  "name": "Ninja Penguin",
+  "unlock": "Get 500 kills",
+  "rarity": "epic"
+ },
+ {
+  "id": "mushroom_reactor",
+  "name": "Reactor Shroom",
+  "unlock": "Defuse 10 bombs",
+  "rarity": "rare"
+ },
+ {
+  "id": "cool_moon",
+  "name": "Chill Moon",
+  "unlock": "Play 25 matches",
+  "rarity": "common"
+ },
+ {
+  "id": "coffee_bot",
+  "name": "Coffee Bot",
+  "unlock": "Play on 7 different days",
+  "rarity": "rare"
+ },
+ {
+  "id": "slime_king",
+  "name": "Slime King",
+  "unlock": "Reach Major",
+  "rarity": "epic"
+ },
+ {
+  "id": "boom_bomb",
+  "name": "Boom Buddy",
+  "unlock": "Plant 20 bombs",
+  "rarity": "epic"
+ }
+]
