@@ -1,9 +1,12 @@
 {
-  "v": "2",
+  "v": "3",
   "modules": [
-    "graphics",
     "settings",
+    "graphics",
     "badges",
+    "demoassets",
+    "modes",
+    "roundfx",
     "news"
   ],
   "notes": "Add-ons in load order. Only qa/release edits this. It holds a CANDIDATE only while the release gate runs (the tests load this file); on any failure it is put back to the live list at once. What is really live: qa/release/log.md."

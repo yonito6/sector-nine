@@ -1,0 +1,150 @@
+{
+ "units": "metres, game space (x right, y up, z toward camera); bbox = [minX,minY,minZ,maxX,maxY,maxZ] relative to the piece origin",
+ "parts": {
+  "d_led": "status LED (blinks)",
+  "d_screen": "countdown screen, UV 0..1 = full screen",
+  "d_keys": "keypad keys"
+ },
+ "pieces": {
+  "charge_carried": {
+   "tris": 5753,
+   "mats": [
+    "d_paint",
+    "d_metal",
+    "d_rubber",
+    "d_glow",
+    "d_led",
+    "d_screen",
+    "d_keys"
+   ],
+   "bbox": [
+    -0.24,
+    -0.152,
+    -0.216,
+    0.24,
+    0.247,
+    0.01
+   ],
+   "size": [
+    0.48,
+    0.399,
+    0.226
+   ]
+  },
+  "charge_planted": {
+   "tris": 5690,
+   "mats": [
+    "d_paint",
+    "d_metal",
+    "d_rubber",
+    "d_glow",
+    "d_led",
+    "d_screen",
+    "d_keys"
+   ],
+   "bbox": [
+    -0.266,
+    0.0,
+    -0.21,
+    0.266,
+    0.302,
+    0.17
+   ],
+   "size": [
+    0.532,
+    0.302,
+    0.379
+   ]
+  },
+  "kit": {
+   "tris": 720,
+   "mats": [
+    "d_paint",
+    "d_metal",
+    "d_rubber",
+    "d_glow"
+   ],
+   "bbox": [
+    -0.127,
+    0.0,
+    -0.04,
+    0.103,
+    0.243,
+    0.061
+   ],
+   "size": [
+    0.23,
+    0.243,
+    0.1
+   ]
+  },
+  "kit_belt": {
+   "tris": 848,
+   "mats": [
+    "d_paint",
+    "d_metal",
+    "d_rubber",
+    "d_glow"
+   ],
+   "bbox": [
+    -0.103,
+    -0.13,
+    -0.11,
+    0.103,
+    0.113,
+    0.024
+   ],
+   "size": [
+    0.206,
+    0.243,
+    0.135
+   ]
+  },
+  "site_a": {
+   "tris": 1129,
+   "mats": [
+    "d_paint",
+    "d_metal",
+    "d_glow",
+    "d_decal",
+    "d_holo"
+   ],
+   "bbox": [
+    -2.6,
+    0.0,
+    -2.6,
+    4.0,
+    3.595,
+    2.6
+   ],
+   "size": [
+    6.6,
+    3.595,
+    5.2
+   ]
+  },
+  "site_b": {
+   "tris": 1259,
+   "mats": [
+    "d_paint",
+    "d_metal",
+    "d_glow",
+    "d_decal",
+    "d_holo"
+   ],
+   "bbox": [
+    -2.6,
+    0.0,
+    -2.6,
+    4.001,
+    3.595,
+    2.6
+   ],
+   "size": [
+    6.601,
+    3.595,
+    5.2
+   ]
+  }
+ }
+}

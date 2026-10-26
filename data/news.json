@@ -2,16 +2,16 @@
   "about": "What's New feed shown in the game (modules/news.js). Newest first is not required: the game sorts by date + version. Fields: id (unique), date YYYY-MM-DD, version, title, items[], big (highlighted card), image (optional, relative path like assets/ui/news/x.jpg). Written by the release manager (qa/release) when a big feature goes live.",
   "entries": [
     {
-      "id": "mod-killcam",
+      "id": "mod-modes",
       "date": "2026-10-26",
-      "version": "2026.10.26-r1",
-      "title": "Killcam 2.0",
+      "version": "2026.10.26-r3",
+      "title": "Game modes: Team Deathmatch and Demolition",
       "big": true,
       "items": [
-        "See your death through your killer's eyes: their gun, their scope, their aim",
-        "Slow motion on the final shot, banner with their weapon and HP left",
-        "Final killcam at the end of every match",
-        "Press Space to skip"
+        "Team Deathmatch: two teams, first to the kill target wins",
+        "Demolition: plant the charge at site A or B, or defuse it, round by round",
+        "Free for all stays the classic mode",
+        "Already playing? Refresh the page with Ctrl+F5 to get the new modes"
       ]
     },
     {
