@@ -1,0 +1,499 @@
+{
+ "version": 1,
+ "about": "Sector Nine levels. 50 levels = 10 ranks x 5 steps (I-V). XP to go from level L to L+1 = round(400 + 120*L + 6*L*L). totalXp = lifetime XP needed to reach that level. After level 50 every prestige.xpPer XP adds one Prestige (level stays 50). XP is decided by the game server only.",
+ "formula": "round(400 + 120*L + 6*L*L)",
+ "maxLevel": 50,
+ "ranks": [
+  "Recruit",
+  "Private",
+  "Corporal",
+  "Sergeant",
+  "Lieutenant",
+  "Captain",
+  "Major",
+  "Colonel",
+  "General",
+  "Sector Legend"
+ ],
+ "steps": [
+  "I",
+  "II",
+  "III",
+  "IV",
+  "V"
+ ],
+ "badges": "assets/ui/badges/rank_<rank>.png (512px, transparent); step pips drawn by the UI",
+ "xp": {
+  "kill": 100,
+  "headshot": 50,
+  "assist": 40,
+  "win": 500,
+  "loss": 150,
+  "plant": 150,
+  "defuse": 200,
+  "roundWin": 120,
+  "mvp": 200,
+  "firstMatchOfDay": 500
+ },
+ "antiAbuse": {
+  "minSeconds": 60,
+  "minRealPlayers": 2,
+  "maxMatchXp": 5000
+ },
+ "prestige": {
+  "afterXp": 409150,
+  "xpPer": 21400
+ },
+ "levels": [
+  {
+   "level": 1,
+   "rank": 0,
+   "rankName": "Recruit",
+   "step": 1,
+   "stepName": "I",
+   "totalXp": 0,
+   "xpToNext": 526
+  },
+  {
+   "level": 2,
+   "rank": 0,
+   "rankName": "Recruit",
+   "step": 2,
+   "stepName": "II",
+   "totalXp": 526,
+   "xpToNext": 664
+  },
+  {
+   "level": 3,
+   "rank": 0,
+   "rankName": "Recruit",
+   "step": 3,
+   "stepName": "III",
+   "totalXp": 1190,
+   "xpToNext": 814
+  },
+  {
+   "level": 4,
+   "rank": 0,
+   "rankName": "Recruit",
+   "step": 4,
+   "stepName": "IV",
+   "totalXp": 2004,
+   "xpToNext": 976
+  },
+  {
+   "level": 5,
+   "rank": 0,
+   "rankName": "Recruit",
+   "step": 5,
+   "stepName": "V",
+   "totalXp": 2980,
+   "xpToNext": 1150
+  },
+  {
+   "level": 6,
+   "rank": 1,
+   "rankName": "Private",
+   "step": 1,
+   "stepName": "I",
+   "totalXp": 4130,
+   "xpToNext": 1336
+  },
+  {
+   "level": 7,
+   "rank": 1,
+   "rankName": "Private",
+   "step": 2,
+   "stepName": "II",
+   "totalXp": 5466,
+   "xpToNext": 1534
+  },
+  {
+   "level": 8,
+   "rank": 1,
+   "rankName": "Private",
+   "step": 3,
+   "stepName": "III",
+   "totalXp": 7000,
+   "xpToNext": 1744
+  },
+  {
+   "level": 9,
+   "rank": 1,
+   "rankName": "Private",
+   "step": 4,
+   "stepName": "IV",
+   "totalXp": 8744,
+   "xpToNext": 1966
+  },
+  {
+   "level": 10,
+   "rank": 1,
+   "rankName": "Private",
+   "step": 5,
+   "stepName": "V",
+   "totalXp": 10710,
+   "xpToNext": 2200
+  },
+  {
+   "level": 11,
+   "rank": 2,
+   "rankName": "Corporal",
+   "step": 1,
+   "stepName": "I",
+   "totalXp": 12910,
+   "xpToNext": 2446
+  },
+  {
+   "level": 12,
+   "rank": 2,
+   "rankName": "Corporal",
+   "step": 2,
+   "stepName": "II",
+   "totalXp": 15356,
+   "xpToNext": 2704
+  },
+  {
+   "level": 13,
+   "rank": 2,
+   "rankName": "Corporal",
+   "step": 3,
+   "stepName": "III",
+   "totalXp": 18060,
+   "xpToNext": 2974
+  },
+  {
+   "level": 14,
+   "rank": 2,
+   "rankName": "Corporal",
+   "step": 4,
+   "stepName": "IV",
+   "totalXp": 21034,
+   "xpToNext": 3256
+  },
+  {
+   "level": 15,
+   "rank": 2,
+   "rankName": "Corporal",
+   "step": 5,
+   "stepName": "V",
+   "totalXp": 24290,
+   "xpToNext": 3550
+  },
+  {
+   "level": 16,
+   "rank": 3,
+   "rankName": "Sergeant",
+   "step": 1,
+   "stepName": "I",
+   "totalXp": 27840,
+   "xpToNext": 3856
+  },
+  {
+   "level": 17,
+   "rank": 3,
+   "rankName": "Sergeant",
+   "step": 2,
+   "stepName": "II",
+   "totalXp": 31696,
+   "xpToNext": 4174
+  },
+  {
+   "level": 18,
+   "rank": 3,
+   "rankName": "Sergeant",
+   "step": 3,
+   "stepName": "III",
+   "totalXp": 35870,
+   "xpToNext": 4504
+  },
+  {
+   "level": 19,
+   "rank": 3,
+   "rankName": "Sergeant",
+   "step": 4,
+   "stepName": "IV",
+   "totalXp": 40374,
+   "xpToNext": 4846
+  },
+  {
+   "level": 20,
+   "rank": 3,
+   "rankName": "Sergeant",
+   "step": 5,
+   "stepName": "V",
+   "totalXp": 45220,
+   "xpToNext": 5200
+  },
+  {
+   "level": 21,
+   "rank": 4,
+   "rankName": "Lieutenant",
+   "step": 1,
+   "stepName": "I",
+   "totalXp": 50420,
+   "xpToNext": 5566
+  },
+  {
+   "level": 22,
+   "rank": 4,
+   "rankName": "Lieutenant",
+   "step": 2,
+   "stepName": "II",
+   "totalXp": 55986,
+   "xpToNext": 5944
+  },
+  {
+   "level": 23,
+   "rank": 4,
+   "rankName": "Lieutenant",
+   "step": 3,
+   "stepName": "III",
+   "totalXp": 61930,
+   "xpToNext": 6334
+  },
+  {
+   "level": 24,
+   "rank": 4,
+   "rankName": "Lieutenant",
+   "step": 4,
+   "stepName": "IV",
+   "totalXp": 68264,
+   "xpToNext": 6736
+  },
+  {
+   "level": 25,
+   "rank": 4,
+   "rankName": "Lieutenant",
+   "step": 5,
+   "stepName": "V",
+   "totalXp": 75000,
+   "xpToNext": 7150
+  },
+  {
+   "level": 26,
+   "rank": 5,
+   "rankName": "Captain",
+   "step": 1,
+   "stepName": "I",
+   "totalXp": 82150,
+   "xpToNext": 7576
+  },
+  {
+   "level": 27,
+   "rank": 5,
+   "rankName": "Captain",
+   "step": 2,
+   "stepName": "II",
+   "totalXp": 89726,
+   "xpToNext": 8014
+  },
+  {
+   "level": 28,
+   "rank": 5,
+   "rankName": "Captain",
+   "step": 3,
+   "stepName": "III",
+   "totalXp": 97740,
+   "xpToNext": 8464
+  },
+  {
+   "level": 29,
+   "rank": 5,
+   "rankName": "Captain",
+   "step": 4,
+   "stepName": "IV",
+   "totalXp": 106204,
+   "xpToNext": 8926
+  },
+  {
+   "level": 30,
+   "rank": 5,
+   "rankName": "Captain",
+   "step": 5,
+   "stepName": "V",
+   "totalXp": 115130,
+   "xpToNext": 9400
+  },
+  {
+   "level": 31,
+   "rank": 6,
+   "rankName": "Major",
+   "step": 1,
+   "stepName": "I",
+   "totalXp": 124530,
+   "xpToNext": 9886
+  },
+  {
+   "level": 32,
+   "rank": 6,
+   "rankName": "Major",
+   "step": 2,
+   "stepName": "II",
+   "totalXp": 134416,
+   "xpToNext": 10384
+  },
+  {
+   "level": 33,
+   "rank": 6,
+   "rankName": "Major",
+   "step": 3,
+   "stepName": "III",
+   "totalXp": 144800,
+   "xpToNext": 10894
+  },
+  {
+   "level": 34,
+   "rank": 6,
+   "rankName": "Major",
+   "step": 4,
+   "stepName": "IV",
+   "totalXp": 155694,
+   "xpToNext": 11416
+  },
+  {
+   "level": 35,
+   "rank": 6,
+   "rankName": "Major",
+   "step": 5,
+   "stepName": "V",
+   "totalXp": 167110,
+   "xpToNext": 11950
+  },
+  {
+   "level": 36,
+   "rank": 7,
+   "rankName": "Colonel",
+   "step": 1,
+   "stepName": "I",
+   "totalXp": 179060,
+   "xpToNext": 12496
+  },
+  {
+   "level": 37,
+   "rank": 7,
+   "rankName": "Colonel",
+   "step": 2,
+   "stepName": "II",
+   "totalXp": 191556,
+   "xpToNext": 13054
+  },
+  {
+   "level": 38,
+   "rank": 7,
+   "rankName": "Colonel",
+   "step": 3,
+   "stepName": "III",
+   "totalXp": 204610,
+   "xpToNext": 13624
+  },
+  {
+   "level": 39,
+   "rank": 7,
+   "rankName": "Colonel",
+   "step": 4,
+   "stepName": "IV",
+   "totalXp": 218234,
+   "xpToNext": 14206
+  },
+  {
+   "level": 40,
+   "rank": 7,
+   "rankName": "Colonel",
+   "step": 5,
+   "stepName": "V",
+   "totalXp": 232440,
+   "xpToNext": 14800
+  },
+  {
+   "level": 41,
+   "rank": 8,
+   "rankName": "General",
+   "step": 1,
+   "stepName": "I",
+   "totalXp": 247240,
+   "xpToNext": 15406
+  },
+  {
+   "level": 42,
+   "rank": 8,
+   "rankName": "General",
+   "step": 2,
+   "stepName": "II",
+   "totalXp": 262646,
+   "xpToNext": 16024
+  },
+  {
+   "level": 43,
+   "rank": 8,
+   "rankName": "General",
+   "step": 3,
+   "stepName": "III",
+   "totalXp": 278670,
+   "xpToNext": 16654
+  },
+  {
+   "level": 44,
+   "rank": 8,
+   "rankName": "General",
+   "step": 4,
+   "stepName": "IV",
+   "totalXp": 295324,
+   "xpToNext": 17296
+  },
+  {
+   "level": 45,
+   "rank": 8,
+   "rankName": "General",
+   "step": 5,
+   "stepName": "V",
+   "totalXp": 312620,
+   "xpToNext": 17950
+  },
+  {
+   "level": 46,
+   "rank": 9,
+   "rankName": "Sector Legend",
+   "step": 1,
+   "stepName": "I",
+   "totalXp": 330570,
+   "xpToNext": 18616
+  },
+  {
+   "level": 47,
+   "rank": 9,
+   "rankName": "Sector Legend",
+   "step": 2,
+   "stepName": "II",
+   "totalXp": 349186,
+   "xpToNext": 19294
+  },
+  {
+   "level": 48,
+   "rank": 9,
+   "rankName": "Sector Legend",
+   "step": 3,
+   "stepName": "III",
+   "totalXp": 368480,
+   "xpToNext": 19984
+  },
+  {
+   "level": 49,
+   "rank": 9,
+   "rankName": "Sector Legend",
+   "step": 4,
+   "stepName": "IV",
+   "totalXp": 388464,
+   "xpToNext": 20686
+  },
+  {
+   "level": 50,
+   "rank": 9,
+   "rankName": "Sector Legend",
+   "step": 5,
+   "stepName": "V",
+   "totalXp": 409150,
+   "xpToNext": null
+  }
+ ]
+}
