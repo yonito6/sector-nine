@@ -53,7 +53,10 @@
   // decided once this whole file has run (the blocker screen below must exist first)
   // (a lock that is a bit old, up to 2 minutes, means another tab probably exists but is slowed down: browsers run
   // background-tab timers once a minute. Then wait longer for its answer.)
-  Promise.resolve().then(() => { const l = lock(); if (fresh(l) && l.id !== tabId) settle(false); else { const recent = l && l.id && l.id !== tabId && Date.now() - l.t < 120000; if (bc) bc.postMessage({ k: 'who', id: tabId }); setTimeout(() => { const m = lock(); settle(!(fresh(m) && m.id !== tabId)); }, bc ? (recent ? 4000 : 800) : 0); } });
+  // a link from our emails (#confirm= / #reset=) is the player choosing THIS tab: it takes over at once (newest wins),
+  // the older tab pauses with "Use here instead". Never block the email link behind the other-tab screen.
+  const fromEmail = /^#(confirm|reset)=/.test(location.hash || '');
+  Promise.resolve().then(() => { if (fromEmail && !S.decided) { S.decided = true; activate(false); decide(); return; } const l = lock(); if (fresh(l) && l.id !== tabId) settle(false); else { const recent = l && l.id && l.id !== tabId && Date.now() - l.t < 120000; if (bc) bc.postMessage({ k: 'who', id: tabId }); setTimeout(() => { const m = lock(); settle(!(fresh(m) && m.id !== tabId)); }, bc ? (recent ? 4000 : 800) : 0); } });
 
   function activate(first) {
     if (!first) { const l = lock(); myGen = Math.max(myGen, l ? l.gen | 0 : 0) + 1; mySince = Date.now(); }
