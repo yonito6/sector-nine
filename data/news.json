@@ -2,6 +2,28 @@
   "about": "What's New feed shown in the game (modules/news.js). Newest first is not required: the game sorts by date + version. Fields: id (unique), date YYYY-MM-DD, version, title, items[], big (highlighted card), image (optional, relative path like assets/ui/news/x.jpg). Written by the release manager (qa/release) when a big feature goes live.",
   "entries": [
     {
+      "id": "mod-bugreport",
+      "date": "2026-10-26",
+      "version": "2026.10.26-r4",
+      "title": "Report a bug from inside the game",
+      "big": false,
+      "items": [
+        "New 'Report a bug' button in the menu and pause menu",
+        "Point at the broken spot in the map with your crosshair"
+      ]
+    },
+    {
+      "id": "mod-friends",
+      "date": "2026-10-26",
+      "version": "2026.10.26-r4",
+      "title": "Friends",
+      "big": true,
+      "items": [
+        "Add friends and see who is online",
+        "Invite friends to your room, or join theirs in one click"
+      ]
+    },
+    {
       "id": "mod-modes",
       "date": "2026-10-26",
       "version": "2026.10.26-r3",

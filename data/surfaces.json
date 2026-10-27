@@ -1,0 +1,152 @@
+{
+  "about": "Footstep surfaces for Sector Nine. Engine-neutral: a lookup (what is under the feet) + one sound recipe per surface. modules/footsteps.js reads this file in the browser; render/sfx/render_steps.js renders the same recipes to WAV files (assets/sfx/steps) for the Unity version. 'ignore' = decoration (glow strips): the floor under it decides.",
+  "version": 1,
+  "surfaces": ["concrete", "stone", "metal", "grate", "wood", "sand", "dirt", "snow", "ice", "grass", "water", "glass", "rubber", "carpet", "crystal", "lava"],
+  "lookup": {
+    "cell": 0.25,
+    "layers": 6,
+    "mergeHeight": 0.12,
+    "maxSlope": 0.55,
+    "aboveFeet": 0.3,
+    "belowFeet": 0.8,
+    "zoneMaxHeight": 0.25
+  },
+  "kitMaterials": {
+    "m_hull": "metal", "m_trim": "metal", "m_concrete": "concrete", "m_rubber": "rubber", "m_glass": "glass",
+    "m_glow": "ignore", "m_glow2": "ignore", "m_glow3": "ignore",
+    "m_snow": "snow", "m_ice": "ice", "m_rock": "stone", "m_paint": "metal", "m_corr": "metal", "m_wood": "wood"
+  },
+  "pieces": {
+    "catwalk_4": "grate",
+    "floor_grate_4": "grate",
+    "stairs_4": "grate",
+    "fd_bridge": "grate",
+    "railing_4": "grate",
+    "hexbags": { "m_rubber": "dirt" },
+    "or_bunk": { "m_rubber": "carpet" },
+    "cv_crystal_big": { "m_glass": "crystal" },
+    "cv_crystal_small": { "m_glass": "crystal" },
+    "dk_pontoon": { "m_trim": "wood" },
+    "gl_station_tower": { "m_concrete": "metal" }
+  },
+  "textures": {
+    "hangar_concrete_floor": "concrete", "ribbed_concrete_wall": "concrete", "precast_concrete_wall": "concrete", "worn_asphalt": "concrete",
+    "rock_wall_08": "stone", "volcanic_rock_tiles": "stone", "dark_brick_wall": "stone", "red_brick": "stone", "alienrock": "stone",
+    "sandstone_blocks_08": "stone", "large_sandstone_blocks": "stone", "japanese_stone_wall": "stone",
+    "metal_plate": "metal", "container_grey": "metal", "rustplate": "metal", "hull": "metal", "green_metal_rust": "metal",
+    "rusty_corrugated_iron": "metal", "rusty_painted_metal": "metal", "brushed": "metal",
+    "metal_grate_rusty": "grate",
+    "wood_floor_deck": "wood",
+    "sand_02": "sand",
+    "snow_floor": "snow",
+    "forest_ground_06": "dirt"
+  },
+  "zones": { "ice": "ice", "water": "water" },
+  "hazards": { "acid": "water", "water": "water", "lava": "lava" },
+  "colors": { "about": "untextured map materials by colour (hex)", "e6c99a": "sand", "f4f8ff": "snow", "d8a020": "metal" },
+  "maps": {
+    "yard": { "ground": "concrete" },
+    "glacier": { "ground": "snow", "physicalOpaque": "ice" },
+    "foundry": { "ground": "stone" },
+    "neon": { "ground": "concrete" },
+    "dunes": { "ground": "sand", "kitMaterials": { "m_concrete": "stone", "m_hull": "stone" } },
+    "orbital": { "ground": "metal" },
+    "biolab": { "ground": "metal" },
+    "caverns": { "ground": "stone", "kitMaterials": { "m_concrete": "stone", "m_hull": "stone", "m_trim": "stone", "m_glass": "crystal", "m_rubber": "dirt" }, "physicalTransparent": "crystal" },
+    "shrine": { "ground": "dirt", "physicalTransparent": "grass", "kitMaterials": { "m_hull": "wood", "m_rubber": "wood", "m_concrete": "stone", "m_trim": "stone", "m_glass": "grass" } },
+    "docks": { "ground": "concrete" },
+    "grid": { "ground": "glass", "colors": { "ffffff": "glass" } }
+  },
+  "mix": {
+    "about": "loudness per movement (the old synthesised steps used the same numbers); rate = playback speed; lp = low-pass Hz (crouching muffles)",
+    "player": { "walk": 0.55, "sprint": 0.75, "land": 1.0, "crouch": 0.35 },
+    "foe": { "walk": 0.9, "sprint": 1.25, "land": 1.5, "crouch": 0.3 },
+    "rate": { "walk": 1.0, "sprint": 1.05, "land": 0.97, "crouch": 0.93 },
+    "lp": { "walk": 11000, "sprint": 16000, "land": 14000, "crouch": 1700 },
+    "random": { "vol": [0.88, 1.08], "rate": [0.96, 1.04] },
+    "foePanner": { "model": "HRTF", "distance": "inverse", "ref": 3, "rolloff": 1.25, "max": 120, "verb": 0.14, "maxDistance": 55, "budgetPerHalfSecond": 6 },
+    "playerVerb": 0.08,
+    "calibration": 1.0
+  },
+  "render": {
+    "about": "how each surface's sound is built: layers start at 'at' seconds; thump = falling sine (heel weight), noise = filtered noise burst, ring = decaying partials [Hz, amp, decay s], grains = many tiny bursts (crunch/rustle), chirps = little sine sweeps (bubbles/squeaks). A step = heel strike + toe roll; a landing = two feet, heavier and longer. 4 step + 3 landing variations per surface.",
+    "sampleRate": 32000, "stepVariants": 4, "landVariants": 3, "maxLen": 0.34, "targetRms": 0.16
+  },
+  "sounds": {
+    "concrete": { "gain": 1.0, "len": 0.22, "roll": 0.075, "toe": 0.45, "layers": [
+      { "t": "thump", "f0": 125, "f1": 58, "tau": 0.028, "g": 0.75 },
+      { "t": "noise", "type": "lp", "f": 900, "q": 0.7, "tau": 0.022, "g": 0.55 },
+      { "t": "noise", "type": "bp", "f": 2700, "q": 1.3, "tau": 0.007, "g": 0.6 },
+      { "t": "noise", "type": "hp", "f": 5200, "q": 0.7, "tau": 0.01, "g": 0.14, "at": 0.004 } ] },
+    "stone": { "gain": 1.0, "len": 0.24, "roll": 0.075, "toe": 0.5, "layers": [
+      { "t": "thump", "f0": 105, "f1": 50, "tau": 0.032, "g": 0.7 },
+      { "t": "noise", "type": "lp", "f": 700, "q": 0.7, "tau": 0.025, "g": 0.45 },
+      { "t": "grains", "n": 12, "w": 0.07, "type": "bp", "f": 3600, "fs": 0.4, "q": 2.2, "tau": 0.005, "g": 0.55 },
+      { "t": "noise", "type": "hp", "f": 6000, "q": 0.7, "tau": 0.03, "g": 0.08, "at": 0.01 } ] },
+    "metal": { "gain": 0.95, "len": 0.26, "roll": 0.07, "toe": 0.45, "layers": [
+      { "t": "thump", "f0": 150, "f1": 72, "tau": 0.03, "g": 0.6 },
+      { "t": "noise", "type": "bp", "f": 3300, "q": 2.2, "tau": 0.006, "g": 0.55 },
+      { "t": "ring", "p": [[410, 0.26, 0.055], [1090, 0.2, 0.04], [2230, 0.13, 0.03], [3420, 0.08, 0.022]] },
+      { "t": "noise", "type": "lp", "f": 700, "q": 0.8, "tau": 0.02, "g": 0.3 } ] },
+    "grate": { "gain": 0.95, "len": 0.32, "roll": 0.07, "toe": 0.5, "layers": [
+      { "t": "thump", "f0": 105, "f1": 60, "tau": 0.022, "g": 0.42 },
+      { "t": "noise", "type": "bp", "f": 1900, "q": 1.6, "tau": 0.008, "g": 0.5 },
+      { "t": "ring", "p": [[262, 0.3, 0.13], [651, 0.24, 0.1], [1187, 0.17, 0.075], [1934, 0.11, 0.055], [2871, 0.07, 0.04]] },
+      { "t": "grains", "n": 6, "w": 0.07, "type": "bp", "f": 2600, "fs": 0.3, "q": 4, "tau": 0.007, "g": 0.4, "at": 0.006 } ] },
+    "wood": { "gain": 1.0, "len": 0.24, "roll": 0.08, "toe": 0.45, "layers": [
+      { "t": "thump", "f0": 155, "f1": 82, "tau": 0.04, "g": 0.7 },
+      { "t": "ring", "p": [[188, 0.34, 0.05], [436, 0.24, 0.035], [867, 0.1, 0.02]] },
+      { "t": "noise", "type": "bp", "f": 1250, "q": 1.4, "tau": 0.014, "g": 0.4 },
+      { "t": "chirps", "n": 1, "w": 0.04, "f0": 540, "f1": 430, "d": 0.07, "g": 0.035, "p": 0.3, "at": 0.03 } ] },
+    "sand": { "gain": 1.05, "len": 0.24, "roll": 0.09, "toe": 0.5, "layers": [
+      { "t": "thump", "f0": 92, "f1": 48, "tau": 0.03, "g": 0.45 },
+      { "t": "grains", "n": 28, "w": 0.1, "type": "bp", "f": 1900, "fs": 0.45, "q": 0.9, "tau": 0.006, "g": 0.33 },
+      { "t": "noise", "type": "lp", "f": 750, "q": 0.6, "tau": 0.06, "g": 0.32, "atk": 0.012 } ] },
+    "dirt": { "gain": 1.0, "len": 0.22, "roll": 0.085, "toe": 0.45, "layers": [
+      { "t": "thump", "f0": 100, "f1": 50, "tau": 0.035, "g": 0.65 },
+      { "t": "noise", "type": "lp", "f": 620, "q": 0.7, "tau": 0.03, "g": 0.48 },
+      { "t": "grains", "n": 9, "w": 0.045, "type": "bp", "f": 2300, "fs": 0.4, "q": 1.4, "tau": 0.005, "g": 0.22 } ] },
+    "snow": { "gain": 1.05, "len": 0.27, "roll": 0.1, "toe": 0.55, "layers": [
+      { "t": "thump", "f0": 82, "f1": 45, "tau": 0.03, "g": 0.35 },
+      { "t": "grains", "n": 38, "w": 0.13, "type": "bp", "f": 2400, "fs": 0.5, "q": 1.8, "tau": 0.0035, "g": 0.48 },
+      { "t": "chirps", "n": 3, "w": 0.1, "f0": 1000, "f1": 1350, "d": 0.025, "g": 0.05, "p": 0.7, "at": 0.01 },
+      { "t": "noise", "type": "lp", "f": 520, "q": 0.6, "tau": 0.05, "g": 0.24, "atk": 0.01 } ] },
+    "ice": { "gain": 0.95, "len": 0.24, "roll": 0.07, "toe": 0.4, "layers": [
+      { "t": "thump", "f0": 135, "f1": 66, "tau": 0.02, "g": 0.5 },
+      { "t": "noise", "type": "hp", "f": 3600, "q": 0.8, "tau": 0.004, "g": 0.6 },
+      { "t": "ring", "p": [[1930, 0.05, 0.025], [3710, 0.035, 0.018]] },
+      { "t": "noise", "type": "bp", "f": 5200, "q": 1.5, "tau": 0.07, "g": 0.24, "at": 0.015, "atk": 0.02 } ] },
+    "grass": { "gain": 1.05, "len": 0.24, "roll": 0.09, "toe": 0.5, "layers": [
+      { "t": "thump", "f0": 86, "f1": 46, "tau": 0.035, "g": 0.45 },
+      { "t": "noise", "type": "hp", "f": 2600, "q": 0.6, "tau": 0.05, "g": 0.26, "atk": 0.012 },
+      { "t": "noise", "type": "bp", "f": 1150, "q": 0.7, "tau": 0.04, "g": 0.24, "atk": 0.006 },
+      { "t": "grains", "n": 12, "w": 0.09, "type": "hp", "f": 4200, "fs": 0.3, "q": 0.8, "tau": 0.006, "g": 0.12 } ] },
+    "water": { "gain": 1.05, "len": 0.32, "roll": 0.09, "toe": 0.5, "layers": [
+      { "t": "thump", "f0": 82, "f1": 44, "tau": 0.03, "g": 0.35 },
+      { "t": "noise", "type": "bp", "f": 1050, "q": 0.6, "tau": 0.07, "g": 0.6, "atk": 0.004 },
+      { "t": "noise", "type": "hp", "f": 3200, "q": 0.6, "tau": 0.05, "g": 0.32, "at": 0.008, "atk": 0.006 },
+      { "t": "chirps", "n": 6, "w": 0.16, "f0": 420, "f1": 1450, "d": 0.03, "g": 0.13, "p": 0.85, "at": 0.015 } ] },
+    "glass": { "gain": 0.9, "len": 0.26, "roll": 0.07, "toe": 0.4, "layers": [
+      { "t": "thump", "f0": 145, "f1": 72, "tau": 0.024, "g": 0.5 },
+      { "t": "noise", "type": "hp", "f": 4200, "q": 0.7, "tau": 0.003, "g": 0.5 },
+      { "t": "ring", "p": [[2410, 0.11, 0.06], [3930, 0.075, 0.045], [6120, 0.045, 0.03]] },
+      { "t": "noise", "type": "bp", "f": 3000, "q": 3, "tau": 0.01, "g": 0.2 } ] },
+    "rubber": { "gain": 1.05, "len": 0.2, "roll": 0.07, "toe": 0.5, "layers": [
+      { "t": "thump", "f0": 118, "f1": 62, "tau": 0.03, "g": 0.7 },
+      { "t": "noise", "type": "bp", "f": 850, "q": 2.4, "tau": 0.022, "g": 0.7 },
+      { "t": "chirps", "n": 2, "w": 0.03, "f0": 1500, "f1": 1150, "d": 0.05, "g": 0.06, "p": 0.6, "at": 0.015 } ] },
+    "carpet": { "gain": 1.1, "len": 0.22, "roll": 0.095, "toe": 0.45, "layers": [
+      { "t": "thump", "f0": 84, "f1": 44, "tau": 0.05, "g": 0.55 },
+      { "t": "noise", "type": "lp", "f": 300, "q": 0.6, "tau": 0.055, "g": 0.55, "atk": 0.01 },
+      { "t": "noise", "type": "hp", "f": 3800, "q": 0.5, "tau": 0.035, "g": 0.07, "atk": 0.012, "at": 0.01 } ] },
+    "crystal": { "gain": 0.85, "len": 0.34, "roll": 0.07, "toe": 0.4, "layers": [
+      { "t": "thump", "f0": 132, "f1": 66, "tau": 0.025, "g": 0.45 },
+      { "t": "noise", "type": "hp", "f": 5000, "q": 0.7, "tau": 0.003, "g": 0.45 },
+      { "t": "ring", "p": [[1763, 0.14, 0.26], [2782, 0.1, 0.2], [4301, 0.07, 0.14], [882, 0.06, 0.18]] } ] },
+    "lava": { "gain": 1.0, "len": 0.34, "roll": 0.09, "toe": 0.5, "layers": [
+      { "t": "thump", "f0": 70, "f1": 38, "tau": 0.04, "g": 0.45 },
+      { "t": "noise", "type": "lp", "f": 480, "q": 1.2, "tau": 0.08, "g": 0.6, "atk": 0.008 },
+      { "t": "chirps", "n": 4, "w": 0.18, "f0": 160, "f1": 420, "d": 0.05, "g": 0.18, "p": 0.85, "at": 0.02 },
+      { "t": "noise", "type": "hp", "f": 5200, "q": 0.6, "tau": 0.09, "g": 0.12, "at": 0.03, "atk": 0.03 } ] }
+  }
+}
