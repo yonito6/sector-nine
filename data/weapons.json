@@ -1,0 +1,865 @@
+{
+ "note": "Player weapons. dmg per hit; head = headshot multiplier; limbs take 0.75x; falloff [fullDamageUntil m, minDamageFrom m, minMultiplier]; rpm = rounds per minute; hip/ads = spread in radians.",
+ "order": [
+  "carbine",
+  "wasp",
+  "breacher",
+  "helix",
+  "sniper",
+  "nova",
+  "pistol",
+  "stinger",
+  "titan",
+  "triad",
+  "judge",
+  "arc",
+  "ricochet",
+  "seeker",
+  "cryo",
+  "inferno",
+  "void",
+  "boomerang"
+ ],
+ "weapons": {
+  "carbine": {
+   "name": "K-7 Carbine",
+   "cls": "Pulse rifle",
+   "mag": 30,
+   "reserve": 240,
+   "maxReserve": 360,
+   "rpm": 680,
+   "auto": true,
+   "dmg": 24,
+   "head": 2.4,
+   "hip": 0.016,
+   "ads": 0.0015,
+   "adsFov": 44,
+   "adsSpeed": 14,
+   "reload": 1.85,
+   "reloadEmpty": 2.25,
+   "falloff": [
+    24,
+    70,
+    0.6
+   ],
+   "kick": 1,
+   "move": 1,
+   "heat": 0.14,
+   "skin": "carbine",
+   "glow": [
+    2.4,
+    0.9,
+    0.3
+   ],
+   "shape": [
+    1,
+    1,
+    1
+   ],
+   "sound": "shot",
+   "tracer": [
+    5,
+    3.6,
+    2.2
+   ],
+   "stats": [
+    62,
+    72,
+    70,
+    70
+   ],
+   "desc": "Reliable automatic pulse rifle. Good at every range.",
+   "label": "K-7 Carbine · pulse rifle"
+  },
+  "wasp": {
+   "name": "V-9 Wasp",
+   "cls": "Ion SMG",
+   "mag": 42,
+   "reserve": 336,
+   "maxReserve": 420,
+   "rpm": 1080,
+   "auto": true,
+   "dmg": 15,
+   "head": 2,
+   "hip": 0.02,
+   "ads": 0.006,
+   "adsFov": 58,
+   "adsSpeed": 22,
+   "reload": 1.5,
+   "reloadEmpty": 1.8,
+   "falloff": [
+    12,
+    32,
+    0.5
+   ],
+   "kick": 0.55,
+   "move": 1.08,
+   "heat": 0.07,
+   "skin": "wasp",
+   "glow": [
+    0.4,
+    2.4,
+    2.8
+   ],
+   "shape": [
+    0.92,
+    0.88,
+    0.7
+   ],
+   "sound": "smg",
+   "tracer": [
+    1.6,
+    3.6,
+    5
+   ],
+   "stats": [
+    42,
+    98,
+    35,
+    92
+   ],
+   "desc": "Shreds up close. Fast to aim, fast to move. Weak past 15 m.",
+   "label": "V-9 Wasp · ion smg"
+  },
+  "breacher": {
+   "name": "Breacher",
+   "cls": "Plasma shotgun",
+   "mag": 6,
+   "reserve": 36,
+   "maxReserve": 54,
+   "rpm": 80,
+   "auto": false,
+   "dmg": 13,
+   "pellets": 10,
+   "spreadP": 0.062,
+   "head": 1.5,
+   "hip": 0,
+   "ads": 0,
+   "adsFov": 62,
+   "adsSpeed": 16,
+   "reload": 2.4,
+   "reloadEmpty": 2.4,
+   "falloff": [
+    7,
+    24,
+    0.2
+   ],
+   "kick": 2.8,
+   "move": 1.02,
+   "heat": 0,
+   "skin": "breach",
+   "glow": [
+    3,
+    0.4,
+    0.3
+   ],
+   "shape": [
+    1.18,
+    1.1,
+    0.8
+   ],
+   "sound": "shotgun",
+   "tracer": [
+    6,
+    1.6,
+    1
+   ],
+   "stats": [
+    96,
+    20,
+    18,
+    80
+   ],
+   "desc": "Ten plasma pellets. One-shots anyone within 7 m.",
+   "label": "Breacher · plasma shotgun"
+  },
+  "helix": {
+   "name": "Helix",
+   "cls": "Railgun",
+   "mag": 4,
+   "reserve": 28,
+   "maxReserve": 36,
+   "rpm": 75,
+   "auto": false,
+   "dmg": 90,
+   "head": 2.2,
+   "pierce": true,
+   "hip": 0.018,
+   "ads": 0,
+   "adsFov": 30,
+   "adsSpeed": 15,
+   "reload": 2.2,
+   "reloadEmpty": 2.2,
+   "falloff": null,
+   "kick": 3,
+   "move": 0.95,
+   "heat": 0,
+   "skin": "helix",
+   "glow": [
+    0.5,
+    2.6,
+    4
+   ],
+   "shape": [
+    0.95,
+    0.95,
+    1.22
+   ],
+   "sound": "rail",
+   "tracer": [
+    1.5,
+    4,
+    7
+   ],
+   "beam": true,
+   "stats": [
+    88,
+    22,
+    92,
+    60
+   ],
+   "desc": "Hypersonic slug that pierces bodies. Headshot kills, 2 body shots.",
+   "label": "Helix · railgun"
+  },
+  "sniper": {
+   "name": "R-90 Longbow",
+   "cls": "Sniper rifle",
+   "mag": 10,
+   "reserve": 40,
+   "maxReserve": 60,
+   "rpm": 200,
+   "auto": false,
+   "dmg": 5000,
+   "head": 1,
+   "oneShot": true,
+   "pierce": true,
+   "scope": true,
+   "hip": 0.06,
+   "ads": 0,
+   "adsFov": 13,
+   "adsSpeed": 26,
+   "reload": 2,
+   "reloadEmpty": 2,
+   "falloff": null,
+   "kick": 4,
+   "move": 0.94,
+   "heat": 0,
+   "skin": "sniper",
+   "glow": [
+    0.4,
+    1.8,
+    2.6
+   ],
+   "shape": [
+    1,
+    1,
+    1
+   ],
+   "sound": "sniper",
+   "tracer": [
+    7,
+    5,
+    3
+   ],
+   "stats": [
+    100,
+    30,
+    100,
+    45
+   ],
+   "desc": "Scoped. Kills in one shot and passes through every body in line.",
+   "label": "R-90 Longbow · sniper rifle"
+  },
+  "nova": {
+   "name": "Nova",
+   "cls": "Plasma launcher",
+   "mag": 2,
+   "reserve": 10,
+   "maxReserve": 14,
+   "rpm": 55,
+   "auto": false,
+   "projectile": true,
+   "hip": 0.01,
+   "ads": 0.004,
+   "adsFov": 55,
+   "adsSpeed": 12,
+   "reload": 2.6,
+   "reloadEmpty": 2.6,
+   "kick": 3.5,
+   "move": 0.92,
+   "heat": 0,
+   "skin": "nova",
+   "glow": [
+    3,
+    1.2,
+    0.3
+   ],
+   "shape": [
+    1.15,
+    1.15,
+    0.95
+   ],
+   "sound": "launch",
+   "stats": [
+    92,
+    12,
+    60,
+    40
+   ],
+   "desc": "Fires plasma rockets that explode on impact. Splash damage.",
+   "label": "Nova · plasma launcher"
+  },
+  "pistol": {
+   "name": "M-2 Pulse Pistol",
+   "cls": "Sidearm",
+   "mag": 14,
+   "reserve": 98,
+   "maxReserve": 140,
+   "rpm": 400,
+   "auto": false,
+   "dmg": 30,
+   "head": 2.2,
+   "hip": 0.012,
+   "ads": 0.003,
+   "adsFov": 60,
+   "adsSpeed": 24,
+   "reload": 1.2,
+   "reloadEmpty": 1.4,
+   "falloff": [
+    20,
+    50,
+    0.6
+   ],
+   "kick": 1.3,
+   "move": 1.06,
+   "heat": 0.05,
+   "skin": "pistol",
+   "glow": [
+    2.6,
+    1.9,
+    0.4
+   ],
+   "sound": "pistol",
+   "tracer": [
+    5,
+    4,
+    1.5
+   ],
+   "stats": [
+    55,
+    55,
+    50,
+    96
+   ],
+   "desc": "Fast draw, precise semi-auto. Great backup.",
+   "label": "M-2 Pulse Pistol · sidearm"
+  },
+  "knife": {
+   "name": "Arc Knife",
+   "cls": "Melee",
+   "mag": 0,
+   "reserve": 0,
+   "maxReserve": 0,
+   "rpm": 140,
+   "auto": false,
+   "dmg": 55,
+   "hip": 0,
+   "ads": 0,
+   "adsFov": 78,
+   "adsSpeed": 10,
+   "reload": 1,
+   "reloadEmpty": 1,
+   "move": 1.12,
+   "label": "Arc Knife · melee"
+  },
+  "stinger": {
+   "name": "Stinger",
+   "cls": "Crossbow",
+   "mode": "proj",
+   "proj": "bolt",
+   "mag": 1,
+   "reserve": 24,
+   "maxReserve": 36,
+   "rpm": 70,
+   "auto": false,
+   "dmg": 85,
+   "head": 2.4,
+   "hip": 0.01,
+   "ads": 0.0005,
+   "adsFov": 38,
+   "adsSpeed": 16,
+   "reload": 0.75,
+   "reloadEmpty": 0.75,
+   "kick": 2.2,
+   "move": 1,
+   "skin": "olive",
+   "glow": [
+    2.6,
+    1.6,
+    0.3
+   ],
+   "shape": [
+    0.95,
+    0.9,
+    1.08
+   ],
+   "sound": "crossbow",
+   "stats": [
+    86,
+    14,
+    82,
+    80
+   ],
+   "desc": "Silent heavy bolts that drop with distance. Headshot kills, two to the body.",
+   "label": "Stinger · crossbow"
+  },
+  "titan": {
+   "name": "Titan",
+   "cls": "Minigun",
+   "mag": 150,
+   "reserve": 450,
+   "maxReserve": 600,
+   "rpm": 1250,
+   "rpmMin": 300,
+   "spin": 0.55,
+   "auto": true,
+   "dmg": 13,
+   "head": 1.8,
+   "hip": 0.024,
+   "ads": 0.012,
+   "adsFov": 62,
+   "adsSpeed": 9,
+   "reload": 3.4,
+   "reloadEmpty": 3.4,
+   "falloff": [
+    18,
+    45,
+    0.6
+   ],
+   "kick": 0.45,
+   "move": 0.82,
+   "heat": 0.02,
+   "skin": "gunmetal",
+   "glow": [
+    3,
+    0.5,
+    0.3
+   ],
+   "shape": [
+    1.3,
+    1.2,
+    1
+   ],
+   "sound": "minigun",
+   "tracer": [
+    5,
+    2.2,
+    1.2
+   ],
+   "stats": [
+    60,
+    100,
+    50,
+    25
+   ],
+   "desc": "Spins up, then never stops. Huge magazine, slow to move and aim.",
+   "label": "Titan · minigun"
+  },
+  "triad": {
+   "name": "Triad",
+   "cls": "Burst rifle",
+   "mode": "burst",
+   "burst": 3,
+   "burstRpm": 1100,
+   "mag": 36,
+   "reserve": 252,
+   "maxReserve": 360,
+   "rpm": 200,
+   "auto": false,
+   "dmg": 29,
+   "head": 2,
+   "hip": 0.011,
+   "ads": 0.0012,
+   "adsFov": 40,
+   "adsSpeed": 15,
+   "reload": 2,
+   "reloadEmpty": 2.3,
+   "falloff": [
+    40,
+    100,
+    0.8
+   ],
+   "kick": 0.8,
+   "move": 1,
+   "heat": 0.05,
+   "skin": "sand",
+   "glow": [
+    0.5,
+    1.6,
+    3
+   ],
+   "shape": [
+    0.95,
+    0.95,
+    1.05
+   ],
+   "sound": "burst",
+   "tracer": [
+    2.4,
+    3.6,
+    5
+   ],
+   "stats": [
+    70,
+    62,
+    85,
+    70
+   ],
+   "desc": "Three-round bursts with pinpoint accuracy. Two bursts drop anyone.",
+   "label": "Triad · burst rifle"
+  },
+  "judge": {
+   "name": "Judge",
+   "cls": "Hand cannon",
+   "handgun": true,
+   "mag": 6,
+   "reserve": 48,
+   "maxReserve": 72,
+   "rpm": 150,
+   "auto": false,
+   "dmg": 58,
+   "head": 2,
+   "hip": 0.008,
+   "ads": 0.0015,
+   "adsFov": 56,
+   "adsSpeed": 22,
+   "reload": 2.2,
+   "reloadEmpty": 2.2,
+   "falloff": [
+    22,
+    55,
+    0.7
+   ],
+   "kick": 3.2,
+   "move": 1.05,
+   "heat": 0,
+   "skin": "gold",
+   "glow": [
+    3,
+    2,
+    0.5
+   ],
+   "sound": "judge",
+   "tracer": [
+    6,
+    4.4,
+    1.4
+   ],
+   "stats": [
+    80,
+    36,
+    62,
+    92
+   ],
+   "desc": "Six rounds of thunder. Headshot kills, two to the body.",
+   "label": "Judge · hand cannon"
+  },
+  "arc": {
+   "name": "Arc Thrower",
+   "cls": "Chain lightning",
+   "mode": "arc",
+   "mag": 100,
+   "reserve": 300,
+   "maxReserve": 400,
+   "rpm": 900,
+   "auto": true,
+   "dmg": 9,
+   "range": 22,
+   "hip": 0,
+   "ads": 0,
+   "adsFov": 70,
+   "adsSpeed": 14,
+   "reload": 2.2,
+   "reloadEmpty": 2.2,
+   "kick": 0.15,
+   "move": 0.98,
+   "skin": "teal",
+   "glow": [
+    0.6,
+    2.4,
+    3
+   ],
+   "shape": [
+    1.1,
+    1.1,
+    0.85
+   ],
+   "sound": "arc",
+   "stats": [
+    58,
+    100,
+    30,
+    70
+   ],
+   "desc": "Lightning that locks onto anyone near your crosshair and jumps to two more.",
+   "label": "Arc Thrower · chain lightning"
+  },
+  "ricochet": {
+   "name": "Ricochet",
+   "cls": "Disc launcher",
+   "mode": "proj",
+   "proj": "disc",
+   "mag": 4,
+   "reserve": 32,
+   "maxReserve": 44,
+   "rpm": 100,
+   "auto": false,
+   "dmg": 62,
+   "head": 1,
+   "hip": 0.006,
+   "ads": 0.002,
+   "adsFov": 56,
+   "adsSpeed": 14,
+   "reload": 2.3,
+   "reloadEmpty": 2.3,
+   "kick": 1.6,
+   "move": 0.96,
+   "skin": "crimson",
+   "glow": [
+    3,
+    0.6,
+    0.5
+   ],
+   "shape": [
+    1.2,
+    1.05,
+    0.85
+   ],
+   "sound": "disc",
+   "stats": [
+    74,
+    38,
+    60,
+    64
+   ],
+   "desc": "Razor discs that bounce off walls three times. Hit people around corners.",
+   "label": "Ricochet · disc launcher"
+  },
+  "seeker": {
+   "name": "Seeker",
+   "cls": "Homing missiles",
+   "mode": "proj",
+   "proj": "missile",
+   "mag": 3,
+   "reserve": 12,
+   "maxReserve": 18,
+   "rpm": 45,
+   "auto": false,
+   "dmg": 30,
+   "head": 1,
+   "hip": 0.01,
+   "ads": 0.004,
+   "adsFov": 50,
+   "adsSpeed": 13,
+   "reload": 2.6,
+   "reloadEmpty": 2.6,
+   "kick": 2.2,
+   "move": 0.93,
+   "skin": "toxic",
+   "glow": [
+    1,
+    3,
+    0.5
+   ],
+   "shape": [
+    1.15,
+    1.15,
+    0.9
+   ],
+   "sound": "seeker",
+   "stats": [
+    78,
+    18,
+    70,
+    48
+   ],
+   "desc": "Fires three micro-missiles that chase whoever is nearest your crosshair.",
+   "label": "Seeker · homing missiles"
+  },
+  "cryo": {
+   "name": "Cryo Lancer",
+   "cls": "Freeze ray",
+   "mag": 14,
+   "reserve": 98,
+   "maxReserve": 140,
+   "rpm": 260,
+   "auto": false,
+   "dmg": 26,
+   "head": 1.8,
+   "status": "chill",
+   "hip": 0.012,
+   "ads": 0.002,
+   "adsFov": 46,
+   "adsSpeed": 16,
+   "reload": 1.9,
+   "reloadEmpty": 2.1,
+   "falloff": [
+    30,
+    70,
+    0.7
+   ],
+   "kick": 0.9,
+   "move": 1,
+   "heat": 0.04,
+   "skin": "ice",
+   "glow": [
+    0.8,
+    2.4,
+    3.2
+   ],
+   "shape": [
+    1,
+    1,
+    1.1
+   ],
+   "sound": "cryo",
+   "tracer": [
+    1.4,
+    3,
+    4.4
+   ],
+   "beam": true,
+   "stats": [
+    62,
+    58,
+    76,
+    70
+   ],
+   "desc": "Every hit slows the target to half speed. Freeze them, then finish them.",
+   "label": "Cryo Lancer · freeze ray"
+  },
+  "inferno": {
+   "name": "Inferno",
+   "cls": "Flamethrower",
+   "mode": "flame",
+   "mag": 160,
+   "reserve": 320,
+   "maxReserve": 480,
+   "rpm": 960,
+   "auto": true,
+   "dmg": 8,
+   "range": 10,
+   "hip": 0,
+   "ads": 0,
+   "adsFov": 74,
+   "adsSpeed": 12,
+   "reload": 2.6,
+   "reloadEmpty": 2.6,
+   "kick": 0.1,
+   "move": 1,
+   "skin": "ember",
+   "glow": [
+    3,
+    1.1,
+    0.2
+   ],
+   "shape": [
+    1.15,
+    1.1,
+    0.9
+   ],
+   "sound": "flame",
+   "stats": [
+    70,
+    100,
+    12,
+    72
+   ],
+   "desc": "A jet of plasma fire. Sets targets alight to keep burning after they escape.",
+   "label": "Inferno · flamethrower"
+  },
+  "void": {
+   "name": "Void Lance",
+   "cls": "Charge beam",
+   "mode": "charge",
+   "charge": 1.1,
+   "mag": 6,
+   "reserve": 30,
+   "maxReserve": 42,
+   "rpm": 120,
+   "auto": false,
+   "dmg": 160,
+   "head": 1.5,
+   "pierce": true,
+   "beam": true,
+   "hip": 0.015,
+   "ads": 0.001,
+   "adsFov": 36,
+   "adsSpeed": 15,
+   "reload": 2.4,
+   "reloadEmpty": 2.4,
+   "kick": 3.5,
+   "move": 0.95,
+   "skin": "void",
+   "glow": [
+    1.8,
+    0.4,
+    3.2
+   ],
+   "shape": [
+    1,
+    1,
+    1.15
+   ],
+   "sound": "voidfire",
+   "tracer": [
+    2,
+    0.6,
+    4
+   ],
+   "stats": [
+    96,
+    16,
+    96,
+    60
+   ],
+   "desc": "Hold to charge, release to fire. A full charge pierces and kills in one hit.",
+   "label": "Void Lance · charge beam"
+  },
+  "boomerang": {
+   "name": "Vortex",
+   "cls": "Boomerang",
+   "mode": "boomerang",
+   "infinite": true,
+   "mag": 1,
+   "reserve": 0,
+   "maxReserve": 0,
+   "rpm": 300,
+   "auto": false,
+   "dmg": 500,
+   "head": 1,
+   "hip": 0,
+   "ads": 0,
+   "adsFov": 78,
+   "adsSpeed": 10,
+   "reload": 1,
+   "reloadEmpty": 1,
+   "kick": 0,
+   "move": 1.1,
+   "glow": [
+    3.2,
+    0.9,
+    2.4
+   ],
+   "sound": "boomThrow",
+   "stats": [
+    100,
+    34,
+    58,
+    94
+   ],
+   "desc": "Never runs out. Hold to wind up, release to throw: kills in one hit, then flies back to your hand. Right click punches.",
+   "label": "Vortex · boomerang"
+  }
+ }
+}

@@ -6224,7 +6224,9 @@ function foeSteps(r, dt) {
 function updateTags() {
   for (const r of robots) {
     const t = r.tag; let show = false;
-    if (!r.dead && (state === 'play' || state === 'dead') && r.seesPlayer) {
+    // name + HP only over TEAMMATES (like Valorant/CS): enemies (bots, free-for-all players, the other team) show nothing
+    const mate = !!(r.remote && window.MODE && MODE.teamMode && MODE.teamMode() && MODE.myTeam() && MODE.teamOf(r.netId) === MODE.myTeam());
+    if (mate && !r.dead && (state === 'play' || state === 'dead')) {
       _proj.set(r.root.position.x, r.root.position.y + 2.05, r.root.position.z);
       const d = camera.position.distanceTo(_proj); _proj.project(camera);
       if (_proj.z < 1 && Math.abs(_proj.x) < 1.1 && Math.abs(_proj.y) < 1.1 && d < 55) {

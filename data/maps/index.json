@@ -1,0 +1,210 @@
+{
+ "note": "All maps; size = metres per side (square). kit maps have a full placement list in maps/<id>.json.",
+ "maps": [
+  {
+   "id": "yard",
+   "name": "Sector Nine Yard",
+   "tag": "Three lanes · sniper towers · cargo maze · 4-6 players",
+   "size": 72,
+   "kit": true,
+   "spawns": [
+    [
+     -32,
+     0
+    ],
+    [
+     32,
+     0
+    ],
+    [
+     0,
+     -32
+    ],
+    [
+     0,
+     32
+    ],
+    [
+     -30,
+     18
+    ],
+    [
+     30,
+     -18
+    ],
+    [
+     -18,
+     -32
+    ],
+    [
+     18,
+     32
+    ],
+    [
+     -8,
+     30
+    ],
+    [
+     8,
+     -30
+    ],
+    [
+     -32,
+     -16
+    ],
+    [
+     32,
+     16
+    ],
+    [
+     -10,
+     -16
+    ],
+    [
+     10,
+     16
+    ]
+   ],
+   "camps": [
+    [
+     -30.6,
+     6,
+     -29.8,
+     0.8
+    ],
+    [
+     30.6,
+     6,
+     29.8,
+     -2.35
+    ],
+    [
+     -5,
+     3.6,
+     -5,
+     -2.36
+    ],
+    [
+     5,
+     3.6,
+     5,
+     0.79
+    ],
+    [
+     -13,
+     0,
+     -22.4,
+     0
+    ],
+    [
+     13,
+     0,
+     22.4,
+     3.14
+    ],
+    [
+     15,
+     0,
+     -22,
+     -0.79
+    ],
+    [
+     -15,
+     0,
+     22,
+     2.36
+    ]
+   ]
+  },
+  {
+   "id": "glacier",
+   "name": "Glacier Station",
+   "tag": "Frozen research outpost · ice floors · jump pads",
+   "size": 64,
+   "kit": false,
+   "spawns": null,
+   "camps": null
+  },
+  {
+   "id": "foundry",
+   "name": "Magma Foundry",
+   "tag": "Lava rivers · steel bridges · ash storm",
+   "size": 64,
+   "kit": false,
+   "spawns": null,
+   "camps": null
+  },
+  {
+   "id": "neon",
+   "name": "Neon District",
+   "tag": "Rain-soaked city block · subway teleporters",
+   "size": 64,
+   "kit": false,
+   "spawns": null,
+   "camps": null
+  },
+  {
+   "id": "dunes",
+   "name": "Sunken Temple",
+   "tag": "Desert ruins · broken columns · blazing sun",
+   "size": 64,
+   "kit": false,
+   "spawns": null,
+   "camps": null
+  },
+  {
+   "id": "orbital",
+   "name": "Orbital Ring",
+   "tag": "Space station deck · low-gravity zones · Earth below",
+   "size": 64,
+   "kit": false,
+   "spawns": null,
+   "camps": null
+  },
+  {
+   "id": "biolab",
+   "name": "Toxic Bio-Lab",
+   "tag": "Overgrown lab · acid pools · specimen tanks",
+   "size": 64,
+   "kit": false,
+   "spawns": null,
+   "camps": null
+  },
+  {
+   "id": "caverns",
+   "name": "Crystal Caverns",
+   "tag": "Underground cave · giant crystals · crystal gates",
+   "size": 64,
+   "kit": false,
+   "spawns": null,
+   "camps": null
+  },
+  {
+   "id": "shrine",
+   "name": "Sakura Shrine",
+   "tag": "Temple garden at sunset · koi ponds · torii gates",
+   "size": 64,
+   "kit": false,
+   "spawns": null,
+   "camps": null
+  },
+  {
+   "id": "docks",
+   "name": "Storm Docks",
+   "tag": "Harbor in a thunderstorm · lightning · stacked containers",
+   "size": 64,
+   "kit": false,
+   "spawns": null,
+   "camps": null
+  },
+  {
+   "id": "grid",
+   "name": "Hologrid Arena",
+   "tag": "Synthwave arena · laser fences · jump pads",
+   "size": 64,
+   "kit": false,
+   "spawns": null,
+   "camps": null
+  }
+ ]
+}

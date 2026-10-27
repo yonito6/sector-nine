@@ -1,0 +1,1323 @@
+{
+ "version": 1,
+ "about": "Second set of Sector Nine soldier skins (own modelled bodies, Blender). Same ids as data/skins.json: an entry here REPLACES that skin's look (merge by id; name, rarity, unlock, colour slots, material and model). Each model is a skinned glTF on the standard soldier skeleton (same joint order, same inverse bind matrices); weights come from the standard soldier so animations and hitboxes are identical. Per-vertex _MAT = skins.js aMat (slot, roughness, metalness, flags). Glow slot (visor colour) = team colour in matches. Reference loader: render/skins2/merge.js.",
+ "skins": [
+  {
+   "id": "nomad",
+   "name": "Desert Nomad",
+   "rarity": "common",
+   "unlockLevel": 4,
+   "unlockRank": "Recruit IV",
+   "desc": "Layered dune robes, a turquoise mantle, goggles and a filter respirator.",
+   "slots": {
+    "primary": "#b4532f",
+    "secondary": "#1f9a8f",
+    "dark": "#3b2a1e",
+    "accent": "#f0b43c",
+    "visor": "#36e0ff",
+    "light": "#b97a52",
+    "extra": "#e8dcc0",
+    "metal": "#9aa3a8"
+   },
+   "helmetVariant": false,
+   "customizable": [
+    "primary",
+    "secondary",
+    "visor",
+    "emblem"
+   ],
+   "replaces": "nomad",
+   "model": "assets/models/skins2/nomad.gltf.json",
+   "thumbnail": "assets/models/skins2/thumbs/nomad.png",
+   "material": {
+    "pat": [
+     "fur",
+     0,
+     0.2,
+     0,
+     0.8
+    ],
+    "patCol": 6,
+    "base": [
+     0,
+     1,
+     2,
+     7,
+     3
+    ],
+    "crm": [
+     [
+      0.85,
+      0
+     ],
+     [
+      0.9,
+      0
+     ],
+     [
+      0.75,
+      0.05
+     ],
+     [
+      0.45,
+      0.8
+     ],
+     [
+      0.7,
+      0
+     ]
+    ]
+   },
+   "hands": [
+    6,
+    0
+   ],
+   "drawCalls": 1,
+   "triangles": 14695,
+   "fairness": [
+    {
+     "helmet": false,
+     "silhouetteAreaMaxDeviation": 0.098,
+     "extraOverhangVsStandard": 0.098,
+     "hitboxCoverageDeltaVsStandard": 0,
+     "triangles": 14695
+    }
+   ],
+   "volumesCm": {
+    "Head": [
+     -12.8,
+     -21.9,
+     150.2,
+     10.3,
+     9.6,
+     181.6
+    ],
+    "Spine2": [
+     -23.4,
+     -23.4,
+     130.1,
+     21.9,
+     14.7,
+     161.1
+    ],
+    "Spine1": [
+     -21.3,
+     -22.5,
+     121.5,
+     21.3,
+     15.2,
+     140.9
+    ],
+    "Spine": [
+     -20.5,
+     -17.1,
+     117.6,
+     20.5,
+     13,
+     130.3
+    ],
+    "Hips": [
+     -28.2,
+     -22.1,
+     51.3,
+     28.2,
+     18.6,
+     131.8
+    ],
+    "LeftArm": [
+     -46.8,
+     -18.4,
+     138.6,
+     -19,
+     6.9,
+     161.7
+    ],
+    "LeftForeArm": [
+     -92.4,
+     -13.7,
+     139.7,
+     -43.4,
+     2.3,
+     155.8
+    ],
+    "RightArm": [
+     17.7,
+     -18.5,
+     137.9,
+     48.3,
+     7.5,
+     161.7
+    ],
+    "RightForeArm": [
+     46.9,
+     -13.7,
+     139.6,
+     92.4,
+     2.1,
+     155.4
+    ],
+    "LeftUpLeg": [
+     -21.8,
+     -14.1,
+     52.6,
+     1.7,
+     18.5,
+     100.1
+    ],
+    "LeftLeg": [
+     -18.8,
+     -13,
+     0,
+     -1.3,
+     23,
+     56.5
+    ],
+    "RightUpLeg": [
+     0.6,
+     -22.1,
+     51.7,
+     21.8,
+     13.5,
+     99
+    ],
+    "RightLeg": [
+     1.3,
+     -13,
+     0,
+     18.9,
+     23,
+     58.5
+    ]
+   }
+  },
+  {
+   "id": "arctic",
+   "name": "Arctic Ops",
+   "rarity": "common",
+   "unlockLevel": 7,
+   "unlockRank": "Private II",
+   "desc": "Puffy expedition parka, fur-trimmed hood, snow goggles and big snow boots.",
+   "slots": {
+    "primary": "#f26b1d",
+    "secondary": "#5d7083",
+    "dark": "#2b3440",
+    "accent": "#ffd23f",
+    "visor": "#36e0ff",
+    "light": "#f2ece0",
+    "extra": "#e9eef2",
+    "metal": "#9fb0bd"
+   },
+   "helmetVariant": false,
+   "customizable": [
+    "primary",
+    "secondary",
+    "visor",
+    "emblem"
+   ],
+   "replaces": "arctic",
+   "model": "assets/models/skins2/arctic.gltf.json",
+   "thumbnail": "assets/models/skins2/thumbs/arctic.png",
+   "material": {
+    "pat": [
+     "fur",
+     0,
+     0.12,
+     0,
+     0.5
+    ],
+    "patCol": 5,
+    "base": [
+     0,
+     1,
+     2,
+     7,
+     3
+    ],
+    "crm": [
+     [
+      0.7,
+      0.05
+     ],
+     [
+      0.85,
+      0
+     ],
+     [
+      0.7,
+      0.05
+     ],
+     [
+      0.35,
+      0.9
+     ],
+     [
+      0.5,
+      0.1
+     ]
+    ]
+   },
+   "hands": [
+    2,
+    0
+   ],
+   "drawCalls": 1,
+   "triangles": 13508,
+   "fairness": [
+    {
+     "helmet": false,
+     "silhouetteAreaMaxDeviation": 0.061,
+     "extraOverhangVsStandard": 0.061,
+     "hitboxCoverageDeltaVsStandard": 0,
+     "triangles": 13508
+    }
+   ],
+   "volumesCm": {
+    "Head": [
+     -14,
+     -19.9,
+     150.3,
+     14,
+     9.9,
+     182.6
+    ],
+    "Spine2": [
+     -24.1,
+     -24.1,
+     124.1,
+     24,
+     15.8,
+     163.2
+    ],
+    "Spine1": [
+     -23.3,
+     -22.7,
+     122.5,
+     23.3,
+     16.3,
+     142.1
+    ],
+    "Spine": [
+     -21.6,
+     -19.4,
+     115.9,
+     21.6,
+     15.9,
+     130.3
+    ],
+    "Hips": [
+     -24.6,
+     -19.3,
+     93,
+     24.5,
+     16,
+     119.1
+    ],
+    "LeftArm": [
+     -45,
+     -18.6,
+     136.6,
+     -19.5,
+     8.3,
+     162.9
+    ],
+    "LeftForeArm": [
+     -89.7,
+     -15.9,
+     138.3,
+     -43.8,
+     4.3,
+     157.5
+    ],
+    "RightArm": [
+     14,
+     -19.9,
+     136.5,
+     49.2,
+     8.3,
+     163.2
+    ],
+    "RightForeArm": [
+     47.2,
+     -15.9,
+     138.2,
+     89.7,
+     4.2,
+     157.5
+    ],
+    "LeftUpLeg": [
+     -23.5,
+     -15.1,
+     53.5,
+     1.7,
+     15.1,
+     100
+    ],
+    "LeftLeg": [
+     -20.4,
+     -13.1,
+     0,
+     0.4,
+     23,
+     57.2
+    ],
+    "RightUpLeg": [
+     0.5,
+     -14.1,
+     55.8,
+     23.5,
+     15.1,
+     99
+    ],
+    "RightLeg": [
+     -0.5,
+     -13.2,
+     0,
+     20.5,
+     23,
+     57.5
+    ]
+   }
+  },
+  {
+   "id": "ninja",
+   "name": "Cyber Ninja",
+   "rarity": "rare",
+   "unlockLevel": 15,
+   "unlockRank": "Corporal V",
+   "desc": "Segmented wrap suit, split-toe tabi boots, a scarf and a glowing katana on the back.",
+   "slots": {
+    "primary": "#62869a",
+    "secondary": "#e6f53a",
+    "dark": "#26303a",
+    "accent": "#d4dae4",
+    "visor": "#36e0ff",
+    "light": "#f2f4f8",
+    "extra": "#33454f",
+    "metal": "#a3adbd"
+   },
+   "helmetVariant": false,
+   "customizable": [
+    "primary",
+    "secondary",
+    "visor",
+    "emblem"
+   ],
+   "replaces": "ninja",
+   "model": "assets/models/skins2/ninja.gltf.json",
+   "thumbnail": "assets/models/skins2/thumbs/ninja.png",
+   "material": {
+    "pat": [
+     "weave",
+     0,
+     0.22,
+     0.25,
+     0.6
+    ],
+    "patCol": 4,
+    "base": [
+     0,
+     0,
+     2,
+     2,
+     1
+    ],
+    "crm": [
+     [
+      0.45,
+      0.1
+     ],
+     [
+      0.6,
+      0
+     ],
+     [
+      0.5,
+      0.1
+     ],
+     [
+      0.3,
+      0.8
+     ],
+     [
+      0.4,
+      0.2
+     ]
+    ]
+   },
+   "hands": [
+    2,
+    0
+   ],
+   "drawCalls": 1,
+   "triangles": 14695,
+   "fairness": [
+    {
+     "helmet": false,
+     "silhouetteAreaMaxDeviation": 0.09,
+     "extraOverhangVsStandard": -0.016,
+     "hitboxCoverageDeltaVsStandard": 0,
+     "triangles": 14695
+    }
+   ],
+   "volumesCm": {
+    "Head": [
+     -9.7,
+     -20,
+     155,
+     9.7,
+     8.4,
+     180.2
+    ],
+    "Spine2": [
+     -21.7,
+     -23.4,
+     108.8,
+     19.7,
+     12,
+     166.7
+    ],
+    "Spine1": [
+     -18.5,
+     -18.6,
+     124.5,
+     18.9,
+     12.3,
+     141.2
+    ],
+    "Spine": [
+     -17.8,
+     -16.2,
+     112.9,
+     17.5,
+     12.1,
+     130.5
+    ],
+    "Hips": [
+     -21.5,
+     -16.2,
+     95,
+     21.5,
+     12.7,
+     116.6
+    ],
+    "LeftArm": [
+     -46.1,
+     -14.6,
+     139.4,
+     -19,
+     3.4,
+     157.8
+    ],
+    "LeftForeArm": [
+     -92.4,
+     -12.8,
+     139.7,
+     -44,
+     1.5,
+     154.3
+    ],
+    "RightArm": [
+     16.1,
+     -15.3,
+     139.3,
+     48.6,
+     3.6,
+     158.4
+    ],
+    "RightForeArm": [
+     45.6,
+     -12.9,
+     139.6,
+     92.4,
+     2,
+     154.3
+    ],
+    "LeftUpLeg": [
+     -21.1,
+     -12.8,
+     55.7,
+     1.7,
+     12,
+     100.5
+    ],
+    "LeftLeg": [
+     -18.6,
+     -13,
+     0,
+     -1.5,
+     22.1,
+     56.6
+    ],
+    "RightUpLeg": [
+     0.5,
+     -10.9,
+     55.8,
+     21.9,
+     12,
+     98.5
+    ],
+    "RightLeg": [
+     1.5,
+     -13,
+     0,
+     18.6,
+     22.1,
+     57.1
+    ]
+   }
+  },
+  {
+   "id": "pirate",
+   "name": "Space Pirate",
+   "rarity": "rare",
+   "unlockLevel": 18,
+   "unlockRank": "Sergeant III",
+   "desc": "Long captain's coat, cyber hook-hand and a robot parrot drone that never shuts up.",
+   "slots": {
+    "primary": "#6a2448",
+    "secondary": "#2b4a6b",
+    "dark": "#3a2a20",
+    "accent": "#e2b24c",
+    "visor": "#36e0ff",
+    "light": "#e3b58e",
+    "extra": "#24a88c",
+    "metal": "#aab4be"
+   },
+   "helmetVariant": false,
+   "customizable": [
+    "primary",
+    "secondary",
+    "visor",
+    "emblem"
+   ],
+   "replaces": "pirate",
+   "model": "assets/models/skins2/pirate.gltf.json",
+   "thumbnail": "assets/models/skins2/thumbs/pirate.png",
+   "material": {
+    "pat": [
+     "leather",
+     0,
+     0.4,
+     0,
+     1.4
+    ],
+    "patCol": 3,
+    "base": [
+     0,
+     1,
+     2,
+     3,
+     3
+    ],
+    "crm": [
+     [
+      0.65,
+      0.02
+     ],
+     [
+      0.8,
+      0
+     ],
+     [
+      0.75,
+      0.05
+     ],
+     [
+      0.3,
+      0.95
+     ],
+     [
+      0.35,
+      0.9
+     ]
+    ]
+   },
+   "hands": [
+    2,
+    0
+   ],
+   "drawCalls": 1,
+   "triangles": 14694,
+   "fairness": [
+    {
+     "helmet": false,
+     "silhouetteAreaMaxDeviation": 0.073,
+     "extraOverhangVsStandard": 0.073,
+     "hitboxCoverageDeltaVsStandard": 0,
+     "triangles": 14694
+    }
+   ],
+   "volumesCm": {
+    "Head": [
+     -13.8,
+     -17.2,
+     146.2,
+     13.8,
+     12.1,
+     180.8
+    ],
+    "Spine2": [
+     -22.6,
+     -22.3,
+     129.8,
+     22.6,
+     14.8,
+     177.9
+    ],
+    "Spine1": [
+     -21.1,
+     -21.3,
+     119.7,
+     21.5,
+     15.2,
+     142.4
+    ],
+    "Spine": [
+     -21.5,
+     -18.2,
+     116.8,
+     19.9,
+     15,
+     133.2
+    ],
+    "Hips": [
+     -28.4,
+     -20.1,
+     62.4,
+     28.4,
+     18.8,
+     118.3
+    ],
+    "LeftArm": [
+     -44.7,
+     -16.9,
+     133.1,
+     -17.4,
+     6.6,
+     160.7
+    ],
+    "LeftForeArm": [
+     -92.4,
+     -14.9,
+     139.3,
+     -43.9,
+     4.2,
+     157.3
+    ],
+    "RightArm": [
+     17.3,
+     -17.5,
+     136.9,
+     48.8,
+     6.5,
+     160.6
+    ],
+    "RightForeArm": [
+     44.4,
+     -14.9,
+     139.2,
+     92.4,
+     4.2,
+     156.6
+    ],
+    "LeftUpLeg": [
+     -28.5,
+     -13.3,
+     55.3,
+     1,
+     18.9,
+     98.8
+    ],
+    "LeftLeg": [
+     -20.5,
+     -13,
+     -0.1,
+     0.5,
+     23,
+     56.9
+    ],
+    "RightUpLeg": [
+     0.9,
+     -12.7,
+     57.1,
+     28.5,
+     18.9,
+     98.7
+    ],
+    "RightLeg": [
+     -0.5,
+     -13,
+     0,
+     20.5,
+     23,
+     59.5
+    ]
+   }
+  },
+  {
+   "id": "mushroom",
+   "name": "Mushroom Man",
+   "rarity": "epic",
+   "unlockLevel": 31,
+   "unlockRank": "Major I",
+   "desc": "A spotted cap, glowing gills, a mycelium-threaded stalk body and a very cute face.",
+   "slots": {
+    "primary": "#d8322c",
+    "secondary": "#cfb185",
+    "dark": "#3a2a22",
+    "accent": "#ffffff",
+    "visor": "#b6ff6a",
+    "light": "#fff8ea",
+    "extra": "#c9a77c",
+    "metal": "#6f9a3a"
+   },
+   "helmetVariant": false,
+   "customizable": [
+    "primary",
+    "secondary",
+    "visor",
+    "emblem"
+   ],
+   "replaces": "mushroom",
+   "model": "assets/models/skins2/mushroom.gltf.json",
+   "thumbnail": "assets/models/skins2/thumbs/mushroom.png",
+   "material": {
+    "pat": [
+     "veins",
+     0.55,
+     0.3,
+     0.4,
+     1.4
+    ],
+    "patCol": 6,
+    "patS": 0.045,
+    "base": [
+     1,
+     6,
+     2,
+     6,
+     3
+    ],
+    "crm": [
+     [
+      0.8,
+      0
+     ],
+     [
+      0.8,
+      0
+     ],
+     [
+      0.8,
+      0
+     ],
+     [
+      0.6,
+      0.2
+     ],
+     [
+      0.6,
+      0
+     ]
+    ]
+   },
+   "hands": [
+    5,
+    1
+   ],
+   "drawCalls": 1,
+   "triangles": 11952,
+   "fairness": [
+    {
+     "helmet": false,
+     "silhouetteAreaMaxDeviation": 0.037,
+     "extraOverhangVsStandard": 0.037,
+     "hitboxCoverageDeltaVsStandard": 0,
+     "triangles": 11952
+    }
+   ],
+   "volumesCm": {
+    "Head": [
+     -19.5,
+     -23,
+     154.6,
+     19.5,
+     16,
+     184
+    ],
+    "Spine2": [
+     -21.4,
+     -25.8,
+     130.1,
+     21.4,
+     15.4,
+     158.6
+    ],
+    "Spine1": [
+     -21.2,
+     -19.8,
+     123,
+     21.2,
+     15,
+     140.2
+    ],
+    "Spine": [
+     -21,
+     -18.4,
+     117.6,
+     20.6,
+     18.3,
+     127.9
+    ],
+    "Hips": [
+     -25,
+     -18.9,
+     94.3,
+     25,
+     20.6,
+     119.1
+    ],
+    "LeftArm": [
+     -45.4,
+     -15.6,
+     139,
+     -18,
+     4.1,
+     158.6
+    ],
+    "LeftForeArm": [
+     -89.2,
+     -12.3,
+     140.5,
+     -43.4,
+     3.5,
+     154.4
+    ],
+    "RightArm": [
+     15.7,
+     -15.6,
+     139,
+     48.9,
+     4.1,
+     158.6
+    ],
+    "RightForeArm": [
+     47.2,
+     -12.3,
+     140.5,
+     89.2,
+     3.5,
+     154.4
+    ],
+    "LeftUpLeg": [
+     -20.9,
+     -13.8,
+     54.3,
+     0.7,
+     12.2,
+     98.9
+    ],
+    "LeftLeg": [
+     -19.6,
+     -13,
+     0,
+     -0.4,
+     23,
+     57.3
+    ],
+    "RightUpLeg": [
+     0.4,
+     -11.2,
+     55.1,
+     20.9,
+     12.4,
+     98.6
+    ],
+    "RightLeg": [
+     0.4,
+     -13,
+     0,
+     19.5,
+     23,
+     59.3
+    ]
+   }
+  },
+  {
+   "id": "skeleton",
+   "name": "Skeleton Phantom",
+   "rarity": "legendary",
+   "unlockLevel": 35,
+   "unlockRank": "Major V",
+   "desc": "Bones grown into a phantom suit, a skull with burning eyes and a ghostly glow.",
+   "slots": {
+    "primary": "#5d4a8a",
+    "secondary": "#7d68ad",
+    "dark": "#43356b",
+    "accent": "#9dff6a",
+    "visor": "#3dff9a",
+    "light": "#ece6d4",
+    "extra": "#8f86b8",
+    "metal": "#9a96ad"
+   },
+   "helmetVariant": false,
+   "customizable": [
+    "primary",
+    "secondary",
+    "visor",
+    "emblem"
+   ],
+   "replaces": "skeleton",
+   "model": "assets/models/skins2/skeleton.gltf.json",
+   "thumbnail": "assets/models/skins2/thumbs/skeleton.png",
+   "material": {
+    "pat": [
+     "mist",
+     0,
+     0,
+     0.03,
+     0.15
+    ],
+    "patCol": 4,
+    "base": [
+     1,
+     1,
+     1,
+     2,
+     1
+    ],
+    "crm": [
+     [
+      0.6,
+      0.05
+     ],
+     [
+      0.6,
+      0.05
+     ],
+     [
+      0.6,
+      0.05
+     ],
+     [
+      0.4,
+      0.5
+     ],
+     [
+      0.6,
+      0.05
+     ]
+    ]
+   },
+   "hands": [
+    5,
+    1
+   ],
+   "drawCalls": 1,
+   "triangles": 14692,
+   "fairness": [
+    {
+     "helmet": false,
+     "silhouetteAreaMaxDeviation": 0.061,
+     "extraOverhangVsStandard": 0.061,
+     "hitboxCoverageDeltaVsStandard": 0,
+     "triangles": 14692
+    }
+   ],
+   "volumesCm": {
+    "Head": [
+     -11.4,
+     -22.5,
+     154.1,
+     11.4,
+     7.8,
+     182.7
+    ],
+    "Spine2": [
+     -25.2,
+     -24.4,
+     129.6,
+     21.7,
+     14.4,
+     163.6
+    ],
+    "Spine1": [
+     -21.1,
+     -22.4,
+     119.2,
+     21.1,
+     14.6,
+     141.2
+    ],
+    "Spine": [
+     -19.7,
+     -18.4,
+     114.1,
+     19.7,
+     14.1,
+     129.1
+    ],
+    "Hips": [
+     -31.2,
+     -21.3,
+     92,
+     31.5,
+     13.7,
+     131.3
+    ],
+    "LeftArm": [
+     -44.7,
+     -19.3,
+     138.6,
+     -5.8,
+     8.4,
+     163.3
+    ],
+    "LeftForeArm": [
+     -92.4,
+     -13,
+     139.7,
+     -43.5,
+     1.5,
+     155.8
+    ],
+    "RightArm": [
+     4.9,
+     -20.4,
+     131.3,
+     48.3,
+     7.4,
+     163.5
+    ],
+    "RightForeArm": [
+     45.8,
+     -13.1,
+     139.6,
+     92.4,
+     2,
+     155.6
+    ],
+    "LeftUpLeg": [
+     -31.2,
+     -19.5,
+     53.7,
+     1.7,
+     14.4,
+     100
+    ],
+    "LeftLeg": [
+     -18.7,
+     -13,
+     0,
+     -2.2,
+     23,
+     56.1
+    ],
+    "RightUpLeg": [
+     -0.4,
+     -19.3,
+     55.6,
+     30.9,
+     14.4,
+     100.6
+    ],
+    "RightLeg": [
+     1.8,
+     -13,
+     0,
+     18.7,
+     23,
+     57.5
+    ]
+   }
+  },
+  {
+   "id": "glitch",
+   "name": "Neon Glitch",
+   "rarity": "legendary",
+   "unlockLevel": 40,
+   "unlockRank": "Colonel V",
+   "desc": "A hologram that broke: pixel shards set into a shimmering body, a half-pixelated head.",
+   "slots": {
+    "primary": "#23c4e6",
+    "secondary": "#a6ff3a",
+    "dark": "#1d3d52",
+    "accent": "#ffe04d",
+    "visor": "#36e0ff",
+    "light": "#e9f6ff",
+    "extra": "#ff7ad9",
+    "metal": "#8fd8ff"
+   },
+   "helmetVariant": false,
+   "customizable": [
+    "primary",
+    "secondary",
+    "visor",
+    "emblem"
+   ],
+   "replaces": "glitch",
+   "model": "assets/models/skins2/glitch.gltf.json",
+   "thumbnail": "assets/models/skins2/thumbs/glitch.png",
+   "material": {
+    "pat": [
+     "grid",
+     0.25,
+     0,
+     0.45,
+     0.6
+    ],
+    "patCol": 3,
+    "base": [
+     0,
+     0,
+     2,
+     2,
+     4
+    ],
+    "crm": [
+     [
+      0.25,
+      0.4
+     ],
+     [
+      0.4,
+      0.2
+     ],
+     [
+      0.4,
+      0.2
+     ],
+     [
+      0.2,
+      0.9
+     ],
+     [
+      0.3,
+      0.2
+     ]
+    ]
+   },
+   "hands": [
+    2,
+    0
+   ],
+   "drawCalls": 1,
+   "triangles": 13842,
+   "fairness": [
+    {
+     "helmet": false,
+     "silhouetteAreaMaxDeviation": 0.065,
+     "extraOverhangVsStandard": 0.002,
+     "hitboxCoverageDeltaVsStandard": 0,
+     "triangles": 13842
+    }
+   ],
+   "volumesCm": {
+    "Head": [
+     -9.3,
+     -14.7,
+     155.9,
+     9.3,
+     8.5,
+     179.7
+    ],
+    "Spine2": [
+     -22.2,
+     -21.5,
+     129.5,
+     21.7,
+     12.9,
+     159.7
+    ],
+    "Spine1": [
+     -20.2,
+     -19.2,
+     123.9,
+     20.4,
+     14.9,
+     138.9
+    ],
+    "Spine": [
+     -19.7,
+     -16.6,
+     116.7,
+     19.8,
+     13.6,
+     130.2
+    ],
+    "Hips": [
+     -21.8,
+     -16.6,
+     93.5,
+     22.2,
+     13,
+     118.2
+    ],
+    "LeftArm": [
+     -44.7,
+     -15.9,
+     138.6,
+     -18.9,
+     4.3,
+     159.1
+    ],
+    "LeftForeArm": [
+     -92.4,
+     -13.4,
+     139.7,
+     -43.7,
+     1.7,
+     155.6
+    ],
+    "RightArm": [
+     17.3,
+     -16.4,
+     138.6,
+     48.1,
+     4.3,
+     159.2
+    ],
+    "RightForeArm": [
+     46.4,
+     -13.4,
+     139.6,
+     92.4,
+     2.4,
+     155.9
+    ],
+    "LeftUpLeg": [
+     -21.7,
+     -13.8,
+     53.5,
+     2,
+     13.2,
+     98.9
+    ],
+    "LeftLeg": [
+     -19.5,
+     -13,
+     0,
+     -0.1,
+     23,
+     57.5
+    ],
+    "RightUpLeg": [
+     -2,
+     -12.1,
+     55.9,
+     21.8,
+     13.2,
+     98.9
+    ],
+    "RightLeg": [
+     0.3,
+     -13,
+     0,
+     19.7,
+     23,
+     57.9
+    ]
+   }
+  }
+ ]
+}

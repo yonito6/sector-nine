@@ -152,6 +152,7 @@ function visibleTargets(s) {
   const out = [], THREE = s.THREE;
   s.scene.traverseVisible(o => {
     if (!o.isMesh || o.userData.s9bug) return;
+    for (let x = o; x; x = x.parent) if (x.userData && x.userData.noProbe) return;   // weapon parts/effects in the world (e.g. the Flytrap's head) are not map geometry
     const ms = [].concat(o.material || []); if (!ms.length || ms.every(m => !m || m.visible === false)) return;
     const m = ms[0]; if (m && m.blending === THREE.AdditiveBlending && m.depthWrite === false) return;   // muzzle flashes, glows, decals
     if (m && m.transparent && m.opacity < .05) return;

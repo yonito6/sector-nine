@@ -84,7 +84,7 @@
   function load(url) {
     let pr = IMG.get(url);
     if (pr) { IMG.delete(url); IMG.set(url, pr); return pr; }
-    pr = new Promise(res => { const im = new Image(); im.decoding = 'async'; im.onload = () => res(im); im.onerror = () => { IMG.delete(url); res(null); }; im.src = url; });
+    pr = new Promise(res => { const im = new Image(); im.decoding = 'async'; im.onload = () => (im.decode ? im.decode().catch(() => {}) : Promise.resolve()).then(() => { try { const c = document.createElement('canvas'); c.width = c.height = 1; c.getContext('2d').drawImage(im, 0, 0, 1, 1); } catch (e) {} res(im); }); /* decode + first draw BEFORE the animation starts (else frame 1 stalls and frames get skipped) */ im.onerror = () => { IMG.delete(url); res(null); }; im.src = url; });
     IMG.set(url, pr);
     while (IMG.size > 3) IMG.delete(IMG.keys().next().value);
     return pr;

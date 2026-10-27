@@ -1,0 +1,55 @@
+{
+  "id": "flytrap",
+  "version": 1,
+  "notes": "Flytrap: alien Venus-flytrap bio-weapon. Left click = Bite (the head launches on its stem, chomps the first body it reaches, rips a chunk out, retracts). Right click = Spit (arcing poison glob, small splash, poison damage over time, sizzling puddle). No reload, no aim-down-sights, no aim assist. Distances in metres, times in seconds, damage in HP (players have 100). Read by modules/w_flytrap.js at load; the module has the same numbers built in as a fallback.",
+  "weapon": {
+    "name": "Flytrap",
+    "cls": "Bio-weapon",
+    "desc": "Alive and hungry. Left click: the head shoots out up to 14 m and rips a chunk out of whoever it bites. Right click: spits poison that keeps eating them.",
+    "stats": [90, 26, 32, 80],
+    "move": 1.03,
+    "glow": [1.35, 3.0, 0.45]
+  },
+  "bite": {
+    "range": 14,
+    "speed": 110,
+    "retractSpeed": 34,
+    "cooldown": 1.1,
+    "body": 72,
+    "headMult": 1.36,
+    "jawRadius": 0.2,
+    "latchTime": 0.15,
+    "missSnapTime": 0.1,
+    "noiseRadius": 30
+  },
+  "spit": {
+    "pool": 100,
+    "cost": 25,
+    "regenPerSec": 14,
+    "regenDelay": 0.7,
+    "cooldown": 0.42,
+    "speed": 26,
+    "upBoost": 2.2,
+    "gravity": 13,
+    "directDamage": 16,
+    "splashDamage": 10,
+    "splashRadius": 2.0,
+    "puddleTime": 4.0,
+    "maxFlight": 3.0
+  },
+  "poison": {
+    "dps": 8,
+    "duration": 4,
+    "maxStacks": 2,
+    "tick": 0.5
+  },
+  "viewmodel": {
+    "scale": 0.64,
+    "hip": [0.25, -0.15, -0.47],
+    "rot": [0.08, 0.36, -0.09],
+    "open": 0.3
+  },
+  "thirdPerson": {
+    "scale": 1.1
+  }
+}

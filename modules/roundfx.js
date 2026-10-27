@@ -445,6 +445,35 @@ html.rfx-cel #hud,html.rfx-cel #mxHud,html.rfx-cel #mxTip,html.rfx-cel #mxBar,ht
 .rfx-band .why,.rfx-band h3,.cel .sub,.rfx-obj,.rfx-half .you{text-wrap:balance}
 .rfx-half .rfx-skip{display:none}
 @media (max-width:560px){.rfx-end{top:max(150px,18vh)}.rfx-clutch{top:max(112px,13vh)}.rfx-intro{top:136px}.pod.p1 .blk{height:118px}.pod.p2 .blk{height:102px}.pod.p3 .blk{height:90px}.pod .blk .st{font-size:8px}.rfx-final.cel{background:rgba(6,7,10,.35)}}
+/* match-end redesign: futuristic place emblem, aligned podium cards, bot-match note */
+.cel .cel-medal,.cel .cel-plate{position:relative;flex:none;display:block;width:clamp(86px,8.4vw,116px);height:auto;aspect-ratio:120/150;clip-path:none;border:0;background:none;animation:embIn .9s 2.1s cubic-bezier(.2,1.3,.4,1) both,embGlow 2.6s 3s ease-in-out infinite}
+.emb-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.emb-svg .sweep{animation:embSweep 2.2s 2.9s ease-in-out infinite}
+.emb-svg .ch{fill:none;stroke:var(--a);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;animation:embChev .5s both}
+.emb-t{position:absolute;left:0;right:0;top:20%;bottom:7%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-align:center}
+.cel .emb-t b{font-weight:900;font-size:clamp(26px,2.9vw,40px);line-height:.95;letter-spacing:.02em;background:linear-gradient(180deg,var(--a),var(--b) 70%);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 0 8px var(--g))}
+.cel .emb-t small{font:700 clamp(7px,.75vw,9.5px) var(--mono,monospace);letter-spacing:.32em;margin-right:-.32em;color:var(--b);opacity:.9}
+@keyframes embIn{0%{opacity:0;transform:scale(.5) translateY(14px)}60%{opacity:1;transform:scale(1.07)}100%{opacity:1;transform:none}}
+@keyframes embGlow{0%,100%{filter:drop-shadow(0 0 7px var(--g))}50%{filter:drop-shadow(0 0 16px var(--g))}}
+@keyframes embSweep{0%{transform:translateY(-6px);opacity:0}15%{opacity:1}70%{opacity:1}100%{transform:translateY(118px);opacity:0}}
+@keyframes embChev{0%{opacity:0;transform:translateY(5px)}100%{opacity:1;transform:none}}
+.cel .cel-pod{align-items:flex-end;gap:clamp(8px,1.4vw,18px);width:min(720px,100%)}
+.cel .pod{max-width:230px}
+.cel .pod .blk{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto;justify-content:stretch;justify-items:center;align-content:start;gap:5px;height:auto!important;min-height:0;padding:24px 8px 12px;border:1px solid rgba(255,255,255,.1);border-top:2px solid var(--b);background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(10,13,18,.94) 45%);box-shadow:0 -8px 26px -10px var(--g),inset 0 1px 0 rgba(255,255,255,.12)}
+.cel .pod.me .blk{box-shadow:0 -8px 30px -6px var(--g),inset 0 0 0 1px var(--b)}
+.cel .pod .blk b{display:grid;place-items:center;position:relative;width:34px;height:38px;font-size:19px;line-height:1;font-weight:900;color:var(--a);-webkit-text-fill-color:var(--a);background:linear-gradient(180deg,var(--a),var(--c));clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);isolation:isolate}
+.cel .pod .blk b::before{content:"";position:absolute;inset:2px;z-index:-1;background:#0a0d12;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)}
+.cel .pod .blk .nm{width:100%;max-width:100%;text-align:center;font-size:clamp(14px,1.45vw,19px);line-height:1.2;letter-spacing:.06em;text-transform:uppercase}
+.cel .pod .blk .nm.you{color:#ffd27a;text-shadow:0 0 12px rgba(255,179,71,.55)}
+.cel .pod .blk .nm em{display:inline-block;margin-left:5px;padding:2px 5px 1px;font-size:.52em;line-height:1.1;background:#ffb347;color:#0b0d10;clip-path:polygon(4px 0,100% 0,calc(100% - 4px) 100%,0 100%)}
+.cel .pod .blk .st{margin:0;line-height:1.3;font-size:clamp(9px,.95vw,11.5px);letter-spacing:.1em;color:#aeb6c0}
+.cel .pod .blk .wn{top:-15px}
+.cel .pod .rs{display:block;width:100%;height:10px;margin-top:3px;background:linear-gradient(180deg,var(--b),transparent);opacity:.32;clip-path:polygon(0 0,100% 0,calc(100% - 10px) 100%,10px 100%)}
+.cel .pod.p1 .rs{height:30px}.cel .pod.p2 .rs{height:20px}.cel .pod.p3 .rs{height:10px}
+.cel-note{display:flex;align-items:center;justify-content:center;gap:9px;max-width:min(660px,94%);padding:7px 18px 7px 12px;font:600 clamp(10px,1.05vw,12.5px)/1.35 var(--mono,monospace);letter-spacing:.07em;color:#cfeaf7;background:linear-gradient(90deg,rgba(61,200,255,.14),rgba(10,13,18,.85) 60%);border-left:3px solid #3dc8ff;clip-path:polygon(0 0,100% 0,calc(100% - 10px) 100%,0 100%);animation:rfxRise .45s 2.6s both;text-align:left}
+.cel-note i{flex:none;width:18px;height:18px;color:#3dc8ff;display:block}.cel-note i svg{width:100%;height:100%;display:block}
+@media (min-width:561px) and (max-height:820px){.cel .pod .cel-av{height:clamp(84px,15vh,150px)}.cel .pod.p1 .cel-av{height:clamp(96px,17vh,170px)}.cel .rfx-final,.rfx-final.cel{gap:6px}}
+@media (max-width:560px){.cel .cel-medal,.cel .cel-plate{width:78px}.cel .pod .blk{padding:22px 4px 10px}.cel .pod .blk .nm{font-size:13px;letter-spacing:.03em}.cel .pod .blk .nm em{display:block;margin:3px auto 0;width:max-content}.cel .pod .blk .st{font-size:8px;letter-spacing:.03em}.cel-note{font-size:10px;padding:6px 12px 6px 9px;letter-spacing:.03em}.cel .cel-head{gap:4px}.cel .pod .blk b{width:30px;height:34px;font-size:17px}}
 @media (prefers-reduced-motion:reduce){#rfx *{animation-duration:.01ms!important;animation-iteration-count:1!important}}`;
   document.head.appendChild(css);
   const root = document.createElement('div'); root.id = 'rfx'; root.setAttribute('aria-live', 'polite');
@@ -582,7 +611,18 @@ html.rfx-cel #hud,html.rfx-cel #mxHud,html.rfx-cel #mxTip,html.rfx-cel #mxBar,ht
   /* ---------- end-of-match celebration (all modes): podium (FFA) / winning-team line-up (TDM, Demolition) ----------
      Appears before the XP / coins summaries and hands over to them: S9Profile.matchXp, S9Shop.matchCoins and
      S9Shop.showLastMatch wait for it (see hookSummaries), so the order is always celebration -> XP -> coins. */
-  const MEDAL = { 1: { t: '1ST', a: '#fff6c8', b: '#f2b52b', c: '#7d5000', r1: '#d8392b', r2: '#9e1f16' }, 2: { t: '2ND', a: '#ffffff', b: '#bcc6d1', c: '#4f5964', r1: '#2f6fd8', r2: '#1b4592' }, 3: { t: '3RD', a: '#ffe0bf', b: '#c97c3c', c: '#55290c', r1: '#2a9d5b', r2: '#17653a' } };
+  const MEDAL = { 1: { t: '1ST', a: '#fff1c2', b: '#ffb347', c: '#8a4b00', g: 'rgba(255,179,71,.7)' }, 2: { t: '2ND', a: '#f2fbff', b: '#8fd3ff', c: '#3c5f78', g: 'rgba(120,200,255,.6)' }, 3: { t: '3RD', a: '#ffe2c4', b: '#e0884a', c: '#6a2f10', g: 'rgba(224,136,74,.6)' }, 0: { a: '#e4e9ee', b: '#8f9bab', c: '#3a4250', g: 'rgba(150,165,185,.45)' } };
+  // futuristic place emblem: hex frame + rank chevrons (3/2/1 for 1st/2nd/3rd) + glowing edge + scanline sweep; pure inline SVG (crisp at any size)
+  let EMBN = 0;
+  function emblem(place) {
+    const k = MEDAL[place] || MEDAL[0], id = 'emb' + (++EMBN), n = place >= 1 && place <= 3 ? 4 - place : 0;
+    const chev = Array.from({ length: n }, (_, i) => `<path class="ch" d="M46 ${19 - i * 6.5}L60 ${11 - i * 6.5}L74 ${19 - i * 6.5}" style="animation-delay:${(2.5 + i * .12).toFixed(2)}s"/>`).join('');
+    const H = 'M60 26L108 52V112L60 138L12 112V52Z';
+    return `<svg class="emb-svg" viewBox="0 0 120 150" aria-hidden="true"><defs><linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${k.a}"/><stop offset=".5" stop-color="${k.b}"/><stop offset="1" stop-color="${k.c}"/></linearGradient><linearGradient id="${id}s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${k.a}" stop-opacity="0"/><stop offset=".5" stop-color="${k.a}" stop-opacity=".55"/><stop offset="1" stop-color="${k.a}" stop-opacity="0"/></linearGradient><pattern id="${id}p" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="${k.a}" opacity=".14"/></pattern><clipPath id="${id}c"><path d="${H}"/></clipPath></defs>`
+      + `<path d="${H}" fill="rgba(8,10,14,.86)"/><g clip-path="url(#${id}c)"><rect x="0" y="26" width="120" height="112" fill="url(#${id}p)"/><path d="M12 112L60 138L108 112V96L60 122L12 96Z" fill="${k.b}" opacity=".16"/><rect class="sweep" x="0" y="10" width="120" height="22" fill="url(#${id}s)"/></g>`
+      + `<path d="${H}" fill="none" stroke="url(#${id}f)" stroke-width="3" stroke-linejoin="round"/><path d="M60 36L98 58V106L60 128L22 106V58Z" fill="none" stroke="${k.b}" stroke-opacity=".55" stroke-width="1"/>`
+      + `<path d="M3 62L12 68M3 100L12 94M117 62L108 68M117 100L108 94" stroke="${k.b}" stroke-width="2" stroke-linecap="round"/><g fill="${k.a}"><circle cx="60" cy="26" r="2.6"/><circle cx="108" cy="52" r="2.2"/><circle cx="12" cy="52" r="2.2"/><circle cx="60" cy="138" r="2.6"/></g>${chev}</svg>`;
+  }
   const ord = n => n + ((n % 100 >= 11 && n % 100 <= 13) ? 'TH' : (['TH', 'ST', 'ND', 'RD'][n % 10] || 'TH'));
   const SIL = c => `<svg class="sil" viewBox="0 0 60 120"><circle cx="30" cy="16" r="11" fill="${c}"/><path d="M12 34q18-8 36 0l4 38-8 2-2 44H34l-4-34-4 34H18l-2-44-8-2z" fill="${c}"/></svg>`;
   let CEL = null;
@@ -617,24 +657,25 @@ html.rfx-cel #hud,html.rfx-cel #mxHud,html.rfx-cel #mxTip,html.rfx-cel #mxBar,ht
     const draw = o.result === 'draw';
     const stat = p => `${p.kills} ${p.kills === 1 ? 'KILL' : 'KILLS'}${p.acc != null ? ` · ${p.acc}% ACC` : ` · ${p.deaths} D`}`;
     const letters = w => [...w].map((ch, i) => `<span style="animation-delay:${(i * .055).toFixed(2)}s">${ch === ' ' ? '&nbsp;' : ch}</span>`).join('');
-    const row = (p, k) => `<div class="rfx-row${p.me ? ' me' : ''}"><i>${k}</i><span class="nm">${esc(p.n)}${p.me ? ' (you)' : ''}</span><span>${p.kills}</span><span>${p.deaths}</span><span>${p.score}</span></div>`;
+    const isYou = p => p.me && /^you$/i.test(p.n), chip = p => p.me && !isYou(p) ? ' <em>YOU</em>' : '';   // the player's name once, one YOU marker
+    const row = (p, k) => `<div class="rfx-row${p.me ? ' me' : ''}"><i>${k}</i><span class="nm">${esc(p.n)}${p.me && !isYou(p) ? ' (you)' : ''}</span><span>${p.kills}</span><span>${p.deaths}</span><span>${p.score}</span></div>`;
     const head = '<div class="rfx-row h"><i></i><span class="nm">PLAYER</span><span>K</span><span>D</span><span>PTS</span></div>';
     if (ffa) {
       list.sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || b.score - a.score);
       const wi = list.findIndex(p => p.id === o.winner); if (wi > 0) list.unshift(list.splice(wi, 1)[0]);
       place = list.findIndex(p => p.me) + 1; win = place === 1;
       const M = MEDAL[place], winner = list[0] || { n: '', kills: 0 };
-      const hero = M ? `<div class="cel-medal" style="--a:${M.a};--b:${M.b};--c:${M.c};--r1:${M.r1};--r2:${M.r2}"><i class="rb l"></i><i class="rb r"></i><div class="disc"><b>${M.t}</b><small>PLACE</small></div></div>`
-        : place ? `<div class="cel-plate"><b>#${place}</b><small>OF ${list.length}</small></div>` : '';
+      const hero = M ? `<div class="cel-medal emb" style="--a:${M.a};--b:${M.b};--c:${M.c};--g:${M.g}">${emblem(place)}<div class="emb-t"><b>${M.t}</b><small>PLACE</small></div></div>`
+        : place ? `<div class="cel-plate emb" style="--a:${MEDAL[0].a};--b:${MEDAL[0].b};--c:${MEDAL[0].c};--g:${MEDAL[0].g}">${emblem(0)}<div class="emb-t"><b>#${place}</b><small>OF ${list.length}</small></div></div>` : '';
       const title = win ? 'VICTORY' : place ? `${ord(place)} PLACE` : 'MATCH OVER';
       const sub = win ? `YOU WON THE MATCH · ${winner.kills} KILLS` : `${esc(String(winner.n).toUpperCase())} WINS THE MATCH`;
       const pod = [2, 1, 3].filter(n => list[n - 1]).map(n => { const p = list[n - 1], M2 = MEDAL[n];
-        return `<div class="pod p${n}${p.me ? ' me' : ''}"><div class="cel-av${n === 1 ? ' hero' : ''}" data-i="${n - 1}"></div><div class="blk" style="--a:${M2.a};--b:${M2.b};--c:${M2.c}">${n === 1 ? `<div class="wn"><i>${ICON.crown}</i>WINNER</div>` : ''}<b>${n}</b><div class="nm">${esc(p.n)}${p.me ? ' <em>YOU</em>' : ''}</div><div class="st">${stat(p)}</div></div></div>`; }).join('');
+        return `<div class="pod p${n}${p.me ? ' me' : ''}" style="--a:${M2.a};--b:${M2.b};--c:${M2.c};--g:${M2.g}"><div class="cel-av${n === 1 ? ' hero' : ''}" data-i="${n - 1}"></div><div class="blk">${n === 1 ? `<div class="wn"><i>${ICON.crown}</i>WINNER</div>` : ''}<b>${n}</b><div class="nm${isYou(p) ? ' you' : ''}">${esc(p.n)}${chip(p)}</div><div class="st">${stat(p)}</div></div><i class="rs"></i></div>`; }).join('');
       const rest = list.slice(3, 8);
       const strip = rest.length ? `<div class="rfx-tbl cel-rest"><div class="rfx-col" style="--c:#ffd27a"><div class="hd">STANDINGS<small>${list.length} PLAYERS</small></div>${head}${rest.map((p, i) => row(p, i + 4)).join('')}</div></div>` : '';
       cls += win ? ' win' : place && place <= 3 ? ' podium' : ' lose soft';
       vars = { '--tc': win ? '#ffd27a' : M ? M.b : '#ece6d8', '--glow': win ? 'rgba(255,196,90,.30)' : 'rgba(150,170,200,.16)' };
-      html = `<div class="cel-k">MATCH COMPLETE · ${modeName}</div><div class="cel-head">${hero}<div class="cel-tt"><h2>${letters(title)}</h2><div class="sub">${sub}</div></div></div><div class="cel-pod">${pod}</div>${strip}`;
+      html = `<div class="cel-k">MATCH COMPLETE · ${modeName}</div><div class="cel-head">${hero}<div class="cel-tt"><h2>${letters(title)}</h2><div class="sub">${sub}</div></div></div><div class="cel-pod">${pod}</div>${o.offline ? `<div class="cel-note"><i><svg viewBox="0 0 20 20"><path d="M10 1.5L18 6v8l-8 4.5L2 14V6z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 6v5.2M10 13.2v1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></i><span>Bot matches don't earn XP or Shards - play online to rank up.</span></div>` : ''}${strip}`;
       // timeline: podium rises 3rd -> 2nd -> 1st, winner fanfare + crowd + confetti, then my medal
       SND.celIntro();
       at(450, () => SND.podium(3)); at(850, () => SND.podium(2));
@@ -705,7 +746,7 @@ html.rfx-cel #hud,html.rfx-cel #mxHud,html.rfx-cel #mxTip,html.rfx-cel #mxBar,ht
         const n = NETg(); if (was || !window.S9RoundFX || !S9RoundFX.enabled || (n && n.on) || (CEL && now() - CEL.t0 < 15000)) return r;
         const st = typeof standings === 'function' ? standings() : [];
         const table = st.map((e, i) => ({ id: e.isPlayer ? 'me' : 'bot' + i, n: e.isPlayer ? ((n && n.nick) || 'You') : e.name, kills: e.kills | 0, deaths: e.deaths | 0, score: e.score | 0 }));
-        final({ result: 'win', mode: 'ffa', table, me: 'me', winner: winner && !winner.isPlayer ? 'bot' + st.indexOf(winner) : winner ? 'me' : null });
+        final({ result: 'win', mode: 'ffa', offline: true, table, me: 'me', winner: winner && !winner.isPlayer ? 'bot' + st.indexOf(winner) : winner ? 'me' : null });
       } catch (e) { ST.stats.errors++; ST.lastErr = String(e && e.stack || e); }
       return r;
     };
