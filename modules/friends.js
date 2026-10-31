@@ -587,7 +587,7 @@ html.s9f-popen #s9f-toasts{right:calc(min(430px,100vw) + 14px)}
     const oRoom = document.getElementById('oRoom'); if (!oRoom) return;
     if (!lobbyBox) {
       lobbyBox = el('div', { id: 's9f-lobby', hidden: true });
-      const row = oRoom.querySelector('.row'); row ? oRoom.insertBefore(lobbyBox, row) : oRoom.appendChild(lobbyBox);
+      const row = oRoom.querySelector('.row'); row ? row.parentNode.insertBefore(lobbyBox, row) : oRoom.appendChild(lobbyBox);
     }
     const r = room();
     if (!r || !token() || !hasNet()) { lobbyBox.hidden = true; return; }

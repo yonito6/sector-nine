@@ -270,14 +270,15 @@
       return out;
     };
   }
+  /* room list: Join -> 'Rejoin' for running matches we can return to (menu.js re-renders the list and calls this too) */
+  function markRejoin(list) { const t = tokens(); for (const b of document.querySelectorAll('#roomList [data-room]')) { const r = (list || []).find(x => x.code === b.dataset.room); if (r && r.started && t[r.code] && !b.disabled) b.textContent = 'Rejoin'; } }
   if (typeof renderRoomList === 'function') {
     const _rl = renderRoomList;
     renderRoomList = function (list) {
-      const out = _rl.apply(this, arguments), t = tokens();
-      for (const b of document.querySelectorAll('#roomList [data-room]')) { const r = (list || []).find(x => x.code === b.dataset.room); if (r && r.started && t[r.code] && !b.disabled) b.textContent = 'Rejoin'; }
+      const out = _rl.apply(this, arguments); markRejoin(list);
       return out;
     };
   }
 
-  window.S9Session = { get active() { return S.active; }, get blocked() { return S.blocked; }, tabId, browserId: bid, takeOver: () => activate(false), ready: decision, _S: S };
+  window.S9Session = { get active() { return S.active; }, get blocked() { return S.blocked; }, tabId, browserId: bid, takeOver: () => activate(false), ready: decision, markRejoin, _S: S };
 })();

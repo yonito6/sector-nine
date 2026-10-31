@@ -1,0 +1,107 @@
+{
+ "note": "Gas Giant: a hungry alien critter held like a shotgun. Feed it space beans (each bean = 'perFood' shells), it fires a fixed spread of gooey pellets from its rear vent. Pellets are real projectiles (speed m/s, gravity m/s^2), damage per pellet with falloff [fullDamageUntil m, minDamageFrom m, minMultiplier]; head/limb multipliers like every gun. Splash: each pellet that hits the world hurts others within splashR metres (linear falloff, the shooter is immune). Pattern: 1 centre pellet + 'inner' pellets on a ring of radius innerR + 'outer' pellets on a ring of radius outerR (radians), the whole pattern rotated randomly per shot, each pellet jittered by 'jitter'. Ported 1:1 by modules/w_poopgun.js.",
+ "id": "poopgun",
+ "weapon": {
+  "name": "Gas Giant",
+  "cls": "Critter shotgun",
+  "mode": "poop",
+  "mag": 6,
+  "reserve": 30,
+  "maxReserve": 48,
+  "rpm": 72,
+  "auto": false,
+  "dmg": 15,
+  "pellets": 9,
+  "spreadP": 0.072,
+  "head": 1.5,
+  "limb": 0.75,
+  "hip": 0,
+  "ads": 0,
+  "adsFov": 64,
+  "adsSpeed": 15,
+  "reload": 0.8,
+  "reloadEmpty": 0.8,
+  "falloff": [
+   7,
+   22,
+   0.35
+  ],
+  "kick": 2.4,
+  "move": 1.02,
+  "heat": 0,
+  "glow": [
+   0.9,
+   3.0,
+   0.6
+  ],
+  "tracer": [
+   1.2,
+   4.0,
+   0.8
+  ],
+  "sound": "poopFire",
+  "stats": [
+   92,
+   18,
+   22,
+   76
+  ],
+  "desc": "A hungry space critter. Feed it beans, point its rear end, squeeze: nine gooey blobs. Two-shots anyone up to 10 m, splashes on walls."
+ },
+ "pattern": {
+  "inner": 3,
+  "innerR": 0.03,
+  "outer": 5,
+  "outerR": 0.072,
+  "jitter": 0.006,
+  "adsTighten": 0.15,
+  "crouchTighten": 0.1,
+  "airJitter": 0.018
+ },
+ "projectile": {
+  "speed": 120,
+  "gravity": 6,
+  "life": 1.1,
+  "radius": 0.085,
+  "converge": 0.16
+ },
+ "splash": {
+  "dmg": 6,
+  "r": 1.0
+ },
+ "knockback": {
+  "perPellet": 0.45,
+  "max": 4.0,
+  "botPerPellet": 0.5
+ },
+ "reloadCycle": {
+  "perFood": 2,
+  "cycle": 0.8,
+  "bite": 0.56,
+  "startDelay": 0.05
+ },
+ "bot": {
+  "dmg": 7,
+  "head": 1.5,
+  "limb": 0.8,
+  "gap": 0.95,
+  "burst": [
+   1,
+   1
+  ],
+  "pause": [
+   0.85,
+   1.2
+  ],
+  "mag": 6,
+  "reload": 2.6,
+  "pellets": 9
+ },
+ "slime": {
+  "duration": 1.5,
+  "maxOpacity": 0.78
+ },
+ "ui": {
+  "card": "assets/models/weapons/poopgun/card.png"
+ }
+}
