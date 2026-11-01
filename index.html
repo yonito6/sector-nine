@@ -5133,7 +5133,7 @@ function roomTransport(code, create) {
    The main route for online play. Nobody needs a direct link to anyone else, so it works on any home, office or
    mobile network and for any number of players. If the server can't be reached, the old peer-to-peer + bus route
    below is used instead. */
-const SRV = { url: new URLSearchParams(location.search).get('srv') || 'wss://sector-nine-server-production.up.railway.app', ws: null, ready: null, on: new Set(), rtt: null, listing: false, pingT: null };
+const SRV = { url: new URLSearchParams(location.search).get('srv') || 'wss://sector-nine-server-production.up.railway.app', ws: null, ready: null, on: new Set(), rtt: null, jit: 0, nd: false, listing: false, pingT: null };
 function srvInit() {
   if (SRV.ws && SRV.ws.readyState === 1) return Promise.resolve(true);
   if (SRV.ready) return SRV.ready;
@@ -5143,10 +5143,11 @@ function srvInit() {
     ws.onopen = () => { clearTimeout(t); SRV.ws = ws; if (SRV.listing) srvSend({ k: 'list' }); res(true);
       clearInterval(SRV.pingT); SRV.pingT = setInterval(() => srvSend({ k: 'pi', t: performance.now() }), 1000); srvSend({ k: 'pi', t: performance.now() }); };
     ws.onmessage = e => { let d; try { d = JSON.parse(e.data); } catch (x) { return; } if (!d) return;
-      if (d.k === 'po') { const r0 = performance.now() - d.t; if (r0 >= 0 && r0 < 5000) SRV.rtt = SRV.rtt === null ? r0 : SRV.rtt + (r0 - SRV.rtt) * .2; return; }
+      if (d.k === 'po') { const r0 = performance.now() - d.t; if (r0 >= 0 && r0 < 5000) { if (SRV.rtt !== null) SRV.jit += (Math.abs(r0 - SRV.rtt) - SRV.jit) * .25; SRV.rtt = SRV.rtt === null ? r0 : SRV.rtt + (r0 - SRV.rtt) * .2; } return; }
+      if (d.k === 'hello') SRV.nd = !!d.nd;   // net v3: this server takes delta states and sends 60 Hz bundles (older servers: full states, 30 Hz)
       if (d.k === 'rooms') { LOBBY.srv = d.rooms || []; if (LOBBY.onList) LOBBY.onList(lobbyRooms()); return; }
       for (const f of [...SRV.on]) try { f(d); } catch (x) { console.error(x); } };
-    ws.onclose = () => { clearTimeout(t); const was = SRV.ws === ws; if (was) { SRV.ws = null; clearInterval(SRV.pingT); } SRV.ready = null; res(false);
+    ws.onclose = () => { clearTimeout(t); const was = SRV.ws === ws; if (was) { SRV.ws = null; SRV.nd = false; clearInterval(SRV.pingT); } SRV.ready = null; res(false);
       if (was) { for (const f of [...SRV.on]) try { f({ k: '_closed' }); } catch (x) {} if (SRV.listing) setTimeout(() => { if (SRV.listing) srvInit(); }, 2000); } };
     ws.onerror = () => {};
   }));
@@ -5155,7 +5156,7 @@ const srvOn = () => !!(SRV.ws && SRV.ws.readyState === 1);
 function srvSend(o) { if (srvOn()) try { SRV.ws.send(typeof o === 'string' ? o : JSON.stringify(o)); } catch (e) {} }
 function serverTransport(code, create) {
   return new Promise(resolve => {
-    let settled = false, closed = false, handler = null, pres = {}, pending = null, lastSend = 0, seq = 0, myId = null, retry = false;
+    let settled = false, closed = false, handler = null, pres = {}, pending = null, lastSend = 0, seq = 0, myId = null, retry = false, sent = null, keyT = 0, sentWs = null;
     const remotes = new Map(), lastQ = new Map();
     const done = v => { if (!settled) { settled = true; resolve(v); } };
     const peersList = () => [{ peer: myId || 'me', isMe: true, presence: pres }, ...[...remotes].map(([k, v]) => ({ peer: k, isMe: false, presence: v }))];
@@ -5165,26 +5166,32 @@ function serverTransport(code, create) {
       name: code, code, meta: null, onMeta: null, onClosed: null, onMatch: null, onNote: null, match: null, server: true, relayed: false,
       send(o) { srvSend(o); },
       get isHost() { return !!(api.meta && myId && api.meta.hostId === myId); }, get myId() { return myId; },
-      ping: () => SRV.rtt === null ? 0 : Math.round(SRV.rtt), pingTo: k => { const p = remotes.get(k); return p && p.pg ? p.pg | 0 : null; }, direct: () => false,
-      presence(patch) { pres = Object.assign({}, pres, patch); if (!pending) pending = setTimeout(sendState, Math.max(0, 33 - (performance.now() - lastSend))); return Promise.resolve(); },
+      ping: () => SRV.rtt === null ? 0 : Math.round(SRV.rtt), jitter: () => Math.round(SRV.jit), pingTo: k => { const p = remotes.get(k); return p && p.pg ? p.pg | 0 : null; }, direct: () => false,
+      presence(patch) { pres = Object.assign({}, pres, patch); if (!pending) pending = setTimeout(sendState, Math.max(0, (SRV.nd ? 15 : 33) - (performance.now() - lastSend))); return Promise.resolve(); },
       peers: peersList, onPeers(h) { handler = h; setTimeout(() => fire(), 0); return () => { handler = null; }; }, connected: srvOn,
       setMeta(patch) { if (!api.isHost) return; Object.assign(api.meta, patch); srvSend({ k: 'meta', m: patch }); },
       leave() { if (!closed) srvSend({ k: 'leave' }); stop(); clearTimeout(pending); return Promise.resolve(); }
     };
-    function sendState() { pending = null; if (closed) return; lastSend = performance.now(); pres.q = ++seq; pres.ts = Math.round(lastSend); pres.pg = api.ping(); srvSend({ k: 'st', p: pres }); }
+    // net v3 (server said nd): 60 Hz, and only the fields that changed since the last send ({k:'sd'}); a full state ({k:'st'})
+    // every second, after (re)joining and on a new connection, so the server and newcomers always have a complete picture
+    function sendState() { pending = null; if (closed) return; lastSend = performance.now(); pres.q = ++seq; pres.ts = Math.round(lastSend); pres.pg = api.ping();
+      if (!SRV.nd) { sent = null; srvSend({ k: 'st', p: pres }); return; }
+      if (!sent || sentWs !== SRV.ws || lastSend - keyT >= 1000) { sent = {}; for (const k in pres) sent[k] = JSON.stringify(pres[k]); keyT = lastSend; sentWs = SRV.ws; srvSend({ k: 'st', p: pres }); return; }
+      const dl = {}; for (const k in pres) { const v = JSON.stringify(pres[k]); if (sent[k] !== v) { sent[k] = v; dl[k] = pres[k]; } }
+      srvSend({ k: 'sd', p: dl }); }
     function forget(k) { remotes.delete(k); lastQ.delete(k); }
     // newest state wins: anything older than what we already have is ignored
     function accept(k, p) { if (!p || k === myId) return; const q = p.q | 0; if (q && q <= (lastQ.get(k) || 0)) return; if (q) lastQ.set(k, q); const isNew = !remotes.has(k); remotes.set(k, p); fire(isNew ? [{ peer: k }] : [], []); }
     function onMeta(m) { api.meta = m; const ids = new Set(m.players.map(p => p.id)); for (const k of [...remotes.keys()]) if (!ids.has(k)) { forget(k); fire([], [{ peer: k }]); } api.onMeta && api.onMeta(m); }
     function onMsg(d) {
       if (closed) return;
-      if (d.k === 'S') { for (const k in d.s) accept(k, d.s[k]); }   // one bundle per server tick with everyone who moved
+      if (d.k === 'S') { for (const k in d.s) accept(k, d.s[k]); if (d.d) for (const k in d.d) { const b = remotes.get(k); if (b) accept(k, Object.assign({}, b, d.d[k])); } }   // one bundle per server tick with everyone who moved (net v3: d = only what changed)
       else if (d.k === 'st') { if (d.f && d.p) accept(d.f, d.p); }
       else if (d.k === 'mx') { api.match = d.v || null; if (api.onMatch) api.onMatch(d); else (api.mxQueue = api.mxQueue || []).push(d); }   // kept until the modes add-on attaches
       else if (d.k === 'note') { api.onNote && api.onNote(d.e); }
       else if (d.k === 'meta') onMeta(d.m);
       else if (d.k === 'left') { if (remotes.has(d.id)) { forget(d.id); fire([], [{ peer: d.id }]); } }
-      else if (d.k === 'welcome') { myId = d.id; retry = false; done(api); onMeta(d.meta); fire(); }
+      else if (d.k === 'welcome') { myId = d.id; retry = false; sent = null; done(api); onMeta(d.meta); fire(); }   // (in a room again: the next state is a full one)
       else if (d.k === 'taken') { stop(); done({ error: 'taken' }); }
       else if (d.k === 'full') { stop(); if (settled) api.onClosed && api.onClosed('That room is full.'); else done({ error: 'That room is full.' }); }
       else if (d.k === 'err') { stop(); if (settled) api.onClosed && api.onClosed(d.e); else done({ error: d.e }); }
@@ -5194,12 +5201,12 @@ function serverTransport(code, create) {
     function reconnect() {
       if (!settled) { stop(); done({ error: 'Lost the connection to the game server. Try again.' }); return; }
       if (retry) return; retry = true; const t0 = performance.now();
-      const tryIt = async () => { if (closed) return; if (await srvInit()) { srvSend({ k: 'join', code, n: NET.nick, c: NET.color | 0 }); setTimeout(() => { if (retry && !closed) { retry = false; reconnect(); } }, 6000); return; }
+      const tryIt = async () => { if (closed) return; if (await srvInit()) { srvSend({ k: 'join', code, n: NET.nick, c: NET.color | 0, pv: 3 }); setTimeout(() => { if (retry && !closed) { retry = false; reconnect(); } }, 6000); return; }
         if (performance.now() - t0 > 25000) { stop(); api.onClosed && api.onClosed('Lost the connection to the game server.'); return; } setTimeout(tryIt, 1500); };
       setTimeout(tryIt, 400);
     }
     SRV.on.add(onMsg);
-    srvSend(create ? { k: 'create', code, meta: create, n: NET.nick, c: NET.color | 0 } : { k: 'join', code, n: NET.nick, c: NET.color | 0 });
+    srvSend(create ? { k: 'create', code, meta: create, n: NET.nick, c: NET.color | 0, pv: 3 } : { k: 'join', code, n: NET.nick, c: NET.color | 0, pv: 3 });
     setTimeout(() => { if (!settled) { stop(); done({ error: 'The game server did not answer. Try again.' }); } }, 10000);
   });
 }
@@ -5304,8 +5311,8 @@ function onNetPeers() {
   for (const p of NET.room.peers()) { if (p.isMe || !p.presence || p.presence.v !== 1) continue; if (p.presence.lob) { if (NET.peers.has(p.peer)) dropPeer(p.peer, true); continue; } const E = peerEntry(p.peer, p.presence); if (E.pres !== p.presence) { E.pres = p.presence; netReceive(E, p.presence); } }
 }
 // what TAB shows in the ping column: real round-trip times online (each player's own average to everyone), 'BOT' for bots
-function pingOf(e) { if (!NET.on || !NET.room || !NET.room.ping) return null; if (e.isPlayer) return NET.room.ping(); if (e.remote) return e.ping || NET.room.pingTo(e.netId); return null; }
-function pingTxt(e) { if (!e.isPlayer && !e.remote) return 'BOT'; const v = pingOf(e); return v === null || v === undefined ? (NET.on ? '…' : '—') : v + ' ms'; }
+function pingOf(e) { if (!NET.on || !NET.room || !NET.room.ping) return null; if (e.isPlayer) return NET.room.ping() || null; if (e.remote) return e.ping || NET.room.pingTo(e.netId); return null; }
+function pingTxt(e) { if (!e.isPlayer && !e.remote) return 'BOT'; const v = pingOf(e); if (v === null || v === undefined) return NET.on ? '…' : '—'; const j = e.isPlayer && NET.room.jitter ? NET.room.jitter() : 0; return v + ' ms' + (j >= 10 ? ' ±' + j : ''); }
 function pingCls(e) { const v = pingOf(e); return v === null || v === undefined ? '' : v < 60 ? 'pg-good' : v < 120 ? 'pg-ok' : 'pg-bad'; }
 function remoteById(id) { const E = NET.peers.get(id); return E ? E.r : null; }
 function netReceive(E, pr) {
@@ -5315,9 +5322,12 @@ function netReceive(E, pr) {
   let st = now;
   // states are kept on the SENDER's clock; updateRemote plays them back on a steady clock of its own (see there)
   if (pr.ts) { st = pr.ts; const d = now - pr.ts; if (E.base === undefined || d < E.base) E.base = d; else E.base += (d - E.base) * .002;
-    const J = d - E.base; E.jit = E.jit === undefined ? J : E.jit + (J - E.jit) * (J > E.jit ? .2 : .02);   // rises fast on lag spikes, settles slowly
+    // jitter = 60th percentile of the extra delay over the last 2 s (per player; chosen by qa/net_bench.js). A TCP retransmit stall is ridden out
+    // by easing past the newest state and gliding back (updateRemote), instead of keeping everyone 300+ ms in the past.
+    const J = d - E.base, W = E.jw || (E.jw = []); W.push(now, J); while (W.length > 2 && W[0] < now - 2000) W.splice(0, 2);
+    if (!E.jq || now - E.jq > 100) { E.jq = now; const v = []; for (let i = 1; i < W.length; i += 2) v.push(W[i]); v.sort((x, y) => x - y); E.jit = v[Math.min(v.length - 1, Math.floor(v.length * .6))]; }
     if (E.lts) { const iv = pr.ts - E.lts; if (iv > 0 && iv < 500) E.iv = E.iv === undefined ? iv : E.iv + (iv - E.iv) * .1; } E.lts = pr.ts;
-    r.target = clamp((E.iv || 33) * 1.5 + (E.jit || 0) * 1.5 + 15, 60, 350); }
+    r.target = clamp((E.iv || 33) * 2 + (E.jit || 0) * 1.25 + 6, 34, 350); }   // 2 send intervals + jitter: ~45 ms on a clean 60 Hz link (CS2 / Overwatch: ~2 ticks)
   if (!r.snaps.length || st > r.snaps[r.snaps.length - 1].t) { r.snaps.push({ t: st, x: +pr.x[0], y: +pr.x[1], z: +pr.x[2], yaw: +pr.yw, pitch: +pr.pt }); if (r.snaps.length > 30) r.snaps.shift(); }
   r.ping = pr.pg | 0;
   if ((pr.K | 0) >= KILL_LIMIT && !G.ended && NET.inMatch) setTimeout(() => endMatch(r), 1200);
@@ -5390,8 +5400,12 @@ function updateRemote(r, dt) {
     let nx = lerp(a.x, b.x, k), ny = lerp(a.y, b.y, k), nz = lerp(a.z, b.z, k);
     // when late data corrects where they really are, glide there over ~0.15 s instead of popping (respawns/teleports still snap)
     const C = r.corr || (r.corr = new THREE.Vector3());
-    if (r.lastN && p.distanceTo(_v1.set(nx, ny, nz)) < 6) { const jx = nx - r.lastN.x, jy = ny - r.lastN.y, jz = nz - r.lastN.z, lim = 14 * dt + .05;
+    // (a jump = this frame's step minus the step the current segment predicts, so fast but continuous moves like sprints and
+    // dashes never count, while a 0.1 m re-pick after a late packet is glided instead of popping)
+    if (r.lastN && p.distanceTo(_v1.set(nx, ny, nz)) < 6) { const f = b.t > a.t && r.prt !== undefined ? (t - r.prt) / span : 0;
+      const jx = nx - r.lastN.x - (b.x - a.x) * f, jy = ny - r.lastN.y - (b.y - a.y) * f, jz = nz - r.lastN.z - (b.z - a.z) * f, lim = 4 * dt + .03;
       if (jx * jx + jy * jy + jz * jz > lim * lim) C.set(p.x - nx, p.y - ny, p.z - nz); } else C.set(0, 0, 0);
+    r.prt = t;
     (r.lastN || (r.lastN = new THREE.Vector3())).set(nx, ny, nz);
     { const L = C.length(); if (L < .002) C.set(0, 0, 0); else C.multiplyScalar(Math.max(0, L - Math.min(L * (1 - Math.exp(-dt * 8)), 6.5 * dt) - .001) / L); }
     nx += C.x; ny += C.y; nz += C.z;

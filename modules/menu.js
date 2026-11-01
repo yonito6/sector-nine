@@ -24,8 +24,8 @@
   };
   const VIS = {
     public: { name: 'Public', line: 'Shown in the room list.' },
-    friends: { name: 'Friends only', line: 'Only your friends see it.' },
-    private: { name: 'Private', line: 'Link or code only.' }
+    friends: { name: 'Friends only', line: 'Listed for friends. A link opens it.' },
+    private: { name: 'Private', line: 'Not listed. Link or code opens it.' }
   };
   const TEAMS = { atk: { name: 'Strike Force', css: '#ff8a3d' }, def: { name: 'Sentinels', css: '#3dc8ff' } };
   const IMG = id => `assets/ui/map_${id}.jpg`, THUMB = id => `assets/ui/menu/thumb_${id}.jpg`;
@@ -65,7 +65,7 @@
   const KNOWN = {
     btnArsenal: ['nav', 10, 'Arsenal', 'arsenal'], btnArsenalSkins: ['nav', 20, 'Customize', 'customize'],
     btnProfile: ['nav', 30, 'Profile', 'profile'], btnFriends: ['wallet', 0, 'Friends', 'friends'],
-    btnNews: ['util', 10, "What's new", 'news'], s9mControls: ['util', 20, 'Controls', 'controls'],
+    btnNews: ['nav', 40, "What's new", 'news'], s9mControls: ['util', 20, 'Controls', 'controls'],
     btnSettings: ['util', 30, 'Settings', 'settings'], btnBugMenu: ['util', 40, 'Report a bug', 'bug'],
     btnShop: ['wallet', 10, 'Shop', 'shop']
   };
@@ -206,6 +206,9 @@
 .s9m-map .s9m-ok{position:absolute;top:6px;right:6px;width:24px;height:24px;display:none;place-items:center;background:var(--o);color:#14100b}
 .s9m-map[aria-pressed=true] .s9m-ok,.s9m-map[aria-checked=true] .s9m-ok{display:grid}
 .s9m-map .s9m-ok .s9m-i{width:15px;height:15px}
+.s9m-loop{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .5s ease;pointer-events:none;background:transparent}
+.s9m-loop.on{opacity:1}.s9m-map:hover .s9m-th:has(.s9m-loop.on) img{transform:none}
+.s9m-prev .s9m-loop{z-index:0}.s9m-prev .s9m-cap{z-index:1}
 /* option cards (mode / visibility) + chips */
 .s9m-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .s9m-card{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-content:start;padding:12px;background:rgba(236,230,216,.04);border:1px solid var(--ln);color:var(--ink);text-align:left;cursor:pointer;transition:border-color .15s,background .15s;min-width:0}
@@ -227,6 +230,8 @@
 #s9m input::placeholder{color:#767b83}
 #s9m select{height:40px;background:rgba(8,9,12,.85);color:var(--ink);border:1px solid var(--ln2);font-family:var(--mo);font-size:13px;padding:0 8px;min-width:0;max-width:100%}
 .s9m-hide{display:none!important}
+.s9m-spec[hidden],.s9m-spec [hidden]{display:none!important}.s9m-chipw{min-width:84px;width:auto;padding:0 14px}[data-s9specmax]{display:grid!important;grid-template-columns:repeat(8,minmax(0,1fr));gap:5px;max-width:420px}[data-s9specmax] .s9m-chip{min-width:0;padding:0}[data-s9specmax][hidden]{display:none!important}
+.s9m-playas{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;border:1px solid var(--ln2);background:rgba(8,9,12,.55);font-family:var(--mo);font-size:13px;color:var(--dim);letter-spacing:.04em;min-width:0}.s9m-playas b{color:var(--ink);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .s9m-msg{min-height:20px;font-size:13px;color:var(--c);letter-spacing:.02em}
 .s9m-msg .err,.s9m-msg #onlineMsg.err{color:#ff7a6e}
 .s9m-msgrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:12px}
@@ -335,9 +340,18 @@
 /* keyboard grid focus */
 .s9m-grid .s9m-map:focus-visible{outline:2px solid var(--c);outline-offset:2px}
 /* responsive */
-@media (max-width:1500px){.s9m-nav>button{padding:0 11px;letter-spacing:.1em}}
+@media (min-width:761px) and (max-width:1500px){.s9m-brand b{font-size:22px}#s9m .s9m-nav{gap:2px;container:s9nav/inline-size}#s9m .s9m-nav>button:is(.ghost,:not(.ghost)){padding:0 9px;letter-spacing:.08em}}
+/* the top bar copes with any number of nav items: as the nav gets narrower the labels fold into icons (tooltip stays), lowest priority first; "What's new" keeps its label (and NEW badge) longest */
+@container s9nav (max-width:700px){#s9m .s9m-nav:has(>button:nth-child(5))>button:is(.ghost,:not(.ghost)):not(#btnNews){font-size:0;gap:0;padding:0 12px}#s9m .s9m-nav:has(>button:nth-child(5))>button:is(.ghost,:not(.ghost)):not(#btnNews) b,#s9m .s9m-nav:has(>button:nth-child(5))>button:is(.ghost,:not(.ghost)):not(#btnNews) .s9n-dot{margin-left:6px}}
+@container s9nav (max-width:520px){#s9m .s9m-nav>button:is(.ghost,:not(.ghost)):not(#btnNews){font-size:0;gap:0;padding:0 12px}#s9m .s9m-nav>button:is(.ghost,:not(.ghost)):not(#btnNews) b,#s9m .s9m-nav>button:is(.ghost,:not(.ghost)):not(#btnNews) .s9n-dot{margin-left:6px}}
+@container s9nav (max-width:390px){#s9m .s9m-nav:has(>button:nth-child(6))>button:is(.ghost,:not(.ghost)){font-size:0;gap:0;padding:0 12px}#s9m .s9m-nav:has(>button:nth-child(6))>button:is(.ghost,:not(.ghost)) b,#s9m .s9m-nav:has(>button:nth-child(6))>button:is(.ghost,:not(.ghost)) .s9n-dot{margin-left:6px}}
+@container s9nav (max-width:300px){#s9m .s9m-nav>button:is(.ghost,:not(.ghost)){font-size:0;gap:0;padding:0 12px}#s9m .s9m-nav>button:is(.ghost,:not(.ghost)) b,#s9m .s9m-nav>button:is(.ghost,:not(.ghost)) .s9n-dot{margin-left:6px}}
+#s9m .s9m-nav>button b{font-size:10px}
+/* the NEW tag of "What's new" sits inside the button in the nav (it was a corner badge when the button lived in the icon row, which poked out of the box) */
+@media (min-width:761px){#s9m .s9m-nav>#btnNews .s9n-dot{position:static;box-shadow:none;vertical-align:middle;white-space:nowrap}}
+@media (max-width:760px){#s9m .s9m-nav>#btnNews .s9n-dot{top:3px;right:3px;box-shadow:none}}
 @media (max-width:1240px){.s9m-brand b{display:none}.s9m-two{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}.s9m-create{grid-template-columns:1fr}.s9m-cards{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media (max-width:1040px){.s9m-nav>button{font-size:0;gap:0;padding:0 12px}.s9m-nav>button b{font-size:10px;margin-left:6px}.s9m-browse{grid-template-columns:1fr}.s9m-side{grid-template-columns:1fr 1fr}}
+@media (max-width:1040px){.s9m-browse{grid-template-columns:1fr}.s9m-side{grid-template-columns:1fr 1fr}}
 @media (max-width:760px){
   .s9m-top{flex-wrap:wrap;padding:10px 16px;gap:8px}
   .s9m-brand{order:0}.s9m-right{order:1;margin-left:auto}.s9m-util{order:2}
@@ -603,7 +617,7 @@
     // controls button (mine) in the tools
     addNavButton({ id: 's9mControls', label: 'Controls', icon: 'controls', slot: 'util', onClick: () => show('controls') });
 
-    buildBotGrid(); buildCreate(); wireBrowse();
+    buildBotGrid(); buildCreate(); wireBrowse(); wireLoops();
     root.addEventListener('click', onClick);
     root.addEventListener('keydown', gridKeys);
     root.addEventListener('dragstart', e => { const c = e.target.closest && e.target.closest('.oplayer.drag'); if (!c) return; e.dataTransfer.setData('text/s9pid', c.dataset.pid); e.dataTransfer.effectAllowed = 'move'; c.classList.add('dragging'); });
@@ -639,7 +653,7 @@
     const edit = $('oEdit'); oRoom.appendChild(edit); edit.classList.add('s9m-panel');
     // visibility for the host (sent as meta.vis; the server decides what to do with it)
     const ve = el('div', { class: 's9m-vis-edit' }, `<span class="s9m-lab" style="margin-top:12px">Who can join</span><div class="s9m-cards" role="radiogroup" aria-label="Who can join" id="s9mVisEdit"></div>`);
-    edit.appendChild(ve);
+    edit.appendChild(ve); ve.appendChild(el('div', { class: 's9m-spec', id: 's9mSpec_e' }, specHTML()));
     $('btnSaveRoom').classList.add('s9m-btn');
   }
 
@@ -661,10 +675,55 @@
     const cur = mapPrefNow();
     const pv = $('s9mBotPrev'); if (pv && pv.dataset.id !== cur) { pv.dataset.id = cur; pv.innerHTML = prevHTML(cur); }
     for (const b of document.querySelectorAll('#s9mBotGrid [data-bmap]')) b.setAttribute('aria-checked', b.dataset.bmap === cur ? 'true' : 'false');
+    syncLoops();
     const home = $('s9mBotsPh'), id = cur === 'random' ? 'yard' : cur;
     if (home && home.dataset.id !== id) { home.dataset.id = id; home.innerHTML = `<img src="${IMG(id)}" alt="" decoding="async">`; }
     const t = $('s9mBotsMap'); if (t) t.textContent = 'Map: ' + (cur === 'random' ? 'Random' : mapNm(cur));
     const q = $('s9mQpT'); if (q) q.textContent = 'Straight into a bot match · ' + (cur === 'random' ? 'random map' : mapNm(cur));
+  }
+  /* ---- animated map previews: a short seamless camera loop (assets/ui/menu/loops/<map>.webm + .mp4) fades in over the static thumbnail.
+     One loop per grid (the hovered card, else the selected one) + one in the big preview panel. Static only for prefers-reduced-motion,
+     data saver / 2G, a hidden tab or screen, a missing file or a decode error (the thumbnail stays). Videos are created on demand (lazy). */
+  const LOOPDIR = 'assets/ui/menu/loops/', LP = { bad: new Set(), hover: {} };
+  const loopsOff = () => { try { if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true; const c = navigator.connection; if (c && (c.saveData || /^(slow-2g|2g)$/.test(c.effectiveType || ''))) return true; } catch (e) {} return document.hidden; };
+  function loopKill(v) { try { v.pause(); } catch (e) {} v.textContent = ''; try { v.load(); } catch (e) {} v.remove(); }
+  function loopSet(host, id) {
+    if (!host) return;
+    let v = host.querySelector(':scope>video.s9m-loop');
+    if (!id || id === 'random' || LP.bad.has(id) || loopsOff()) { if (v) loopKill(v); return; }
+    if (v && v.dataset.id === id) { if (v.paused && v.isConnected) { const p = v.play(); if (p && p.catch) p.catch(() => {}); } return; }
+    if (v) loopKill(v);
+    v = document.createElement('video'); v.className = 's9m-loop'; v.dataset.id = id;
+    v.muted = v.defaultMuted = true; v.loop = true; v.autoplay = true; v.playsInline = true; v.preload = 'auto'; v.disablePictureInPicture = true; v.controls = false; v.tabIndex = -1;
+    for (const a of ['muted', 'playsinline', 'webkit-playsinline', 'loop', 'autoplay']) v.setAttribute(a, '');
+    v.setAttribute('aria-hidden', 'true'); v.poster = THUMB(id);
+    const wsrc = `<source src="${LOOPDIR}${id}.webm" type='video/webm; codecs="vp9"'>`, msrc = `<source src="${LOOPDIR}${id}.mp4" type="video/mp4">`;
+    v.innerHTML = LP.noWebm ? msrc : wsrc + msrc;   // VP9 first; if a device's VP9 decoder fails mid-stream we switch everything to the H.264 file
+    v.addEventListener('playing', () => v.classList.add('on'));
+    v.addEventListener('error', e => { if (e.target !== v && e.target.nextElementSibling) return;   // a failing <source> that has a next one: the browser moves on by itself
+      if (!LP.noWebm && /\.webm/.test(v.currentSrc || '')) LP.noWebm = true; else LP.bad.add(id); loopKill(v); syncLoops(); }, true);   // capture: a <source> error does not bubble
+    host.insertBefore(v, host.querySelector('.s9m-cap'));
+    const p = v.play(); if (p && p.catch) p.catch(() => {});
+  }
+  const shown = e => !!e && (e.checkVisibility ? e.checkVisibility({ visibilityProperty: true, opacityProperty: true }) : e.offsetParent !== null);
+  function syncLoops() {
+    if (!ST.built) return;
+    for (const [pid, getId] of [['s9mBotPrev', () => mapPrefNow()], ['s9mCrPrev', () => ($('rMap') || {}).value]]) { const pv = $(pid); if (pv) loopSet(pv, shown(pv) ? getId() : null); }
+    for (const [gid, attr] of [['s9mBotGrid', 'data-bmap'], ['s9mCrGrid', 'data-cmap']]) {
+      const g = $(gid); if (!g) continue; const vis = shown(g), sel = g.querySelector(`[${attr}][aria-checked=true]`);
+      const want = vis ? (LP.hover[gid] || (sel && sel.getAttribute(attr))) : null;
+      for (const c of g.querySelectorAll(`[${attr}]`)) loopSet(c.querySelector('.s9m-th'), c.getAttribute(attr) === want ? want : null);
+    }
+  }
+  function wireLoops() {
+    for (const gid of ['s9mBotGrid', 's9mCrGrid']) {
+      const g = $(gid); if (!g) continue;
+      g.addEventListener('pointerover', e => { if (e.pointerType !== 'mouse') return; const c = e.target.closest('.s9m-map'); const id = c && (c.dataset.bmap || c.dataset.cmap); if (id && LP.hover[gid] !== id) { LP.hover[gid] = id; syncLoops(); } });
+      g.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && LP.hover[gid]) { LP.hover[gid] = null; syncLoops(); } });
+    }
+    try { window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', syncLoops); } catch (e) {}
+    document.addEventListener('visibilitychange', syncLoops);
+    setInterval(syncLoops, 500);
   }
   function pickBotMap(id) {
     const sel = $('mapSel'); if (!sel) return;
@@ -678,6 +737,26 @@
   /* ------------------------------------------------------------------ create: mode / size / kills / visibility / map */
   function radioSet(box, attr, val) { for (const b of box.querySelectorAll(`[${attr}]`)) b.setAttribute('aria-checked', b.getAttribute(attr) === String(val) ? 'true' : 'false'); }
   function setSelect(id, v, ev = 'change') { const s = $(id); if (!s) return; s.value = String(v); s.dispatchEvent(new Event(ev, { bubbles: true })); if (ev !== 'change') s.dispatchEvent(new Event('change', { bubbles: true })); }
+  // spectators: the options spectate.js adds as plain selects (rSpec/rSpecMax create, eSpec/eSpecMax settings) shown as chips here; the selects stay (hidden) and carry the value
+  function specHTML() {
+    return `<span class="s9m-lab" style="margin-top:12px">Spectators</span><div class="s9m-chips" role="radiogroup" aria-label="Spectators" data-s9spec><button type="button" class="s9m-chip s9m-chipw" role="radio" data-sp="1" aria-checked="false">Allowed</button><button type="button" class="s9m-chip s9m-chipw" role="radio" data-sp="0" aria-checked="false">Off</button></div>`
+      + `<span class="s9m-lab" style="margin-top:12px" data-s9specmaxlab>Max watching</span><div class="s9m-chips" role="radiogroup" aria-label="Max watching" data-s9specmax>${[1, 2, 3, 4, 5, 6, 7, 8].map(n => `<button type="button" class="s9m-chip" role="radio" data-sm="${n}" aria-checked="false" aria-label="${n} watching">${n}</button>`).join('')}</div>`;
+  }
+  function syncSpec() {
+    for (const p of ['r', 'e']) {
+      const a = $(p + 'Spec'), m = $(p + 'SpecMax'), blk = $('s9mSpec_' + p); if (!blk) continue;
+      blk.hidden = !a || !m; if (!a || !m) continue;
+      for (const sel of [a, m]) { const l = sel.closest('label'); if (l && !l.classList.contains('s9m-hide')) l.classList.add('s9m-hide'); }
+      const on = a.value === '1';
+      radioSet(blk.querySelector('[data-s9spec]'), 'data-sp', a.value); radioSet(blk.querySelector('[data-s9specmax]'), 'data-sm', m.value);
+      blk.querySelector('[data-s9specmax]').hidden = !on; blk.querySelector('[data-s9specmaxlab]').hidden = !on;
+    }
+  }
+  function setSpec(p, key, v) {
+    const sel = $(p + (key === 'on' ? 'Spec' : 'SpecMax')); if (!sel) return; sel.value = String(v); sel.dispatchEvent(new Event('change', { bubbles: true }));
+    if (p === 'r' && window.SPECTATE && SPECTATE.opt) { if (key === 'on') SPECTATE.opt.on = String(v) === '1'; else SPECTATE.opt.max = +v || 4; }
+    syncSpec();
+  }
   function buildCreate() {
     const nameLab = $('rName').closest('label'); const slot = $('s9mNameSlot');
     slot.innerHTML = '<label class="s9m-lab" for="rName">Room name</label>'; slot.appendChild($('rName'));
@@ -691,6 +770,7 @@
     vis($('s9mVis'), 'data-vis'); vis($('s9mVisEdit'), 'data-evis');
     $('s9mBal').innerHTML = Object.entries(BAL).map(([k, v]) => `<button type="button" class="s9m-card" role="radio" data-bal="${k}" aria-checked="false">${svg(k === 'auto' ? 'shuffle' : 'teams')}<b>${v.name}</b><span>${v.line}</span></button>`).join('');
     $('s9mCrGrid').innerHTML = mapsList().map(m => mapCardHTML(m.id, m.name, false, 'data-cmap')).join('');
+    $('s9mSize').closest('.s9m-pair').insertAdjacentElement('afterend', el('div', { class: 's9m-field s9m-spec', id: 's9mSpec_r' }, specHTML()));
     $('rMap').addEventListener('change', syncCreate);
     syncCreate();
   }
@@ -705,8 +785,10 @@
     radioSet($('s9mSize'), 'data-size', size); radioSet($('s9mKills'), 'data-kills', kills); radioSet($('s9mVis'), 'data-vis', ST.vis);
     $('s9mBalF').hidden = mode === 'ffa'; radioSet($('s9mBal'), 'data-bal', ST.balance);
     $('s9mKills').hidden = mode === 'demo'; $('s9mRounds').hidden = mode !== 'demo'; $('s9mKillsF').querySelector('.s9m-lab').textContent = mode === 'demo' ? 'Rounds' : 'Kills to win';
+    syncSpec();
     for (const b of $('s9mCrGrid').querySelectorAll('[data-cmap]')) b.setAttribute('aria-checked', b.dataset.cmap === map ? 'true' : 'false');
     const pv = $('s9mCrPrev'); if (pv.dataset.id !== map) { pv.dataset.id = map; pv.innerHTML = prevHTML(map); }
+    syncLoops();
     $('s9mSum').innerHTML = `<b>${esc((MODES[mode] || MODES.ffa).name)}</b> · ${esc(mapNm(map))} · ${size} players · ${mode === 'demo' ? 'first to 7 rounds' : `first to ${kills} kills`} · <b>${esc(VIS[ST.vis].name)}</b>${mode !== 'ffa' ? ' · teams: ' + esc(BAL[ST.balance].name.toLowerCase()) : ''}`;
   }
   function setMode(k) {
@@ -735,8 +817,25 @@
     if (typeof openRoom === 'function') openRoom(false, c);
   }
   function msg(t, err) { if (typeof onlineMsg === 'function') onlineMsg(t, err); }
+  // After leaving a room the list must show the truth, not the snapshot from before you joined (the "ghost room" report):
+  // drop the old list, say so, and ask the server for a fresh one (it answers at once; pushes carry on after that).
+  function freshList() {
+    let on = false; try { on = typeof srvOn === 'function' && srvOn(); } catch (e) {}
+    if (!on) return;
+    ST.rooms = null; ST.await = Date.now() + 4000;
+    try { LOBBY.srv = null; } catch (e) {}
+    const list = $('roomList'); if (list) list.innerHTML = '';
+    const c = $('oCount'); if (c) c.textContent = '';
+    const e = $('s9mEmpty'); if (e) { e.hidden = false; const b = e.querySelector('b'); if (b) b.textContent = 'Looking for rooms...'; }
+    try { SRV.listing = true; srvSend({ k: 'list' }); } catch (x) {}
+  }
   function renderRooms(rooms) {
     const list = $('roomList'); if (!list || $('oBrowse').hidden) return;
+    if (ST.await) {   // waiting for the first fresh list after leaving a room
+      let fresh = false; try { fresh = !!LOBBY.srv; } catch (e) {}
+      if (fresh || Date.now() > ST.await) ST.await = 0;
+      else { list.innerHTML = ''; const e = $('s9mEmpty'); if (e) { e.hidden = false; const b = e.querySelector('b'); if (b) b.textContent = 'Looking for rooms...'; } return; }
+    }
     const NET = S9() && S9().NET;
     let rs = (rooms || []).filter(r => r && (!NET || !NET.room || r.code !== NET.room.code)).sort((a, b) => (a.started - b.started) || (b.count - a.count));
     const total = rs.length;
@@ -792,7 +891,7 @@
     if (host && !m.started && bs.disabled) { const left = Math.max(1, (MODES[mode] || MODES.ffa).min - (m.count | 0)); bs.textContent = `Need ${left} more player${left > 1 ? 's' : ''} to start`; }
     // invite
     const fr = $('s9mInviteFriends'); const F = window.S9Friends; fr.hidden = !(F && typeof F.inviteToRoom === 'function');
-    $('s9mVisLine').textContent = vis === 'private' ? 'Private room: only people with the link or code can join.' : vis === 'friends' ? 'Friends only: your friends can see it. Anyone else needs the link.' : 'Send the link, or tell friends the room code.';
+    $('s9mVisLine').textContent = vis === 'private' ? 'Private room: not listed. Anyone with the link or code can join.' : vis === 'friends' ? 'Friends only: listed for your friends. Anyone you give the link or code to can join.' : 'Send the link, or tell friends the room code.';
     radioSet($('s9mVisEdit'), 'data-evis', vis || 'public');
   }
 
@@ -817,8 +916,19 @@
     const want = after ? after.nextSibling : host.firstChild;
     if (b.parentNode !== host || (b.previousElementSibling !== (after || null) && !(slot === 'wallet'))) host.insertBefore(b, want === b ? b.nextSibling : want);
   }
+  // Moving a focused element in the DOM silently drops focus to <body> (keyboard players lose their place, and the button a
+  // panel gives focus back to - Settings, News, Profile - loses it again when this menu is built late on a slow PC and adopts
+  // that button into the top bar). Remember what had focus, run the moves, and put focus back if the move took it away.
+  function keepFocus(fn) {
+    const a = document.activeElement, had = a && a !== document.body && a !== document.documentElement ? a : null;
+    try { return fn(); } finally {
+      const now = document.activeElement;
+      if (had && now !== had && (!now || now === document.body) && had.isConnected && !had.closest('[hidden],[inert]') && had.getClientRects().length) try { had.focus({ preventScroll: true }); } catch (e) {}
+    }
+  }
   let adopting = false;
-  function adopt() {
+  function adopt() { keepFocus(adoptNow); }
+  function adoptNow() {
     if (!ST.built || adopting) return; adopting = true;
     try {
       const menu = $('menu'), sheet = menu.querySelector('.sheet');
@@ -865,6 +975,21 @@
 
   /* ------------------------------------------------------------------ navigation between screens */
   const PARENT = { home: null, bots: 'home', browse: 'home', create: 'browse', lobby: 'browse', controls: 'home' };
+  // the name field: guests type one; a signed-in player's online nick IS the account nick, so the field is hidden and a "Playing as" line shows
+  function accNick() { const A = window.S9Account; try { return (A && A.token && A.token() && A.nick && A.nick()) || null; } catch (e) { return null; } }
+  function placeNick(name) {
+    const nick = $('nick'); if (!nick) return; const an = accNick();
+    let stash = $('s9mNickStash'); if (!stash) { stash = el('div', { id: 's9mNickStash', hidden: '' }); root.appendChild(stash); }
+    for (const id of ['s9mNickSlotB', 's9mNickSlotC']) {
+      const slot = $(id); if (!slot) continue; const mine = id === (name === 'create' ? 's9mNickSlotC' : 's9mNickSlotB');
+      if (an) {
+        if (nick.value !== an) { nick.value = an; nick.dispatchEvent(new Event('input', { bubbles: true })); }
+        if (nick.parentNode !== stash) stash.appendChild(nick);
+        slot.innerHTML = `<div class="s9m-playas" data-s9-playas>Playing as <b>${esc(an)}</b></div>`;
+      } else if (mine) { if (nick.parentNode !== slot) { slot.innerHTML = '<label class="s9m-lab" for="nick">Your name</label>'; slot.appendChild(nick); } }
+      else if (!slot.contains(nick)) slot.innerHTML = '';
+    }
+  }
   function show(name, opt) {
     if (!ST.built) return; if (!scr[name]) name = 'home';
     opt = opt || {};
@@ -873,8 +998,7 @@
     if (name === 'lobby' && $('oRoom').hidden && !netRoom()) name = 'browse';
     if (name === 'home' && !netRoom()) $('onlinePanel').hidden = true;
     if (name === 'browse' || name === 'create') {   // the name field and the status line travel with you
-      const nickSlot = $(name === 'browse' ? 's9mNickSlotB' : 's9mNickSlotC'); const nick = $('nick');
-      if (nick && nick.parentNode !== nickSlot) { nickSlot.innerHTML = '<label class="s9m-lab" for="nick">Your name</label>'; nickSlot.appendChild(nick); }
+      placeNick(name);
     }
     const msgSlot = { browse: 's9mMsgSlotB', create: 's9mMsgSlotC', lobby: 's9mMsgSlotL' }[name];
     if (msgSlot) { const row = $('onlineMsg') && $('onlineMsg').parentNode; const slot = $(msgSlot); if (row && slot && $('onlineMsg').parentNode !== slot) { slot.appendChild($('btnJoinInvite')); slot.appendChild($('onlineMsg')); } }
@@ -888,7 +1012,8 @@
     if (prev !== name && !opt.noFocus) {
       const s = scr[name]; s.scrollTop = 0;
       if (opt.kbd) { const f = s.querySelector('[data-back]') || s.querySelector('button'); if (f) try { f.focus({ preventScroll: true }); } catch (e) {} }
-      else if (document.activeElement && root.contains(document.activeElement) && !s.contains(document.activeElement)) try { document.activeElement.blur(); } catch (e) {}
+      // only drop focus that sat on the screen we just left (it is hidden now); the top bar stays, so focus there stays too
+      else if (document.activeElement && !s.contains(document.activeElement) && Object.keys(scr).some(k => k !== name && scr[k].contains(document.activeElement))) try { document.activeElement.blur(); } catch (e) {}
     }
     window.dispatchEvent(new CustomEvent('s9menu:screen', { detail: { screen: name, from: prev } }));
   }
@@ -911,6 +1036,8 @@
     if (t.dataset.s9mode) { sfxClick(); setMode(t.dataset.s9mode); return; }
     if (t.dataset.size) { sfxClick(); setSelect('rSize', t.dataset.size); syncCreate(); return; }
     if (t.dataset.kills) { sfxClick(); setSelect('rKills', t.dataset.kills); syncCreate(); return; }
+    if (t.dataset.sp !== undefined) { sfxClick(); setSpec(t.closest('#s9mSpec_e') ? 'e' : 'r', 'on', t.dataset.sp); return; }
+    if (t.dataset.sm !== undefined) { sfxClick(); setSpec(t.closest('#s9mSpec_e') ? 'e' : 'r', 'max', t.dataset.sm); return; }
     if (t.dataset.vis) { sfxClick(); setVis(t.dataset.vis); return; }
     if (t.dataset.evis) { sfxClick(); setVis(t.dataset.evis, true); return; }
     if (t.dataset.f) { sfxClick(); ST.filter = t.dataset.f; radioSet($('s9mFilter'), 'data-f', ST.filter); renderRooms(ST.rooms); return; }
@@ -968,6 +1095,11 @@
       const w = function (code, create) { if (create && typeof create === 'object') { if (!create.vis) create.vis = ST.vis; if (!create.balance) create.balance = ST.balance; if (create.teamLock == null) create.teamLock = false; } return f.apply(this, arguments); };
       w.__s9m = true; window[n] = w;
     }
+    // 1b) signed in: the online nick is the account nick, whatever the (hidden) field holds
+    if (typeof window.needNick === 'function' && !window.needNick.__s9m) {
+      const f = window.needNick; const w = function () { const an = accNick(), n = $('nick'); if (an && n && n.value !== an) n.value = an; return f.apply(this, arguments); }; w.__s9m = true; window.needNick = w;
+    }
+    try { const A = window.S9Account; if (A && A.onChange) A.onChange(() => { if (ST.built && (ST.screen === 'browse' || ST.screen === 'create')) placeNick(ST.screen); }); } catch (e) {}
     // 2) room list: our cards with map thumbnails (same data-room Join buttons the game listens for)
     if (typeof renderRoomList === 'function' && !renderRoomList.__s9m) {
       const _rl = renderRoomList;
@@ -980,6 +1112,12 @@
       const _rr = renderRoom;
       const w = function (m) { const r = _rr.apply(this, arguments); try { renderLobby(m); } catch (e) {} return r; };
       w.__s9m = true; window.renderRoom = w;
+    }
+    // 3b) leaving a room (Leave, quit from a match, host closed it): never show the old list again
+    if (typeof leaveOnline === 'function' && !leaveOnline.__s9m) {
+      const _lo = leaveOnline;
+      const w = function () { const r = _lo.apply(this, arguments); try { freshList(); } catch (e) {} return r; };
+      w.__s9m = true; window.leaveOnline = w;
     }
     // 4) remember which visibility I created the room with (for the lobby tag, until the server echoes meta.vis)
     if (typeof openRoom === 'function' && !openRoom.__s9m) {
@@ -1042,13 +1180,16 @@
     if (!frHooked && F && F.onChange) { frHooked = true; F.onChange(syncFriends); if (A && A.onChange) A.onChange(syncFriends); }
   }
   setInterval(hookFriends, 1500);
+  setInterval(() => { if (ST.built && (ST.screen === 'create' || ST.screen === 'lobby')) syncSpec(); }, 300);
 
   function init() {
     const s = S9();
     if (!s || !document.body || !$('menu') || !$('btnPlay') || !$('oRoom') || !$('roomList')) { setTimeout(init, 100); return; }
     if (ST.built) return;
-    build(); hookGame(); adopt(); watch(); hookFriends();
-    if (pending) { for (const [b, o] of pending) { dock.appendChild(b); addNavButton(o); } pending = null; }
+    keepFocus(() => {   // building re-parents the old menu's buttons (maybe the focused one): keep the player's focus
+      build(); hookGame(); adopt(); watch(); hookFriends();
+      if (pending) { for (const [b, o] of pending) { dock.appendChild(b); addNavButton(o); } pending = null; }
+    });
     // late modules (modes.js adds #rMode after us): keep the create form in sync
     const modeWait = setInterval(() => { if ($('rMode')) { clearInterval(modeWait); $('rMode').addEventListener('change', syncCreate); syncCreate(); } }, 300);
     setTimeout(() => clearInterval(modeWait), 60000);

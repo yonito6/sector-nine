@@ -17,8 +17,8 @@
 
   /* ================= numbers (data/w_flytrap.json overrides these) ================= */
   const C = {
-    weapon: { name: 'Flytrap', cls: 'Bio-weapon', desc: 'Alive and hungry. Left click: the head shoots out up to 14 m and rips a chunk out of whoever it bites. Right click: spits poison that keeps eating them.', stats: [90, 26, 32, 80], move: 1.03, glow: [1.35, 3.0, .45] },
-    bite: { range: 14, speed: 110, retractSpeed: 34, cooldown: 1.1, body: 72, headMult: 1.36, jawRadius: .2, latchTime: .15, missSnapTime: .1, noiseRadius: 30 },
+    weapon: { name: 'Flytrap', cls: 'Bio-weapon', desc: 'Alive and hungry. Left click: the head shoots out up to 14 m and devours whoever it bites in one chomp. Right click: spits poison that keeps eating them.', stats: [100, 22, 36, 80], move: 1.03, glow: [1.35, 3.0, .45] },
+    bite: { range: 14, speed: 110, retractSpeed: 34, cooldown: 1.3, body: 500, headMult: 1, jawRadius: .2, latchTime: .26, missSnapTime: .1, noiseRadius: 30 },
     spit: { pool: 100, cost: 25, regenPerSec: 14, regenDelay: .7, cooldown: .42, speed: 30, upBoost: 2.2, gravity: 13, directDamage: 16, splashDamage: 10, splashRadius: 2, puddleTime: 4, maxFlight: 3 },
     poison: { dps: 8, duration: 4, maxStacks: 2, tick: .5 },
     viewmodel: { scale: .64, hip: [.25, -.15, -.47], rot: [.08, .36, -.09], open: .3 },
@@ -306,6 +306,8 @@
     ftWhip: { dur: .45, verb: .25, echo: 0, vol: 1, fn: L => { L.noise(0, 'bp', 380, 2800, .07, 1.6, .16, .9, .004); L.tone(0, 140, 60, .04, .07, .8, 'sin', 2); L.noise(.012, 'lp', 900, 300, .05, 1.2, .1, .5); L.tone(.01, 320, 210, .05, .09, .25, 'saw', 2.2); L.crackle(.02, 600, .08, .25, .12); } },
     // the bite: hard jaw clack + wet crunch + thud
     ftChomp: { dur: .5, verb: .3, echo: .1, vol: 1.15, fn: L => { L.noise(0, 'hp', 5200, 2600, .006, .8, .008, 1); L.tone(0, 1900, 900, .01, .012, .5, 'sq'); L.crackle(.004, 5200, .06, .9, .14); L.noise(.003, 'bp', 900, 260, .05, 1.1, .09, .9); L.tone(.002, 120, 42, .04, .1, 1.1, 'sin', 2.5); L.noise(.05, 'lp', 700, 200, .1, 1, .14, .45); } },
+    // crunch: bones/armour cracking inside the jaws, wet squelch
+    ftCrunch: { dur: .45, verb: .15, echo: 0, vol: 1, fn: L => { L.crackle(0, 3000, .18, .95, .35); L.noise(0, 'bp', 1400, 400, .12, 1.8, .14, .9, .004); L.tone(0, 210, 70, .03, .12, .7, 'saw', 2.2); L.crackle(.07, 2200, .12, .8, .25); L.noise(.1, 'lp', 600, 200, .15, 1.2, .16, .6); } },
     // rip: tearing flesh/armour, falling squelch
     ftRip: { dur: .6, verb: .3, echo: .1, vol: 1, fn: L => { L.noise(0, 'bp', 2400, 500, .2, 2.2, .22, .8, .01); L.crackle(0, 2600, .2, .7, .3); L.noise(.08, 'lp', 800, 160, .2, 1.4, .2, .55); L.tone(.05, 260, 90, .2, .15, .35, 'fm'); } },
     // a miss: jaws snap shut on air
@@ -333,7 +335,7 @@
   function snd(name, pos, vol = 1) {
     try { if (!AU.ctx) return false;
       const now = performance.now(); while (recent.length && now - recent[0] > 1000) recent.shift();
-      if (recent.length >= (LOW[name] ? 5 : 10)) return false; recent.push(now); if (pos && !voice('misc', pos)) return false; if (!pos && VOICE_COST[name] && !voice('misc', null)) return false; return gunVoice(name, pos || null, vol); } catch (e) { warn(e); return false; }
+      if (recent.length >= (LOW[name] ? 6 : 10)) return false; recent.push(now); if (pos && !voice('misc', pos)) return false; if (!pos && VOICE_COST[name] && !voice('misc', null)) return false; return gunVoice(name, pos || null, vol); } catch (e) { warn(e); return false; }
   }
   function warm() { try { if (typeof warmGunVoices === 'function' && AU.ctx) warmGunVoices(); } catch (e) {} warmShaders(); }
   function warmShaders() {   // compile the Flytrap materials up front (first use on Windows can stall)
@@ -455,9 +457,11 @@
         if (this.phase === 'out') this.pos.copy(this.kind === 'tp' ? _d.copy(this.start).lerp(_c, k) : _d.copy(this.anchor(_e)).lerp(_c, k));
         this.jawU = lerp(this.jawU, .95, 1 - Math.exp(-dt * 30)); this.jawL = lerp(this.jawL, -.8, 1 - Math.exp(-dt * 30));
       } else if (this.phase === 'latch') {   // jaws clamp, shake to tear, then yank back
-        if (this.latchE && entAlive(this.latchE) || (this.latchE && !this.kill)) { entChest(this.latchE, _a); this.pos.copy(_a).add(this.latchOff); }
+        if (this.latchE) { entChest(this.latchE, _a); this.pos.copy(_a).add(this.latchOff); }
         const c = this.t / B.latchTime; this.jawU = c < .3 ? lerp(.9, -.05, ez(c / .3)) : -.04 + Math.sin(this.t * 60) * .03; this.jawL = -this.jawU * .9;
-        this.shake = 1 - c;
+        this.shake = 1 - c * .55;
+        if (this.latchE && (this.kind !== 'tp' || true)) { this.gooT = (this.gooT || 0) - dt; if (this.gooT <= 0) { this.gooT = .035; _a.copy(this.dir).negate(); gooBurst(this.pos, _a, this.kill ? 3 : 2, true); } }   // goo keeps spraying from the jaws while it tears
+        if (!this.crunched && this.t > B.latchTime * .45) { this.crunched = true; if (this.latchE) snd('ftCrunch', this.pos.clone(), this.kill ? 1.1 : .8); }
         if (this.kind === 'me' && this.latchE && !this.latchE.isPlayer && !this.latchE.remote && !this.latchE.dead && c > .35) { const p = this.latchE.root.position, k = dt * 2.2; p.x -= this.dir.x * k; p.z -= this.dir.z * k; }
         if (this.t >= B.latchTime) { ripFx(this.pos, this.dir, this.kill, this.latchE); this.retract(); }
       } else if (this.phase === 'snap') {
@@ -489,11 +493,15 @@
       const far = fp ? this.pos.distanceTo(this.swap) : this.pos.distanceTo(this.start), gk = ez(clamp(far / 2.2, 0, 1));
       const sc = fp ? lerp(this.swapScale || 1, FLY_SCALE, gk) : lerp(this.scale, FLY_SCALE * .85, gk);
       const bw = this.phase === 'latch' ? Math.min(1, this.t / .04) : this.phase === 'back' ? Math.max(0, 1 - this.t / .18) : 0;
-      h.g.position.copy(this.pos); h.g.scale.setScalar(sc * (1 + .4 * bw));
+      h.g.position.copy(this.pos); const gs = sc * (1 + .4 * bw);
+      let sqX = 1, sqY = 1, sqZ = 1;   // squash-stretch: the jaws slam (flat + wide), spring back long, then pulse while tearing
+      if (this.phase === 'latch') { const c = this.t / C.bite.latchTime, s0 = c < .18 ? Math.sin(c / .18 * Math.PI / 2) : Math.max(0, 1 - (c - .18) / .3), pul = Math.sin(this.t * 70) * .07 * (1 - c); sqX = 1 + .28 * s0 + pul; sqY = 1 - .3 * s0 - pul; sqZ = 1 + .1 * s0; }
+      else if (this.phase === 'back') { const k0 = clamp(1 - this.t / .2, 0, 1); sqZ = 1 + .35 * k0; sqX = sqY = 1 - .12 * k0; }   // rips back stretched
+      h.g.scale.set(gs * sqX, gs * sqY, gs * sqZ);
       // orientation: mouth along the bite; shaking while it tears
       _b.copy(this.pos).sub(this.dir); h.g.lookAt(_b);   // +z (the back of the head) toward us: the mouth leads
       h.g.rotateY(fp ? lerp(.62, 1.2, bw) : .35); h.g.rotateZ(fp ? -.18 : 0);   // three-quarter on the whole time: you see the jaws, teeth and the torn chunk, not just its back
-      if (this.shake > 0) { h.g.rotateZ(Math.sin(this.age * 55) * .35 * this.shake); h.g.rotateY(Math.sin(this.age * 41) * .2 * this.shake); }
+      if (this.shake > 0) { h.g.rotateZ(Math.sin(this.age * 58) * .5 * this.shake); h.g.rotateY(Math.sin(this.age * 43) * .3 * this.shake); h.g.rotateX(Math.sin(this.age * 37) * .18 * this.shake); }
       h.jawU.rotation.x = this.jawU; h.jawL.rotation.x = this.jawL; h.halo.material.opacity = this.phase === 'out' ? .45 : .25;
       // the vine: from the gun (or the other player's plant) to the back of the head
       const a = fp ? this.tetherFrom(_d) : (this.tp && this.tp.R && inScene(this.tp.g) ? this.tp.R.bulb.getWorldPosition(_d) : entChest(this.r, _d));
@@ -535,8 +543,8 @@
     const shield = e.isPlayer ? P.shield > 0 : e.shield > 0, kill = !shield && (e.hp - dmg) <= 0;
     b.latch(e, hit.p, hit.head, kill);
     FT.stats.biteHits++; if (hit.head) FT.stats.heads++; if (kill) FT.stats.kills++;
-    G.hits++; hitstop = Math.max(hitstop, kill ? .06 : .035); P.trauma = Math.min(1, P.trauma + .1);
-    damageEntity(e, dmg, hit.head, hit.p.clone(), b.dir.clone(), hit.head ? 'head' : 'body', PLAYER_ENT, 'flytrap');
+    G.hits++; hitstop = Math.max(hitstop, kill ? .05 : .035); P.trauma = Math.min(1, P.trauma + (kill ? .38 : .1)); if (kill && !e.isPlayer) e.ftBite = b; springs.kickZ.v += 1.4;
+    damageEntity(e, dmg, false, hit.p.clone(), b.dir.clone(), 'body', PLAYER_ENT, 'flytrap');   // head or body: the same lethal bite, so it is always a "Devoured" rip death (not a headshot death)
     if (!shield) biteConfirm(dmg, hit.head, kill);
     biteResult(b, { p: hit.p, kind: hit.head ? 3 : 2, kill, e });
   }
@@ -556,7 +564,7 @@
     for (let i = 0; i < 4; i++) FX.spawn(p, 0, 0, 0, 5, 6, 3, kill ? 1.1 : .85, .14, 0, 0, 1.2);   // the jaws slam: a bright snap flash
     for (let i = 0; i < 16; i++) { const a = i / 16 * 6.283; FX.spawn(p, Math.cos(a) * 5, Math.sin(a) * 3 + 1, Math.sin(a) * 5, ...C.weapon.glow, .07, .22, 4, 3); }   // ring of saliva sparks
     _a.copy(dir).negate();
-    gooBurst(p, _a, body ? (kill ? 26 : 14) : 6, body);
+    gooBurst(p, _a, body ? (kill ? 38 : 20) : 6, body);
     if (body) lightFlash(p, 0x9cff4a, kill ? 5 : 3, 6);
   }
   function ripFx(p, dir, kill, e) {
@@ -873,7 +881,7 @@
     setStyle(h.pois, 'opacity', pv.toFixed(2));
   }
   function biteConfirm(dmg, crit, kill, small) {
-    const h = hud(); FT.hitT = FT.hitDur = small ? .3 : .42; h.hit.className = kill ? 'kill' : crit ? 'crit' : ''; h.hb.textContent = (kill ? 'DEVOURED ' : crit ? 'HEAD ' : '') + '-' + Math.round(dmg);
+    const h = hud(); FT.hitT = FT.hitDur = small ? .3 : .42; h.hit.className = kill ? 'kill' : crit ? 'crit' : ''; h.hb.textContent = kill ? 'DEVOURED' : (crit ? 'HEAD ' : '') + '-' + Math.round(dmg);
     h.hit.style.transform = `scale(${small ? .6 : kill ? 1.2 : 1})`; }
   function bitten() { const h = hud(); h.bit.classList.remove('on'); void h.bit.offsetWidth; h.bit.classList.add('on'); }
 
@@ -949,14 +957,18 @@
   // deaths: "rip" (yanked toward the trap, a hole torn in the chest, goo) and "melt" (poison dissolves them)
   const _startDeathFx = startDeathFx; startDeathFx = function (r, dir, crit, weapon) {
     const res = _startDeathFx.apply(this, arguments);
-    try { if (r.deathKind === 'rip') { r.deathVel.copy(dir).setY(0).normalize().multiplyScalar(-2.4); r.act.death.timeScale = 1.15; r.ftWound = woundOn(r); } if (r.deathKind === 'melt') { r.deathVel.multiplyScalar(.25); r.act.death.timeScale = .6; } } catch (e) { warn(e); }
+    try { if (r.deathKind === 'rip') { r.ftDir = r.ftDir || V(); r.ftDir.copy(dir).setY(0).normalize(); r.deathVel.set(0, 0, 0); r.ftPulled = false; r.act.death.timeScale = .08; r.ftWound = woundOn(r); r.ftRoot0 = r.root.position.clone(); } if (r.deathKind === 'melt') { r.deathVel.multiplyScalar(.25); r.act.death.timeScale = .6; } } catch (e) { warn(e); }
     return res;
   };
   const _updateDeathFx = updateDeathFx; updateDeathFx = function (r, dt) {
     const k = r.deathKind;
     if (k === 'rip') { try { const t = r.deadT, p = r.root.position;
       if (t < 1.2 && Math.random() < 1 - t / 1.2) { const c = _a.set(p.x, p.y + lerp(1.2, .4, clamp(t / 1, 0, 1)), p.z); SMOKE.spawn(c, rand(-1.5, 1.5), rand(.5, 2.5), rand(-1.5, 1.5), .26, .02, .06, rand(.04, .07), rand(.4, .8), 9, 1, .02, .9); if (Math.random() < .4) FX.spawn(c, rand(-1, 1), rand(.5, 2), rand(-1, 1), ...C.weapon.glow, .03, .35, 6, 1); }
-      if (t < .25 && r.B && r.B.spine1) rotateBoneWorld(r.B.spine1, UPV, Math.sin(t * 40) * .12); } catch (e) { warn(e); } return _updateDeathFx.apply(this, arguments); }
+      // clamped: the jaws shake the body like a rag doll (pose held), then the head rips back and yanks it toward the shooter
+      const LT = C.bite.latchTime;
+      if (t < LT && r.B && r.B.spine1) { const a = Math.sin(t * 62), f = 1 - t / LT * .5; rotateBoneWorld(r.B.spine1, UPV, a * .34 * f); if (r.B.neck) rotateBoneWorld(r.B.neck, UPV, -a * .3 * f); if (r.B.spine2) rotateBoneWorld(r.B.spine2, _b.set(r.ftDir.z, 0, -r.ftDir.x), Math.sin(t * 47) * .22 * f); p.x += Math.sin(t * 71) * .012; p.z += Math.cos(t * 59) * .012; }
+      else if (!r.ftPulled) { r.ftPulled = true; r.act.death.timeScale = 1.4; r.deathVel.copy(r.ftDir).multiplyScalar(-10); r.deathSpin = (r.deathSpin || 1) * 1.5; r.ftBite = null; }
+      } catch (e) { warn(e); } return _updateDeathFx.apply(this, arguments); }
     if (k === 'melt') { try { const t = r.deadT, p = r.root.position, c = clamp(t / 1.3, 0, 1);
       if (!r.bodyCol) r.bodyCol = r.body.color.clone(); r.body.color.copy(r.bodyCol).lerp(_q.set(.12, .3, .03), c); r.body.emissive.setRGB(.15 * c, .5 * c, .05 * c);
       if (Math.random() < .8) FX.spawn(_a.set(p.x + rand(-.35, .35), p.y + rand(.1, 1.4) * (1 - c * .6), p.z + rand(-.35, .35)), rand(-.2, .2), rand(.5, 1.6), rand(-.2, .2), ...C.weapon.glow, rand(.03, .06), rand(.4, .8), -1, 1, .02, .9);

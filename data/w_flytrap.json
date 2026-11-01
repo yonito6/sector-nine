@@ -1,12 +1,12 @@
 {
   "id": "flytrap",
   "version": 1,
-  "notes": "Flytrap: alien Venus-flytrap bio-weapon. Left click = Bite (the head launches on its stem, chomps the first body it reaches, rips a chunk out, retracts). Right click = Spit (arcing poison glob, small splash, poison damage over time, sizzling puddle). No reload, no aim-down-sights, no aim assist. Distances in metres, times in seconds, damage in HP (players have 100). Read by modules/w_flytrap.js at load; the module has the same numbers built in as a fallback.",
+  "notes": "Flytrap: alien Venus-flytrap bio-weapon. Left click = Bite (the head launches on its stem, chomps the first body it reaches and kills in ONE bite like the Vortex boomerang, rips them toward you, retracts; a miss snaps shut and is punished by the retract time and 1.3 s cooldown). Right click = Spit (arcing poison glob, small splash, poison damage over time, sizzling puddle). No reload, no aim-down-sights, no aim assist. Distances in metres, times in seconds, damage in HP (players have 100). Read by modules/w_flytrap.js at load; the module has the same numbers built in as a fallback.",
   "weapon": {
     "name": "Flytrap",
     "cls": "Bio-weapon",
-    "desc": "Alive and hungry. Left click: the head shoots out up to 14 m and rips a chunk out of whoever it bites. Right click: spits poison that keeps eating them.",
-    "stats": [90, 26, 32, 80],
+    "desc": "Alive and hungry. Left click: the head shoots out up to 14 m and devours whoever it bites in one chomp. Right click: spits poison that keeps eating them.",
+    "stats": [100, 22, 36, 80],
     "move": 1.03,
     "glow": [1.35, 3.0, 0.45]
   },
@@ -14,11 +14,11 @@
     "range": 14,
     "speed": 110,
     "retractSpeed": 34,
-    "cooldown": 1.1,
-    "body": 72,
-    "headMult": 1.36,
+    "cooldown": 1.3,
+    "body": 500,
+    "headMult": 1,
     "jawRadius": 0.2,
-    "latchTime": 0.15,
+    "latchTime": 0.26,
     "missSnapTime": 0.1,
     "noiseRadius": 30
   },

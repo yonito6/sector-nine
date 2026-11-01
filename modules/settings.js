@@ -943,7 +943,22 @@ function close() {
   stopListen(); open = false; root.hidden = true; resetArm = ''; loadNote = '';
   if (pvRaf) { cancelAnimationFrame(pvRaf); pvRaf = 0; }
   // never re-lock the pointer: you land back on the menu / pause screen exactly as you left it
-  if (opener && opener.isConnected && typeof opener.focus === 'function' && !opener.closest('[hidden]')) opener.focus({ preventScroll: true });
+  restoreFocus(opener);
+}
+// Give focus back to whatever opened the panel. Other add-ons (the new main menu) re-parent that button and hide the old row it started in, so the
+// element can be momentarily unfocusable (display:none / not yet in its new home): look it up again by id and retry for a moment instead of giving up.
+function restoreFocus(from) {
+  const id = from && from.id;
+  const target = () => (id && document.getElementById(id)) || from;
+  let tries = 0;
+  const go = () => {
+    if (open) return;   // the panel was opened again meanwhile
+    const a = document.activeElement; if (tries && a && a !== document.body && a !== root && !root.contains(a)) return;   // the user already moved on
+    const el = target();
+    if (el && el.isConnected && typeof el.focus === 'function' && !el.closest('[hidden]')) { el.focus({ preventScroll: true }); if (document.activeElement === el) return; }
+    if (++tries < 12) setTimeout(go, 50);
+  };
+  go();
 }
 function injectButtons() {
   const add = (afterId, id) => {

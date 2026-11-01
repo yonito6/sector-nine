@@ -25,7 +25,7 @@ const SKINS = [
   { id: 'nomad', name: 'Desert Nomad', rarity: 'common', level: 4, tag: 'Sun-bleached wraps, goggles and a dune-runner poncho.',
     pal: ['#c8a46e', '#7d4a2b', '#2b221b', '#2f8f83', '#ffb347', '#efe1c4', '#9b6a3e', '#a29a8c'], helmet: true },
   { id: 'arctic', name: 'Arctic Ops', rarity: 'common', level: 7, tag: 'Pixel snow camo, fur hood and ice-cleat boots.',
-    pal: ['#e9eef2', '#7d8b99', '#1d2329', '#ff6a1a', '#7ff3ff', '#ffffff', '#b6c4cf', '#9fb0bd'], helmet: true },
+    pal: ['#e9eef2', '#7d8b99', '#1d2329', '#9a4a22', '#7ff3ff', '#ffffff', '#b6c4cf', '#9fb0bd'], helmet: true },
   { id: 'banana', name: 'Banana Suit', rarity: 'rare', level: 9, tag: 'Fully ripe. Zero stealth. Maximum potassium.',
     pal: ['#ffd43b', '#34343c', '#3a2a12', '#2f6fd6', '#fff36b', '#ffffff', '#efbf96', '#8a8f96'], helmet: false },
   { id: 'jugg', name: 'Heavy Juggernaut', rarity: 'rare', level: 12, tag: 'Slab armour, hazard stripes, a visor slit and attitude.',
@@ -35,17 +35,17 @@ const SKINS = [
   { id: 'pirate', name: 'Space Pirate', rarity: 'rare', level: 18, tag: 'Tricorn, long coat, gold trim and a robot parrot who talks back.',
     pal: ['#5a1b1b', '#2a2320', '#120d0b', '#d9a33a', '#ffcc33', '#efe3c8', '#2e6f8e', '#b0884a'], helmet: true },
   { id: 'dino', name: 'Party Dino', rarity: 'epic', level: 21, tag: 'Inflatable rex costume with a party hat. Rawr means hello.',
-    pal: ['#63c23c', '#ffd84a', '#1e3a1c', '#ff4fa3', '#ffe14d', '#fff2b0', '#2f8f3a', '#9aa3ab'], helmet: false },
+    pal: ['#4a8f2e', '#c9a53a', '#1e3a1c', '#ff4fa3', '#ffe14d', '#fff2b0', '#2f8f3a', '#9aa3ab'], helmet: false },
   { id: 'mecha', name: 'Mecha Pilot', rarity: 'epic', level: 24, tag: 'G-suit, bubble helmet, life-support pack and hoses.',
-    pal: ['#f2f2ee', '#e2462f', '#1b1f26', '#2b6fd6', '#59ffb0', '#ffffff', '#ffb000', '#9aa6b3'], helmet: true },
+    pal: ['#8a8a82', '#7a3a2c', '#1b1f26', '#2b5aa8', '#59ffb0', '#b8b6ae', '#a87a1c', '#6f7882'], helmet: true },
   { id: 'butler', name: 'Robot Butler', rarity: 'epic', level: 27, tag: 'Tailcoat, bow tie, monocle and a moustache moulded in chrome.',
     pal: ['#4b505d', '#f3efe6', '#22242b', '#b3122e', '#7fd7ff', '#ffffff', '#f0c45a', '#c7ccd4'], helmet: false },
   { id: 'mushroom', name: 'Mushroom Man', rarity: 'epic', level: 31, tag: 'A spotted cap, gills, glowing spores and a mossy body.',
-    pal: ['#d8322c', '#efe6d2', '#2d2318', '#6b8f3a', '#b6ff6a', '#fff8ea', '#8a6a48', '#9a9a8a'], helmet: false },
+    pal: ['#7a2620', '#5e5038', '#2d2318', '#3f5a22', '#b6ff6a', '#7a6c52', '#4a3a28', '#5e5e52'], helmet: false },
   { id: 'skeleton', name: 'Skeleton Phantom', rarity: 'legendary', level: 35, tag: 'Bone armour over a void suit. Its eyes burn ghost-green.',
     pal: ['#ece6d4', '#121318', '#07080a', '#5b5f6b', '#3dff9a', '#ffffff', '#2a2d36', '#8a8f99'], helmet: false },
   { id: 'glitch', name: 'Neon Glitch', rarity: 'legendary', level: 40, tag: 'A corrupted render: crystal head, pixel shards, live neon seams.',
-    pal: ['#14121f', '#2de2ff', '#06060a', '#ff3df2', '#ff3df2', '#e9e6ff', '#3b2b6b', '#7c7f99'], helmet: false },
+    pal: ['#14121f', '#0f4a56', '#06060a', '#ff3df2', '#ff3df2', '#9a98b8', '#2b2060', '#5c5f78'], helmet: false },
   { id: 'xeno', name: 'Xeno Alien', rarity: 'legendary', level: 46, tag: 'Teal chitin, an elongated skull and veins that pulse with light.',
     pal: ['#2aa79b', '#4a2a7a', '#0d0b14', '#c8ff3a', '#ffd23d', '#d9fff5', '#1d6b74', '#7d8a9a'], helmet: false },
 ];
@@ -1035,7 +1035,7 @@ function makeBodyMat() {
     uPat: { value: flatTex() }, uPatS: { value: 1 / 34 }, uPatCol: { value: new T.Color() }, uPatAmt: { value: 0 }, uPatDark: { value: 0 }, uPatGlow: { value: 0 }, uBump: { value: 0 },
     uEmb: { value: emblemAtlas() }, uEmbRect: { value: new T.Vector4(0, 0, .25, .25) }, uEmbCol: { value: new T.Color(1, 1, 1) }, uEmbOn: { value: 0 },
     uGlow: { value: new T.Color() }, uTime: { value: 0 } };
-  const m = new T.MeshStandardMaterial({ map: b.map, normalMap: b.normalMap, roughness: 1, metalness: 1, envMapIntensity: .85 });
+  const m = new T.MeshStandardMaterial({ map: b.map, normalMap: b.normalMap, roughness: 1, metalness: 1, envMapIntensity: .5 });
   m.name = 's9skin'; m.userData.s9u = u;
   m.onBeforeCompile = sh => patchBody(sh, u);
   m.customProgramCacheKey = () => 's9skin-v1';
@@ -1159,18 +1159,28 @@ const MATDEF = {
   butler:   { base: [0, 0, 2, 7, 3], crm: [[.5, .05], [.5, .05], [.6, .1], [.2, 1], [.4, .1]], pat: ['pinstripe', .85, 0, 0, .3], patCol: 6 },
   mushroom: { base: [1, 6, 2, 6, 3], crm: [[.8, 0], [.8, 0], [.8, 0], [.6, .2], [.6, 0]], pat: ['moss', .8, .3, .6, 1.6], patCol: 3 },
   skeleton: { base: [1, 1, 1, 2, 1], crm: [[.6, .05], [.6, .05], [.6, .05], [.4, .5], [.6, .05]], pat: ['mist', 0, .25, .16, .6], patCol: 4 },
-  glitch:   { base: [0, 0, 2, 2, 4], crm: [[.25, .4], [.4, .2], [.4, .2], [.2, .9], [.3, .2]], pat: ['grid', .5, 0, .5, .8], patCol: 3 },
-  xeno:     { base: [0, 1, 2, 1, 3], crm: [[.38, 0], [.45, .05], [.45, .05], [.4, .1], [.38, 0]], pat: ['veins', .3, .2, 1.1, 1.6], patCol: 6, patS: 1 / 40, glowK: 1.8 },
+  glitch:   { base: [0, 0, 2, 2, 0], crm: [[.25, .4], [.4, .2], [.4, .2], [.2, .9], [.3, .2]], pat: ['grid', .3, 0, .3, .8], patCol: 3, glowK: .5 },
+  xeno:     { base: [0, 1, 2, 1, 3], crm: [[.38, 0], [.45, .05], [.45, .05], [.4, .1], [.38, 0]], pat: ['veins', .3, .2, .45, 1.6], patCol: 6, patS: 1 / 40, glowK: 1 },
 };
 // first-person glove + sleeve colour slot per skin
 const HANDS = { std: [2, 1], nomad: [6, 0], arctic: [5, 0], banana: [0, 0], jugg: [2, 0], ninja: [2, 0], pirate: [2, 0], dino: [0, 0], mecha: [5, 0], butler: [5, 0], mushroom: [5, 1], skeleton: [5, 1], glitch: [2, 0], xeno: [0, 1] };
+// Dark-tactical grade (cosmetic only): every paint colour is desaturated and darkened so soldiers sit in the dark neon maps.
+// Works in sRGB-space HSL, keeps hue (identity); accent slot 3 stays a little richer, light slot 5 a little lighter.
+const GRIM = { s: .62, l: .5, lo: .035, cap: .46 };
+const _hsl = { h: 0, s: 0, l: 0 };
+function grimTone(c, slot) {
+  c.getHSL(_hsl); const acc = slot === 3, lt = slot === 5;
+  const s = _hsl.s * (acc ? .8 : GRIM.s), l = Math.min(GRIM.cap + (lt ? .06 : 0), _hsl.l * (acc ? .72 : GRIM.l) + GRIM.lo);
+  c.setHSL(_hsl.h, s, l);
+}
 function setupMat(m, look, glowK = 1) {
   const d = SKIN[look.skin], md = MATDEF[look.skin] || MATDEF.std, u = m.userData.s9u;
   d.pal.forEach((h, i) => u.uPal.value[i].set(h));
   u.uPal.value[0].set('#' + look.p); u.uPal.value[1].set('#' + look.s); u.uPal.value[4].set('#' + look.v);
   u.uPal.value[8].set('#' + (look.team || TEAM_DEFAULT));
+  u.uPal.value.forEach((c, i) => { if (i !== 4 && i !== 8) grimTone(c, i); });   // dark-tactical grade: muted + darker paint; glow (4) and team (8) stay vivid
   for (const c of u.uPal.value) c.convertSRGBToLinear();
-  u.uBase.value = md.base.slice(); md.crm.forEach(([r, me], i) => u.uCRM.value[i].set(r, me));
+  u.uBase.value = md.base.slice(); md.crm.forEach(([r, me], i) => u.uCRM.value[i].set(Math.min(.95, r + .12 + (me > .5 ? 0 : .06)), me > .5 ? Math.min(me, .7) : me));
   const [pk, amt, dark, glow, bump] = md.pat; u.uPat.value = patTex(pk, hashStr(look.skin) % 997 + 1); u.uPatAmt.value = amt; u.uPatDark.value = dark; u.uPatGlow.value = glow; u.uBump.value = bump * .35;
   u.uPatCol.value.copy(u.uPal.value[md.patCol]); u.uPatS.value = md.patS || 1 / 34;
   const er = embRect(look.emb); u.uEmbRect.value.set(...er); u.uEmbOn.value = look.emb && look.emb !== 'none' ? 1 : 0;
@@ -1209,7 +1219,7 @@ function syncFn(body) {
     let k = 1; const pv = r && r.visor;
     if (pv && r.color) k = clamp(lum(pv.emissive) / Math.max(.04, lum(r.color)), 0, 5);
     u.uGlow.value.set('#' + st.look.v).convertSRGBToLinear().multiplyScalar(1.9 * k * ((MATDEF[st.look.skin] || {}).glowK || 1));
-    const tc = r && r.color ? r.color : new T.Color('#' + (st.look.team || TEAM_DEFAULT)).convertSRGBToLinear(); u.uTeam.value.copy(tc).multiplyScalar(2.2 * k); u.uPal.value[8].copy(tc);
+    const tc = r && r.color ? r.color : new T.Color('#' + (st.look.team || TEAM_DEFAULT)).convertSRGBToLinear(); u.uTeam.value.copy(tc).multiplyScalar(1.6 * k); u.uPal.value[8].copy(tc);
     const vm = st.vmat; if (vm) { vm.emissive.set('#' + st.look.v).convertSRGBToLinear().multiplyScalar(1.15 * k); if (pv) { if (vm.transparent !== pv.transparent) { vm.transparent = pv.transparent; vm.needsUpdate = true; } vm.opacity = pv.opacity; vm.depthWrite = pv.depthWrite; } }
   };
 }

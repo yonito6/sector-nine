@@ -488,13 +488,17 @@ html.s9f-popen #s9f-toasts{right:calc(min(430px,100vw) + 14px)}
     return row;
   }
   function settings() {
-    const pv = (ST.me && ST.me.privacy) || { appearOffline: false, invites: 'friends' };
+    const pv = (ST.me && ST.me.privacy) || { appearOffline: false, invites: 'friends', stats: 'friends' };
+    const statsNow = pv.stats || 'friends';
+    const statsSeg = el('div', { class: 's9f-seg', style: 'grid-template-columns:repeat(3,1fr);min-width:210px', role: 'group', 'aria-label': 'Who can see my stats' },
+      ...[['everyone', 'Everyone'], ['friends', 'Friends'], ['me', 'Only me']].map(([v, t]) => el('button', { type: 'button', text: t, 'aria-pressed': String(statsNow === v), onclick: e => { e.stopPropagation(); setPrivacy({ stats: v }); } })));
     const sw = el('button', { type: 'button', class: 's9f-sw', role: 'switch', 'aria-checked': String(!!pv.appearOffline), 'aria-label': 'Appear offline', onclick: e => { e.stopPropagation(); setPrivacy({ appearOffline: !pv.appearOffline }); } });
     const invSeg = el('div', { class: 's9f-seg', style: 'grid-template-columns:repeat(2,1fr);min-width:170px', role: 'group', 'aria-label': 'Allow invites from' },
       ...['friends', 'nobody'].map(v => el('button', { type: 'button', text: v === 'friends' ? 'Friends' : 'Nobody', 'aria-pressed': String(pv.invites === v), onclick: e => { e.stopPropagation(); setPrivacy({ invites: v }); } })));
     const s = el('div', { class: 's9f-sec' }, el('div', { class: 's9f-st' }, el('b', { text: 'Privacy' })),
       el('div', { class: 's9f-set' },
         el('div', { class: 's9f-tg' }, el('div', null, 'Appear offline', el('small', { text: 'Friends see you as offline. You can still play and invite.' })), sw),
+        el('div', { class: 's9f-tg' }, el('div', null, 'Who can see my stats', el('small', { text: statsNow === 'everyone' ? 'Anyone in your room can open your player card and see your stats.' : statsNow === 'me' ? 'Nobody else sees your stats. Your level and rank stay visible.' : 'Only your friends see your stats on your player card.' })), statsSeg),
         el('div', { class: 's9f-tg' }, el('div', null, 'Allow invites from', el('small', { text: pv.invites === 'nobody' ? 'Nobody can invite you right now.' : 'Only friends can ever invite you.' })), invSeg)));
     if (ST.blocked.length) {
       const b = btn((blockedOpen ? 'Hide' : 'Show') + ' blocked players (' + ST.blocked.length + ')', 's9f-gh', () => { blockedOpen = !blockedOpen; render(); }, { style: 'justify-self:start;padding-left:0' });

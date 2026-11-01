@@ -11,7 +11,7 @@
 (() => {
 'use strict';
 if (window.S9KC) return;
-const KC = window.S9KC = { ver: 2, clip: null, log: null, errors: 0 };
+const KC = window.S9KC = { ver: 3, clip: null, log: null, errors: 0 };
 
 /* ---------- tuning (the Unity port can read these from killcam.INTEGRATE.md) ---------- */
 const RS = 5.5;          // respawn delay while a killcam runs: index.html frame loop `const RS = REC.on ? 5.5 : 4.7` (we never extend it)
@@ -22,11 +22,14 @@ const POST = .4;         // replay-seconds shown after the killing shot (you go 
 const END_PAD = .12;     // the killcam finishes this long before the respawn
 const FINAL_LEN = 5.2;    // the final killcam (match-winning kill, shown to everyone at match end) runs this long
 const HIST = 7.5;        // seconds of history kept (the killcam uses ~3-4 s of it; the rest covers long slow frames)
-const S_ = 18;           // numbers per recorded sample:
+const HZ = 60;           // fixed recording tick: every actor is sampled on the same 1/60 s grid (frames in between are interpolated)
+const S_ = 19;           // numbers per recorded sample:
 // 0 x,1 y,2 z,3 aimYaw,4 aimPitch,5 crouch,6 ads,7 reload 0-1 (-1 none),8 weapon index,9 on ground,10 alert,11 dead,
-// 12 dead time,13 visible,14 body yaw,15 knife swing 0-1 (-1 none),16 hp,17 sprinting
+// 12 dead time,13 visible,14 body yaw,15 knife swing 0-1 (-1 none),16 hp,17 sprinting,18 eye height above the feet
 const ANGLE = new Set([3, 14]), DISCRETE = [8, 9, 10, 11, 13, 17];
-const R = { tracks: new Map(), shots: [], fires: [], hits: [], throws: [], booms: [], kills: [], proj: [], projHad: false, lastT: -1, n: 0, cur: null, death: null, pid: new WeakMap(), pidN: 0 };
+// kills that are replayed as a third-person orbit around the blast instead of the killer's eyes
+const BLAST = new Set(['nade', 'nova', 'seeker', 'charge']);
+const R = { spawns: [], hitLog: [], tracks: new Map(), shots: [], fires: [], hits: [], throws: [], booms: [], kills: [], proj: [], projHad: false, lastT: -1, n: 0, cur: null, death: null, pid: new WeakMap(), pidN: 0 };
 let WIDS = null; const widx = w => { if (!WIDS) WIDS = Object.keys(WEAPONS); const i = WIDS.indexOf(w); return i < 0 ? 0 : i; }, wname = i => (WIDS || Object.keys(WEAPONS))[i | 0] || 'carbine';
 const hasW = w => typeof w === 'string' && Object.prototype.hasOwnProperty.call(WEAPONS, w);
 const smooth = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
@@ -37,6 +40,22 @@ const warnOnce = (e) => { KC.errors++; if (KC.errors < 4) console.warn('[killcam
 /* ================= recording ================= */
 function trk(ent) { let t = R.tracks.get(ent); if (!t) { t = { ent, t: [], v: [] }; R.tracks.set(ent, t); } return t; }
 function pushS(tr, t, vals) { tr.t.push(t); for (let i = 0; i < S_; i++) tr.v.push(vals[i]); }
+// fixed-tick recorder: the frame's values land on the 1/HZ grid, interpolated from the previous frame (angles the short
+// way round, on/off fields from the nearer frame, teleports/respawns never interpolated)
+const VI = new Float64Array(S_);
+function tick(ent, vals, t) {
+  const tr = trk(ent);
+  if (!tr.prev || t - tr.prevT > .5 || t < tr.prevT) { tr.prev = tr.prev || new Float64Array(S_); tr.prev.set(vals); tr.prevT = t; tr.k = Math.floor(t * HZ) + 1; pushS(tr, t, vals); return; }
+  const a0 = tr.prev, span = t - tr.prevT, jump = (vals[0] - a0[0]) ** 2 + (vals[2] - a0[2]) ** 2 > 9 || vals[11] !== a0[11];
+  for (; tr.k / HZ <= t + 1e-9; tr.k++) {
+    const tk = tr.k / HZ, a = span > 1e-6 ? clamp((tk - tr.prevT) / span, 0, 1) : 1;
+    if (jump) { VI.set(a >= .999 ? vals : a0); }
+    else { for (let f = 0; f < S_; f++) VI[f] = a0[f] + (vals[f] - a0[f]) * a; for (const f of ANGLE) VI[f] = a0[f] + wrapPi(vals[f] - a0[f]) * a;
+      const src = a < .5 ? a0 : vals; for (const f of DISCRETE) VI[f] = src[f]; if (a0[7] < 0 || vals[7] < 0) VI[7] = src[7]; if (a0[15] < 0 || vals[15] < 0) VI[15] = src[15]; }
+    if (!tr.t.length || tk > tr.t[tr.t.length - 1] + 1e-6) pushS(tr, tk, VI);
+  }
+  tr.prev.set(vals); tr.prevT = t;
+}
 function botVals(r) {
   const p = r.root.position, w = r.remote ? (hasW(r.kcW) ? r.kcW : r.netW || 'carbine') : r.weapon;
   V[0] = p.x; V[1] = p.y; V[2] = p.z; V[3] = r.aimYaw || 0; V[4] = r.aimPitch || 0; V[5] = r.crouch || 0;
@@ -45,15 +64,17 @@ function botVals(r) {
   V[8] = widx(w); V[9] = r.onGround === false ? 0 : 1;
   V[10] = r.remote || r.targetVis || G.time - r.lastSeenT < 4 || G.time - r.lastHurt < 4 || r.mode === 'fight' ? 1 : 0;
   V[11] = r.dead ? 1 : 0; V[12] = r.deadT || 0; V[13] = r.root.visible ? 1 : 0; V[14] = r.bodyYaw || 0; V[15] = r.remote && r.kcSw !== undefined ? r.kcSw : -1; V[16] = r.hp || 0; V[17] = 0;
+  V[18] = r.remote && Number.isFinite(r.kcEy) ? r.kcEy : lerp(1.62, 1.12, r.crouch || 0);   // the game's own eye height (entEye)
   return V;
 }
 function meVals() {
   V[0] = P.pos.x; V[1] = P.pos.y; V[2] = P.pos.z; V[3] = wrapPi(P.yaw + Math.PI); V[4] = P.pitch; V[5] = P.crouch || 0; V[6] = P.ads || 0;
   V[7] = P.reload > 0 && P.reloadDur ? clamp(1 - P.reload / P.reloadDur, 0, 1) : -1; V[8] = widx(P.weapon); V[9] = P.onGround ? 1 : 0; V[10] = P.sprint ? 0 : 1;
   V[11] = P.dead ? 1 : 0; V[12] = P.dieT || 0; V[13] = 1; V[14] = V[3]; V[15] = P.swingT > 0 && P.swingDur ? clamp(1 - P.swingT / P.swingDur, 0, 1) : -1; V[16] = P.hp; V[17] = P.sprint ? 1 : 0;
+  V[18] = Number.isFinite(P.smoothY) ? clamp(P.smoothY - P.pos.y, .8, 1.8) : P.camY || 1.65;   // your real eye (step-up smoothing included)
   return V;
 }
-function resetRec() { R.tracks.clear(); for (const k of ['shots', 'fires', 'hits', 'throws', 'booms', 'kills', 'proj']) R[k].length = 0; R.lastT = -1; R.death = null; }
+function resetRec() { R.tracks.clear(); R.spawns.length = 0; for (const k of ['shots', 'fires', 'hits', 'throws', 'booms', 'kills', 'proj']) R[k].length = 0; R.lastT = -1; R.death = null; }
 function trimRec(t) {
   const lim = t - HIST;
   for (const [ent, tr] of R.tracks) {
@@ -66,9 +87,10 @@ function trimRec(t) {
 function recording() { return state === 'play' || (state === 'dead' && R.death && G.time - R.death.t < POST + .25); }
 function record() {
   const t = G.time; if (t < R.lastT - .25) resetRec();
-  if (t - R.lastT < 1 / 125) return; R.lastT = t;
-  pushS(trk(PLAYER_ENT), t, meVals());
-  for (const r of robots) if (!r.kcGhost) pushS(trk(r), t, botVals(r));
+  if (t <= R.lastT) return; R.lastT = t;
+  tick(PLAYER_ENT, meVals(), t);
+  for (const r of robots) if (!r.kcGhost) tick(r, botVals(r), t);
+  if (t - (R.lastPT || -9) < 1 / HZ - 1e-6) return; R.lastPT = t;
   // grenades, rockets and slow projectiles in flight
   const it = [];
   const add = (m, kind) => { if (!m || !m.parent) return; let id = R.pid.get(m); if (!id) { id = ++R.pidN; R.pid.set(m, id); } it.push([id, m, m.position.x, m.position.y, m.position.z, kind]); };
@@ -100,20 +122,31 @@ animateBot = function (r) { if (KC.live && !KC.inReplay && r && !r.kcGhost) retu
 const _updateRobots = updateRobots;
 updateRobots = function (dt, menu) {
   const r = _updateRobots.apply(this, arguments);
-  if (!menu) { try { if (recording()) record(); if (state === 'dead' && KC.clip && !KC.live) buildGhosts(1); } catch (e) { warnOnce(e); } }
+  if (!menu) { try { if (recording()) record(); if (state === 'dead' && KC.clip && !KC.live) buildGhosts(1);
+    // spectator mode switched on while a replay runs: spectate.js holds the death timer at 0, so the replay would never get
+    // another frame and its overlay would stay frozen on top of the spectator view. End it here (this runs every frame).
+    if ((REC.on || KC.clip) && !KC.fin && window.SPECTATE && window.SPECTATE.on) stopKillcam(); } catch (e) { warnOnce(e); } }
   return r;
 };
 const _hurtPlayer = hurtPlayer;
 hurtPlayer = function (dmg, from, attacker, crit, weapon) {
   const hp0 = P.hp, live = state === 'play' && !P.dead;
-  const res = _hurtPlayer.apply(this, arguments);
+  // online: a hit carries an index into NET_W, whose order depends on which add-ons each client loaded: the exact id rides along in `wn`
+  let hq = null; if (R.cur && R.cur.net && R.cur.ent === attacker && R.cur.hq && R.cur.hq.length) { hq = R.cur.hq.shift(); if (hq.wn && hasW(hq.wn) && hq.wn !== weapon) weapon = hq.wn; }
+  if (live && R.cur && R.cur.net && R.cur.ent === attacker) R.cur.hitSeq = hq ? hq.s : (R.cur.E && R.cur.E.last ? R.cur.E.last.hit | 0 : 0);
+  const res = _hurtPlayer.call(this, dmg, from, attacker, crit, weapon);
   if (live && P.hp < hp0) { const h = { t: G.time, ent: attacker || null, dmg: hp0 - P.hp, crit: !!crit, weapon, kill: !!P.dead }; R.hits.push(h); if (R.cur && R.cur.net && R.cur.ent === attacker) R.cur.hit = h; }
   return res;
 };
 const _playerDie = playerDie;
 playerDie = function (killer, weapon, crit) {
-  R.death = { t: G.time, wall: performance.now(), killer: killer || null, weapon: weapon || 'carbine', crit: !!crit, hp: killer && killer.hp, ts: null };
-  return _playerDie.apply(this, arguments);
+  const k = killer || null, kp = k && k !== PLAYER_ENT && k.root ? k.root.position : null;
+  R.death = { t: G.time, wall: performance.now(), killer: k, weapon: weapon || 'carbine', crit: !!crit, hp: k && k.hp, ts: null, dist: kp ? Math.hypot(kp.x - P.pos.x, kp.y - P.pos.y, kp.z - P.pos.z) : 0,
+    skin: k && k !== PLAYER_ENT ? skinOfEnt(k, weapon) : 'factory', seq: R.cur && R.cur.net && R.cur.ent === k ? R.cur.hitSeq | 0 : 0, pos: [P.pos.x, P.pos.y, P.pos.z] };
+  if (k && k.remote && k.netId && !BLAST.has(R.death.weapon)) askHistory(k, R.death);   // (blasts replay as an orbit: their view is not needed)
+  const res = _playerDie.apply(this, arguments);
+  try { deathCard(R.death); } catch (e) { warnOnce(e); }
+  return res;
 };
 const _killEntity = killEntity;
 killEntity = function (v, k, weapon, crit) { if (state === 'play' || state === 'dead') R.kills.push({ t: G.time, wall: performance.now(), v, k, weapon, crit: !!crit, hp: k && k.isPlayer ? P.hp : k && k.hp }); return _killEntity.apply(this, arguments); };
@@ -137,35 +170,126 @@ netSend = function () {
       st.ad = R2(P.ads || 0); st.rp = P.reload > 0 && P.reloadDur ? R2(clamp(1 - P.reload / P.reloadDur, 0, 1)) : -1;
       st.sw = P.swingT > 0 && P.swingDur ? R2(clamp(1 - P.swingT / P.swingDur, 0, 1)) : -1; st.wid = P.weapon; st.sp = P.sprint ? 1 : 0;
       st.yw4 = R4(P.yaw + Math.PI); st.pt4 = R4(P.pitch);
+      st.ey = R2(Number.isFinite(P.smoothY) ? clamp(P.smoothY - P.pos.y, .8, 1.8) : P.camY || 1.65);   // your real eye height
+      st.kwn = P.dead && R.death && hasW(R.death.weapon) ? R.death.weapon : '';                         // exact weapon that killed you
     }
     return p0.apply(this, arguments);
   };
   try { return _netSend.apply(this, arguments); } finally { room.presence = p0; }
 };
+const _netHit = netHit;
+netHit = function (dmg, crit, weapon, target) {
+  const res = _netHit.apply(this, arguments);
+  try { const h = NET.hits && NET.hits[NET.hits.length - 1]; if (h && h.s === NET.seq.hit) { if (typeof weapon === 'string' && hasW(weapon)) h.wn = weapon; R.hitLog.push({ s: h.s, t: G.time, wall: performance.now(), target: target || null, w: weapon }); if (R.hitLog.length > 60) R.hitLog.shift(); } } catch (e) { warnOnce(e); }
+  return res;
+};
 const _netReceive = netReceive;
 netReceive = function (E, pr) {
   const r = E && E.r; if (!r || !pr) return _netReceive.apply(this, arguments);
   const L = E.last || {}, shot0 = L.shot | 0, nade0 = L.nade | 0, proj0 = L.proj || 0, wasDead = P.dead, rDead = r.dead;
-  R.cur = { ent: r, t: G.time, net: true, hit: null };
+  const myId = NET.room && NET.room.myId, hq = [];
+  if (Array.isArray(pr.hl)) for (const h of pr.hl) if (h && (h.s | 0) > (L.hit | 0) && (!h.t || h.t === myId)) hq.push({ s: h.s | 0, wn: typeof h.wn === 'string' ? h.wn : null });
+  R.cur = { ent: r, t: G.time, net: true, hit: null, hq, E };
   let res; try { res = _netReceive.apply(this, arguments); } finally { var cur = R.cur; R.cur = null; }
   if (!Array.isArray(pr.x)) return res;
   if ((pr.sh | 0) > shot0 && Array.isArray(pr.sx) && recording()) R.fires.push({ t: G.time, ent: r });
   r.kcAds = clamp(+pr.ad || 0, 0, 1); r.kcRp = pr.rp === undefined ? undefined : clamp(+pr.rp, -1, 1); r.kcSw = pr.sw === undefined ? undefined : clamp(+pr.sw, -1, 1);
   if (hasW(pr.wid)) r.kcW = pr.wid;
+  const ey = +pr.ey; r.kcEy = Number.isFinite(ey) && ey > .5 && ey < 2 ? ey : undefined;
+  r.kcGk = typeof pr.gk === 'string' && /^[A-Za-z0-9_-]{0,32}$/.test(pr.gk) ? pr.gk || 'factory' : r.kcGk || 'factory';
   const H = r.kcHist || (r.kcHist = []), ts = +pr.ts || performance.now(), aw = performance.now();
   if (!H.length || ts > H[H.length - 1].ts) {
     const yw = Number.isFinite(+pr.yw4) ? +pr.yw4 : +pr.yw || 0, pt = Number.isFinite(+pr.pt4) ? +pr.pt4 : +pr.pt || 0;
     H.push({ ts, aw, x: +pr.x[0] || 0, y: +pr.x[1] || 0, z: +pr.x[2] || 0, yaw: yw, pitch: pt, cr: +pr.cr || 0, g: pr.g ? 1 : 0, w: hasW(pr.wid) ? pr.wid : NET_W[pr.w | 0] || 'carbine',
-      ad: r.kcAds, rp: r.kcRp !== undefined ? r.kcRp : pr.rl ? .5 : -1, sw: r.kcSw !== undefined ? r.kcSw : -1, dd: pr.dd ? 1 : 0, hp: +pr.hp || 0, sp: pr.sp ? 1 : 0,
+      ad: r.kcAds, ey: r.kcEy, gk: r.kcGk, rp: r.kcRp !== undefined ? r.kcRp : pr.rl ? .5 : -1, sw: r.kcSw !== undefined ? r.kcSw : -1, dd: pr.dd ? 1 : 0, hp: +pr.hp || 0, sp: pr.sp ? 1 : 0,
       shot: (pr.sh | 0) > shot0 && Array.isArray(pr.sx) ? { n: Math.min(6, (pr.sh | 0) - shot0), sx: pr.sx.slice(0, 6).map(Number) } : null,
       nade: (pr.ns | 0) > nade0 ? 1 : 0, proj: Array.isArray(pr.pj) && pr.pj[0] > proj0 ? 1 : 0, hit: cur && cur.hit ? { crit: cur.hit.crit, kill: cur.hit.kill } : null });
     while (H.length > 2 && aw - H[0].aw > HIST * 1000) H.shift();
   }
   if (!wasDead && P.dead && R.death && P.killer === r) R.death.ts = ts;   // this state carried the killing hit
   if (!rDead && r.dead && (state === 'play' || state === 'dead')) { const mine = NET.room && pr.kb === NET.room.myId, k = mine ? PLAYER_ENT : remoteById(pr.kb);
-    if (k) R.kills.push({ t: G.time, wall: aw, v: r, k, weapon: NET_W[pr.kw | 0] || 'carbine', crit: !!pr.kh, hp: k.isPlayer ? P.hp : k.hp }); }
+    if (k) R.kills.push({ t: G.time, wall: aw, v: r, k, weapon: hasW(pr.kwn) ? pr.kwn : NET_W[pr.kw | 0] || 'carbine', crit: !!pr.kh, hp: k.isPlayer ? P.hp : k.hp }); }
   return res;
 };
+
+/* ---------- gun finishes (modules/gunskins.js) and soldier looks (modules/skins.js) ---------- */
+const GS = () => window.S9GunSkins && window.S9GunSkins.version ? window.S9GunSkins : null;
+const NOFIN = new Set(['knife', 'nade', 'charge', 'ftspit', 'ftpoison']);
+function skinOfEnt(e, w) {   // the finish on the gun this entity holds / killed with ('factory' when unknown)
+  const gs = GS(); if (!gs || !e || NOFIN.has(w)) return 'factory';
+  try {
+    if (e === PLAYER_ENT) { const id = gs.get(w); return gs.owns(id, w) ? id : 'factory'; }
+    if (e.remote) { const cw = hasW(e.kcW) ? e.kcW : e.netW; return cw === w && e.kcGk ? e.kcGk : 'factory'; }
+    const ud = e.gunInner && e.gunInner.userData; return ud && ud.gsSkin && (ud.gsWeapon || e.weapon) === w ? ud.gsSkin : 'factory';
+  } catch (x) { return 'factory'; }
+}
+function skinInfo(id) {   // { name, rarity, col } or null for the factory finish
+  const gs = GS(); if (!gs || !id || id === 'factory') return null;
+  const s = gs.skin(id); if (!s || s.default || s.id === 'factory') return null; const R0 = (gs.RARITY || {})[s.rarity] || { name: '', col: '#b8c0cc' };
+  return { id: s.id, name: String(s.name || s.id), rarity: R0.name || s.rarity, col: R0.col || '#b8c0cc' };
+}
+
+/* ---------- online: ask the killer for their own view (60 Hz, exact aim, exact shot/hit times) ----------
+   The victim sends {k:'kc', to:killerId, q:1, s:hitSeq}; the game server relays it to that one player; the killer's
+   client answers {k:'kc', to:victimId, a:1, s, ...} with its own recorded track around the killing hit (delta-coded).
+   Old servers / peer-to-peer rooms simply never answer: the replay then uses the ~30 Hz states we already have. */
+const KCQ = { pend: null, lis: false, st: { asked: 0, answered: 0, bytes: 0, got: 0, used: 0, late: 0, bad: '' } }; KC.q = KCQ.st;
+const srvRoom = () => !!(NET && NET.on && NET.room && NET.room.server && typeof srvSend === 'function' && typeof SRV === 'object' && SRV && SRV.ws && SRV.ws.readyState === 1);
+function listen() {
+  if (KCQ.lis || typeof SRV !== 'object' || !SRV || !SRV.on) return; KCQ.lis = true;
+  SRV.on.add(d => { if (d && d.k === 'kc' && typeof d.f === 'string') { try { if (d.a) gotHistory(d); else if (d.q === 1) answer(d); } catch (e) { warnOnce(e); } } });
+}
+try { listen(); } catch (e) {}   // the killer side must be listening from the start
+function askHistory(k, D) {
+  listen(); if (!srvRoom()) return;
+  KCQ.pend = { id: k.netId, ent: k, seq: D.seq | 0, sent: performance.now(), death: D, got: null }; KCQ.st.asked++;
+  srvSend({ k: 'kc', to: k.netId, q: 1, s: D.seq | 0 });
+}
+const PK = 1000;   // packet time unit: ms
+function answer(d) {
+  const vic = d.f, seq = d.s | 0; let H = null;
+  for (let i = R.hitLog.length - 1; i >= 0; i--) { const h = R.hitLog[i]; if (h.target === vic && (!seq || h.s === seq)) { H = h; break; } }
+  if (!H) for (let i = R.hitLog.length - 1; i >= 0; i--) if (R.hitLog[i].target === vic) { H = R.hitLog[i]; break; }
+  if (!H) return;
+  const send = () => {
+    const tr = R.tracks.get(PLAYER_ENT); if (!tr || tr.t.length < 10 || !srvRoom()) return;
+    const th = H.t, a = th - 4.6, b = th + POST + .3, W = [], wi = w => { let i = W.indexOf(w); if (i < 0) { W.push(w); i = W.length - 1; } return i; };
+    const cols = 15, q = [], last = new Array(cols).fill(0); let n = 0;
+    for (let i = 0; i < tr.t.length; i++) { const t = tr.t[i]; if (t < a || t > b) continue; const o = i * S_, v = tr.v;
+      const row = [Math.round((t - th) * PK), Math.round(v[o] * 100), Math.round(v[o + 1] * 100), Math.round(v[o + 2] * 100), Math.round(v[o + 3] * 1e4), Math.round(v[o + 4] * 1e4), Math.round(v[o + 5] * 100), Math.round(v[o + 6] * 100),
+        Math.round(v[o + 7] * 100), wi(wname(v[o + 8])), v[o + 9] | 0, Math.round(v[o + 15] * 100), v[o + 17] | 0, Math.round(v[o + 18] * 100), Math.round(v[o + 16])];
+      for (let c = 0; c < cols; c++) { q.push(c === 4 && n ? Math.round(wrapPi((row[c] - last[c]) / 1e4) * 1e4) : row[c] - last[c]); last[c] = row[c]; } n++; }
+    if (n < 10) return;
+    const shots = [], seen = new Set();
+    for (const x of R.shots) if (x.ent === PLAYER_ENT && x.t >= a && x.t <= b) { const k = Math.round((x.t - th) * PK); shots.push([k, Math.round(x.b.x * 100), Math.round(x.b.y * 100), Math.round(x.b.z * 100), wi(x.wid || P.weapon)]); seen.add(k); }
+    const hits = R.hitLog.filter(h => h.target === vic && h.t >= a && h.t <= b).map(h => [Math.round((h.t - th) * PK), h === H ? 1 : 0]);
+    const thr = R.throws.filter(x => x.ent === PLAYER_ENT && x.t >= a && x.t <= b).map(x => Math.round((x.t - th) * PK));
+    const fin = {}; for (const w of W) { const id = skinOfEnt(PLAYER_ENT, w); if (id !== 'factory') fin[w] = id; }
+    const msg = JSON.stringify({ k: 'kc', to: vic, a: 1, s: H.s, v: 1, n, W, d: q, shots, hits, thr, fin }); KCQ.st.answered++; KCQ.st.bytes = msg.length;
+    srvSend(msg);
+  };
+  // answer quickly (a little after the killing hit so the shot's recoil is in); the moments after the kill come from the states
+  const wait = Math.max(0, Math.min(.2, H.t + .15 - G.time));
+  if (wait <= 0) send(); else setTimeout(() => { try { send(); } catch (e) { warnOnce(e); } }, wait * 1000);
+}
+function gotHistory(d) {
+  const P0 = KCQ.pend; KCQ.st.got++; if (!P0 || d.f !== P0.id || !Array.isArray(d.d) || !Array.isArray(d.W) || d.v !== 1) { KCQ.st.bad = 'match ' + (P0 && P0.id) + ' ' + d.f; return; }
+  const n = d.n | 0, cols = 15; if (n < 10 || d.d.length !== n * cols || n > 2000) { KCQ.st.bad = 'size ' + n + ' ' + d.d.length; return; }
+  const deathT = P0.death.t, tr = { t: [], v: [], fires: [], shots: [], hits: [], throws: [], hi: true }, last = new Array(cols).fill(0), Wn = d.W.map(w => hasW(w) ? w : 'carbine');
+  for (let i = 0; i < n; i++) { for (let c = 0; c < cols; c++) last[c] += +d.d[i * cols + c] || 0;
+    const t = deathT + last[0] / PK; if (tr.t.length && t <= tr.t[tr.t.length - 1]) continue;
+    V[0] = last[1] / 100; V[1] = last[2] / 100; V[2] = last[3] / 100; V[3] = last[4] / 1e4; V[4] = last[5] / 1e4; V[5] = last[6] / 100; V[6] = last[7] / 100; V[7] = last[8] / 100; V[8] = widx(Wn[last[9]] || 'carbine');
+    V[9] = last[10]; V[10] = 1; V[11] = 0; V[12] = 0; V[13] = 1; V[14] = V[3]; V[15] = last[11] / 100; V[16] = last[14]; V[17] = last[12]; V[18] = last[13] / 100; pushS(tr, t, V); }
+  if (tr.t.length < 10) return;
+  let lt = -9; for (const x of d.shots || []) { if (!Array.isArray(x)) continue; const t = deathT + x[0] / PK; tr.shots.push({ t, b: new THREE.Vector3(x[1] / 100, x[2] / 100, x[3] / 100), w: Wn[x[4]] || 'carbine' }); if (t !== lt) { tr.fires.push(t); lt = t; } }
+  for (const x of d.hits || []) if (Array.isArray(x)) tr.hits.push({ t: deathT + x[0] / PK, crit: false, kill: !!x[1] });
+  for (const x of d.thr || []) tr.throws.push(deathT + (+x || 0) / PK);
+  tr.fires.sort((a, b) => a - b); tr.fin = d.fin && typeof d.fin === 'object' ? d.fin : {};
+  P0.got = tr; P0.gotAt = performance.now(); KC.hiN = (KC.hiN || 0) + 1;
+  // the replay has not started yet: rebuild it on the killer's own view
+  P0.gotWall = performance.now(); if (KC.live || KC.fin) KCQ.st.late++;
+  if (KC.clip && !KC.live && KC.clip.killer === P0.ent && KC.clip.deathT === deathT) { const c = makeClip(KC.clip.I); if (c) { KCQ.st.used++; KCQ.st.ms = Math.round(performance.now() - P0.sent); KC.clip = c; fillBanner(c); try { prewarm(c); } catch (e) { warnOnce(e); } DC.T = Math.max(DCT, RS - END_PAD - c.dur); } }
+}
 
 /* ================= sampling ================= */
 function seg(T, t) { const n = T.length; if (n < 2 || t <= T[0]) return 0; if (t >= T[n - 1]) return n - 2; let lo = 0, hi = n - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (T[m] <= t) lo = m; else hi = m; } return lo; }
@@ -210,10 +334,40 @@ function makeGhost(ent) {
   const w0 = isMe ? P.weapon : ent.remote ? (ent.netW || 'carbine') : ent.weapon, w = w0 === 'knife' || !hasW(w0) ? 'carbine' : w0;
   const n0 = robots.length, g = buildBot({ name: isMe ? 'You' : ent.name, color: col, weapon: BOTW[w] ? w : 'carbine', skill: 1 });
   const i = robots.indexOf(g); if (i >= 0) robots.splice(i, 1); if (robots.length !== n0) console.warn('[killcam] robots changed');
+  ghostLook(g, ent, isMe);
   targetsDirty = true; g.tag.remove(); g.kcGhost = true; g.kcEnt = ent; g.root.visible = false; g.gun.visible = false; g.guns = { [g.weapon]: g.gunInner }; g.curW = g.weapon;
-  g.kcScene = scene; GH.set(ent, g); return g;
+  g.kcScene = scene; GH.set(ent, g); dressGhost(g, ent); return g;
+}
+// the replay actor wears what that player really wears: your own soldier look and gun finishes (skins.js would
+// otherwise treat "You" as a bot and pick a random look), a remote player's look + finish from their state
+function lookOf(ent) {
+  const SK = window.S9Skins; if (!SK || !SK.version) return null;
+  try {
+    if (ent === PLAYER_ENT) return SK.look || null;
+    if (ent.remote && NET.peers) { for (const E of NET.peers.values()) if (E.r === ent) return E.pres ? SK.readRemoteLook(E.pres) : null; }
+  } catch (e) {}
+  return null;
+}
+function finFor(ent, w) {
+  const c = KC.clip; if (c && ent === c.killer && c.fin && c.fin[w]) return c.fin[w];
+  return skinOfEnt(ent, w);
+}
+function dressGhost(g, ent) {
+  try { const l = lookOf(ent), SK = window.S9Skins; if (l && SK && SK.apply) SK.apply(g, l.skin, l); } catch (e) { warnOnce(e); }
+  try { const gs = GS(); if (gs && g.weapon && g.gunInner) gs.apply(g.weapon, finFor(ent, g.weapon), g.gunInner); } catch (e) { warnOnce(e); }
 }
 function dropGhost(g) { scene.remove(g.root); scene.remove(g.gun); try { g.mixer.stopAllAction(); g.mixer.uncacheRoot(g.mixer.getRoot()); freeBotGpu(g.root); freeBotGpu(g.gun); } catch (e) {} GH.delete(g.kcEnt); }
+// buildBot() gives every new fighter a random bot skin picked from its name. The replay must show who really died / killed:
+// your own worn soldier skin, and an online player's skin as they sent it. (Bots already get the same look as the live bot.)
+function ghostLook(g, ent, isMe) {
+  try {
+    const SK = window.S9Skins; if (!SK || typeof SK.apply !== 'function') return;
+    let l = null;
+    if (isMe) { l = SK.look; if (l && typeof SK.owns === 'function' && !SK.owns(l.skin)) l = SK.parseLook(SK.lookCode(Object.assign({}, l, { skin: 'std', h: 0 }))); }
+    else if (ent.remote && NET && NET.peers) { for (const e of NET.peers.values()) if (e.r === ent) { l = e.pres && SK.parseLook(e.pres.lk); break; } }
+    if (l && l.skin) SK.apply(g, l.skin, l);
+  } catch (e) { warnOnce(e); }
+}
 function ghostFor(ent) { let g = GH.get(ent); if (g && g.kcScene !== scene) { dropGhost(g); g = null; } return g || makeGhost(ent); }
 // build the actors the replay needs, a few per frame while the death cam runs (no hitch at the moment you die)
 function buildGhosts(max) {
@@ -223,7 +377,7 @@ function buildGhosts(max) {
 function setGhostWeapon(g, w) {
   if (g.curW === w) return; g.curW = w;
   if (w === 'knife' || !hasW(w)) return;
-  if (!g.guns[w]) { try { g.guns[w] = rifleTP(w); } catch (e) { g.guns[w] = g.guns[Object.keys(g.guns)[0]]; } }
+  if (!g.guns[w]) { try { g.guns[w] = rifleTP(w); const gs = GS(); if (gs) gs.apply(w, finFor(g.kcEnt, w), g.guns[w]); } catch (e) { g.guns[w] = g.guns[Object.keys(g.guns)[0]]; } }
   g.gun.remove(g.gunInner); g.gunInner = g.guns[w]; g.gun.add(g.gunInner); g.muzzle.position.copy(g.gunInner.userData.muzzle || g.muzzle.position);
 }
 function poseDeadGhost(g, deadT) {
@@ -263,13 +417,14 @@ function netTrack(r, deathT, wall) {
   const H = r.kcHist || []; if (H.length < 4) return null;
   let off = Infinity; for (const h of H) if (wall - h.aw < 4000) off = Math.min(off, h.aw - h.ts);
   if (!Number.isFinite(off)) return null;
-  const tr = { t: [], v: [], fires: [], shots: [], hits: [], throws: [] }, gap = w => Math.min(.06, 60 / (((WEAPONS[w] || {}).rpm) || 600));
+  const tr = { t: [], v: [], fires: [], shots: [], hits: [], throws: [], fin: {} }, gap = w => Math.min(.06, 60 / (((WEAPONS[w] || {}).rpm) || 600));
   let deadSince = null;
   for (const h of H) {
     const tg = deathT - (wall - (h.ts + off)) / 1000; if (tg < deathT - HIST || (tr.t.length && tg <= tr.t[tr.t.length - 1])) continue;
     if (h.dd) { if (deadSince === null) deadSince = tg; } else deadSince = null;
+    if (h.gk && h.gk !== 'factory' && !NOFIN.has(h.w)) tr.fin[h.w] = h.gk;
     V[0] = h.x; V[1] = h.y; V[2] = h.z; V[3] = h.yaw; V[4] = h.pitch; V[5] = h.cr; V[6] = h.ad; V[7] = h.rp; V[8] = widx(h.w); V[9] = h.g; V[10] = 1; V[11] = h.dd;
-    V[12] = deadSince === null ? 0 : tg - deadSince; V[13] = 1; V[14] = h.yaw; V[15] = h.sw; V[16] = h.hp; V[17] = h.sp;
+    V[12] = deadSince === null ? 0 : tg - deadSince; V[13] = 1; V[14] = h.yaw; V[15] = h.sw; V[16] = h.hp; V[17] = h.sp; V[18] = Number.isFinite(h.ey) ? h.ey : lerp(1.65, 1.05, h.cr);
     pushS(tr, tg, V);
     if (h.shot) { const n = h.shot.n, sx = h.shot.sx, gp = gap(h.w); for (let k = 0; k < n; k++) { const tf = tg - (n - 1 - k) * gp; tr.fires.push(tf); tr.shots.push({ t: tf, b: new THREE.Vector3(sx[3], sx[4], sx[5]), w: h.w }); } }
     if (h.proj) tr.fires.push(tg);
@@ -280,6 +435,21 @@ function netTrack(r, deathT, wall) {
   tr.fires.sort((a, b) => a - b);
   return tr;
 }
+// the start of the actor's current life: after its last death or teleport (respawn) before time t
+function lastSpawn(tr, t) {
+  const T = tr.t, W = tr.v; let i = Math.min(seg(T, t) + 1, T.length - 1);
+  while (i > 0 && T[i] > t) i--;
+  for (; i > 0; i--) { const a = (i - 1) * S_, b = i * S_; if (W[a + 11] > .5 && W[b + 11] < .5) return T[i]; if ((W[b] - W[a]) ** 2 + (W[b + 2] - W[a + 2]) ** 2 > 9 && T[i] - T[i - 1] < .3) return T[i]; if (T[i] - T[i - 1] > 1.5) return T[i]; }   // (a long hole = paused / dead; a lag spike is not a respawn)
+  return -1e9;
+}
+// the killer's own 60 Hz view ends a moment after the kill: continue it with their states (same positions, their clock)
+function withTail(hi, st) {
+  if (!st || !st.t.length) return hi; const end = hi.t[hi.t.length - 1]; if (st.t[st.t.length - 1] <= end + 1 / HZ) return hi;
+  const out = { t: hi.t.slice(), v: hi.v.slice(), fires: hi.fires.slice(), shots: hi.shots.slice(), hits: hi.hits.slice(), throws: hi.throws.slice(), fin: Object.assign({}, st.fin || {}, hi.fin || {}), hi: true };
+  for (let i = 0; i < st.t.length; i++) if (st.t[i] > end + 1 / HZ) { out.t.push(st.t[i]); for (let f = 0; f < S_; f++) out.v.push(st.v[i * S_ + f]); }
+  for (const f of st.fires) if (f > end + .02) out.fires.push(f); for (const x of st.shots) if (x.t > end + .02) out.shots.push(x);
+  return out;
+}
 function speedAt(rt, c) {   // replay speed: 1x, easing into slow motion for the final shot, then back
   const sA = c.deathT - SLOW_PRE, sB = c.deathT + .03;
   const w = rt < sA ? smooth((rt - (sA - .12)) / .12) : rt < sB ? 1 : 1 - smooth((rt - sB) / .18);
@@ -287,21 +457,29 @@ function speedAt(rt, c) {   // replay speed: 1x, easing into slow motion for the
 }
 // I = { killer, victim, t (death time), wall, weapon, crit, hp, final }: any killer (bot, online player, you) and any victim
 function makeClip(I) {
-  const killer = I.killer, victim = I.victim; if (!killer || !victim || killer === victim) return null;
+  const killer = I.killer || null, victim = I.victim; if (!victim || killer === victim) return null;
+  if (!killer && !BLAST.has(I.weapon)) return null;   // world deaths: only blasts (the demolition charge) get a replay
   for (const [e, g] of GH) if (e !== PLAYER_ENT && !robots.includes(e)) dropGhost(g);   // players who left / old matches
   const deathT = I.t, me = R.tracks.get(victim); if (!me || me.t.length < 10) return null;
-  let kind = 'bot', ktr = null;
-  if (killer === PLAYER_ENT) { const t0 = R.tracks.get(PLAYER_ENT); if (t0) { ktr = { t: t0.t, v: t0.v }; kind = 'me'; } }
-  else if (killer.remote) { ktr = netTrack(killer, deathT, I.wall); if (ktr) kind = 'net'; }
+  let kind = 'bot', ktr = null; const pend = KCQ.pend;
+  if (!killer) { ktr = { t: me.t, v: me.v }; kind = 'world'; }
+  else if (killer === PLAYER_ENT) { const t0 = R.tracks.get(PLAYER_ENT); if (t0) { ktr = { t: t0.t, v: t0.v }; kind = 'me'; } }
+  else if (killer.remote) { const st = netTrack(killer, deathT, I.wall);
+    if (pend && pend.ent === killer && pend.got && pend.death && pend.death.t === deathT) { ktr = withTail(pend.got, st); kind = 'net'; } else { ktr = st; if (ktr) kind = 'net'; } }
   if (!ktr) { const t0 = R.tracks.get(killer); if (!t0) return null; ktr = { t: t0.t, v: t0.v }; }   // live reference: post-death samples keep coming in
   if (ktr.t.length < 8) return null;
-  const c = { killer, victim, kind, ktr, deathT, t1: deathT + POST, weapon: I.weapon, crit: !!I.crit, hp: Math.max(0, Math.ceil(I.hp || 0)), me, final: !!I.final };
+  const orbit = BLAST.has(I.weapon) || !killer;   // grenades, rockets, the charge: a third-person orbit around the blast
+  const c = { I, killer, victim, kind, ktr, deathT, t1: deathT + POST + (orbit ? .5 : 0), weapon: I.weapon, crit: !!I.crit, hp: Math.max(0, Math.ceil(I.hp || 0)), me, final: !!I.final, orbit, hi: !!ktr.hi, dist: I.dist || 0 };
+  c.skin = I.skin || 'factory'; if (ktr.fin && ktr.fin[I.weapon]) c.skin = ktr.fin[I.weapon];
+  c.fin = Object.assign({}, ktr.fin || {}); if (!NOFIN.has(I.weapon) && c.skin !== 'factory') c.fin[I.weapon] = c.fin[I.weapon] || c.skin;
   // how much history fits before the respawn: slow-motion part costs more real time
   let slowCost = 0; for (let rt = c.deathT - SLOW_PRE - .15; rt < c.t1; rt += 1 / 480) slowCost += 1 / 480 / speedAt(rt, c);
   const avail = c.final ? FINAL_LEN : RS - DCT - END_PAD;
   let t0 = c.deathT - SLOW_PRE - .15 - (avail - slowCost);
-  t0 = Math.max(t0, ktr.t[0] + .06, me.t[0] + .06);
-  if (t0 > deathT - .6) return null;           // too little footage (you were killed right after spawning): normal death cam
+  // never show anything from before the victim's or the killer's last (re)spawn: no corpse, no teleport inside the replay
+  t0 = Math.max(t0, ktr.t[0] + .06, me.t[0] + .06, lastSpawn(me, deathT) + .08, orbit ? -1e9 : lastSpawn(ktr, deathT) + .08);
+  c.minT0 = Math.max(ktr.t[0] + .06, me.t[0] + .06, lastSpawn(me, deathT) + .08, orbit ? -1e9 : lastSpawn(ktr, deathT) + .08);   // (tests: the oldest footage that exists)
+  if (t0 > deathT - .45) return null;          // too little footage (killed right after spawning): normal death cam
   c.t0 = t0;
   // real time -> replay time table (smooth slow motion, same every run)
   const tab = [t0]; let rt = t0; while (rt < c.t1) { rt = Math.min(c.t1, rt + speedAt(rt, c) / 240); tab.push(rt); }
@@ -334,7 +512,7 @@ function makeClip(I) {
   c.ofires = []; for (const f of R.fires) if (f.ent !== killer && f.t > t0 && f.t <= c.t1) c.ofires.push({ t: f.t, ent: f.ent });
   if (killer !== PLAYER_ENT) { let lt = -9; for (const q of R.shots) if (q.ent === PLAYER_ENT && q.t > t0 && q.t <= c.t1 && q.t !== lt) { lt = q.t; c.ofires.push({ t: q.t, ent: PLAYER_ENT }); } }
   c.ofires.sort((a, b) => a.t - b.t);
-  c.cast = [victim]; for (const [ent, tr] of R.tracks) if (ent !== victim && ent !== killer && tr.t.length && tr.t[tr.t.length - 1] >= t0 && tr.t[0] <= c.t1) c.cast.push(ent);
+  c.cast = [victim]; for (const [ent, tr] of R.tracks) if (ent !== victim && (ent !== killer || orbit) && tr.t.length && tr.t[tr.t.length - 1] >= t0 && tr.t[0] <= c.t1) c.cast.push(ent);
   return c;
 }
 
@@ -345,6 +523,7 @@ function dom() {
   const kc = $('killcam'); if (!kc) return null;
   const st = document.createElement('style'); st.id = 'kcStyle';
   st.textContent = `#killcam{--kcc:#ff4a3d}
+body.kcFinal #rfx .rfx-final,body.kcFinal #mend{display:none!important}
 #death.kc #deathBy{display:none}
 #kcBan{position:absolute;left:50%;bottom:calc(12vh + 30px);transform:translateX(-50%);display:flex;align-items:stretch;max-width:calc(100vw - 32px);background:rgba(11,13,16,.84);border:1px solid rgba(255,255,255,.08);border-left:4px solid var(--kcc);box-shadow:0 6px 24px rgba(0,0,0,.45);font-family:var(--mono,ui-monospace,monospace)}
 #kcBan>div{padding:8px 14px;display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:0}
@@ -355,36 +534,73 @@ function dom() {
 #kcBan em{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.18em;color:#120a00;background:#ffd27a;padding:2px 6px;align-self:flex-start}#kcBan em[hidden]{display:none}
 #kcBan .kh{border-left:1px solid rgba(255,255,255,.08);min-width:86px}#kcBan .kh i{display:block;height:5px;background:rgba(255,255,255,.12)}#kcBan .kh s{display:block;height:100%;background:#5dff9a;transform-origin:left}
 #kcBan .kh span{font-size:12px;letter-spacing:.08em;color:var(--ink,#e8edf2);white-space:nowrap}
+#kcBan .kf,#kcCard .kf{display:flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.08em;white-space:nowrap;color:var(--rc,#b8c0cc)}#kcBan .kf[hidden],#kcCard .kf[hidden]{display:none}
+#kcBan .kf i,#kcCard .kf i{width:7px;height:7px;transform:rotate(45deg);background:var(--rc,#b8c0cc);box-shadow:0 0 6px var(--rc,#b8c0cc);flex:none}
+#kcBan .kf small,#kcCard .kf small{font-size:9px;letter-spacing:.18em;color:var(--dim,#9aa3ad)}
+#kcBan .kd{border-left:1px solid rgba(255,255,255,.08);min-width:56px}#kcBan .kd span{font-size:13px;letter-spacing:.06em;color:var(--ink,#e8edf2)}#kcBan .kd[hidden]{display:none}
+#kcCard{display:flex;align-items:stretch;background:rgba(11,13,16,.84);border:1px solid rgba(255,255,255,.08);border-left:4px solid var(--kcc,#ff4a3d);font-family:var(--mono,ui-monospace,monospace);max-width:calc(100vw - 32px);box-shadow:0 6px 24px rgba(0,0,0,.45)}
+#kcCard[hidden],#death.kc #kcCard{display:none}#death.kcc #deathBy{display:none}
+#kcCard>div{padding:8px 14px;display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:0}#kcCard>div+div{border-left:1px solid rgba(255,255,255,.08)}#kcCard>div[hidden]{display:none}
+#kcCard small{font-size:10px;letter-spacing:.2em;color:var(--dim,#9aa3ad);white-space:nowrap}#kcCard b{font-family:var(--display,inherit);font-size:22px;letter-spacing:.04em;color:var(--kcc,#ff4a3d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40vw}
+#kcCard .kw{display:flex;align-items:center;gap:8px;font-size:13px;letter-spacing:.06em;white-space:nowrap;color:var(--ink,#e8edf2)}#kcCard .kw svg{width:34px;height:12px;flex:none}
+#kcCard em{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.18em;color:#120a00;background:#ffd27a;padding:2px 6px;align-self:flex-start}#kcCard em[hidden]{display:none}
+#kcCard span.hp{font-size:12px;letter-spacing:.08em;color:var(--ink,#e8edf2);white-space:nowrap}
 #kcSkip{position:absolute;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(12vh + 34px);pointer-events:auto;cursor:pointer;background:rgba(11,13,16,.78);color:var(--ink,#e8edf2);border:1px solid rgba(255,255,255,.18);padding:7px 12px;font:600 12px/1 var(--mono,ui-monospace,monospace);letter-spacing:.12em}
 #kcSkip kbd{font:inherit;color:var(--sodium,#ffb84a);margin-right:6px}
 #kcHm{position:absolute;left:50%;top:50%;width:0;height:0;opacity:0}#kcHm i{position:absolute;width:2px;height:10px;background:#fff;left:-1px;top:-5px;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
 #kcHm.crit i{background:#ffd27a}#kcHm.kill i{background:#ff4a3d;height:14px;top:-7px;width:3px;left:-1.5px}
 #kcFx{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(255,60,40,0) 40%,rgba(255,40,30,.55))}
+#kcYou{position:absolute;left:0;top:0;transform:translate(-50%,-100%);font:700 10px/1 var(--mono,ui-monospace,monospace);letter-spacing:.18em;color:#fff;text-shadow:0 1px 2px #000;display:flex;flex-direction:column;align-items:center;gap:2px;opacity:0;will-change:transform}
+#kcYou i{width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid var(--yc,#ff8a3d);filter:drop-shadow(0 1px 1px #000)}
 #kcDown{position:absolute;left:50%;top:calc(130px + env(safe-area-inset-top,0px));transform:translateX(-50%);font:700 12px/1 var(--mono,ui-monospace,monospace);letter-spacing:.2em;color:#ffd27a;background:rgba(11,13,16,.7);padding:5px 10px}#kcDown[hidden]{display:none}
-@media (max-width:560px){#kcBan b{font-size:17px;max-width:34vw}#kcBan>div{padding:7px 9px}#kcBan .kh{min-width:64px}#kcBan .kw svg{display:none}#kcSkip{bottom:calc(12vh + 92px);right:50%;transform:translateX(50%)}}`;
+@media (max-width:560px){#kcBan b{font-size:17px;max-width:34vw}#kcBan>div{padding:7px 9px}#kcBan .kh{min-width:64px}#kcBan .kw svg{display:none}#kcBan .kd{display:none}#kcBan .kf small{display:none}#kcCard b{font-size:17px}#kcCard>div{padding:7px 9px}#kcCard .kw svg{display:none}#kcCard .kd{display:none}#kcCard .kf small{display:none}#kcSkip{bottom:calc(12vh + 118px);right:50%;transform:translateX(50%)}}`;
   document.head.appendChild(st);
   const hm = '<i style="transform:rotate(45deg) translateY(-10px)"></i><i style="transform:rotate(135deg) translateY(-10px)"></i><i style="transform:rotate(225deg) translateY(-10px)"></i><i style="transform:rotate(315deg) translateY(-10px)"></i>';
-  kc.insertAdjacentHTML('beforeend', `<div id="kcHm">${hm}</div><div id="kcDown" hidden>KILLER DOWN</div><div id="kcBan"><div><small>KILLED BY</small><b id="kcBName"></b></div><div class="kw"><span id="kcBW"></span><em id="kcBHs" hidden>HEADSHOT</em></div><div class="kh"><small>THEIR HP</small><i><s id="kcBHp"></s></i><span id="kcBHpT"></span></div></div><button id="kcSkip" type="button"><kbd>SPACE</kbd>SKIP</button><div id="kcFx"></div>`);
+  kc.insertAdjacentHTML('beforeend', `<div id="kcYou"><span></span><i></i></div><div id="kcHm">${hm}</div><div id="kcDown" hidden>KILLER DOWN</div><div id="kcBan"><div><small>KILLED BY</small><b id="kcBName"></b></div><div class="kw"><span id="kcBW"></span><span class="kf" id="kcBF" hidden><i></i><span></span><small></small></span><em id="kcBHs" hidden>HEADSHOT</em></div><div class="kh"><small>THEIR HP</small><i><s id="kcBHp"></s></i><span id="kcBHpT"></span></div><div class="kd"><small>DISTANCE</small><span id="kcBD"></span></div></div><button id="kcSkip" type="button"><kbd>SPACE</kbd>SKIP</button><div id="kcFx"></div>`);
   $('kcSkip').addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); skip(); });
   $('kcSkip').addEventListener('pointerdown', e => e.stopPropagation());
-  D0 = { kc, hm: $('kcHm'), fx: $('kcFx'), down: $('kcDown'), cross: $('kcCross'), xi: [...$('kcCross').children] };
+  D0 = { kc, you: $('kcYou'), hm: $('kcHm'), fx: $('kcFx'), down: $('kcDown'), cross: $('kcCross'), xi: [...$('kcCross').children] };
   return D0;
 }
-const WNAME = { nade: 'Plasma grenade', nova: 'Nova launcher' };
+const WNAME = { nade: 'Plasma grenade', nova: 'Nova launcher', charge: 'The charge', ftspit: 'Flytrap spit', ftpoison: 'Flytrap poison' };
+const wTitle = w => (WEAPONS[w] && WEAPONS[w].name) || WNAME[w] || String(w || '');
+const wIcon = w => (typeof ICON === 'object' && (ICON[w] || ((w === 'ftspit' || w === 'ftpoison') && ICON.flytrap) || ICON.rifle)) || '';
+// "what killed you": weapon icon + name + its finish (name in the finish's rarity colour); the same on the death card and the killcam banner
+function fillWeapon(elW, elF, w, skin) {
+  elW.innerHTML = wIcon(w) + '<span></span>'; elW.lastChild.textContent = wTitle(w);
+  const si = skinInfo(skin); elF.hidden = !si;
+  if (si) { elF.style.setProperty('--rc', si.col); elF.children[1].textContent = si.name; elF.children[2].textContent = String(si.rarity || '').toUpperCase(); elF.title = si.rarity + ' finish'; }
+  return si;
+}
 function fillBanner(c) {
-  const d = dom(); if (!d) return; const k = c.killer;
+  const d = dom(); if (!d) return; const k = c.killer || { name: wTitle(c.weapon).toUpperCase(), cssCol: '#ffb84a', hp: 0 };
   d.kc.style.setProperty('--kcc', k.cssCol || '#ff4a3d');
   $('kcBName').textContent = String(k.name || 'Enemy');
   $('kcBan').firstChild.firstChild.textContent = c.final ? `FINAL KILL ON ${String(c.victim.name || '').toUpperCase()}` : 'KILLED BY';
-  const tb = $('killcam').querySelector('.kc-top b'); if (tb) tb.textContent = c.final ? 'FINAL KILLCAM' : 'KILLCAM';
-  const w = c.weapon, nm = (WEAPONS[w] && WEAPONS[w].name) || WNAME[w] || String(w || '');
-  const ic = (typeof ICON === 'object' && (ICON[w] || ICON.rifle)) || '';
-  $('kcBW').innerHTML = ic + '<span></span>'; $('kcBW').lastChild.textContent = nm;
-  $('kcBHs').hidden = !c.crit;
-  const hp = clamp(c.hp, 0, 100); $('kcBan').querySelector('.kh small').textContent = c.killer === PLAYER_ENT ? 'YOUR HP' : 'THEIR HP'; $('kcBHp').style.transform = `scaleX(${hp / 100})`; $('kcBHp').style.background = hp > 50 ? '#5dff9a' : hp > 25 ? '#ffd166' : '#ff6b5d';
+  const tb = $('killcam').querySelector('.kc-top b'); if (tb) tb.textContent = c.final ? 'FINAL KILLCAM' : c.orbit ? 'BLAST REPLAY' : 'KILLCAM';
+  const si = fillWeapon($('kcBW'), $('kcBF'), c.weapon, c.skin);
+  KC.shown = { killer: String(k.name || ''), weapon: c.weapon, title: wTitle(c.weapon), skin: c.skin || 'factory', fin: si, dist: Math.round(c.dist || 0), orbit: !!c.orbit, hi: !!c.hi };
+  $('kcBHs').hidden = !c.crit; $('kcBHs').textContent = c.weapon === 'knife' ? 'BACKSTAB' : 'HEADSHOT';
+  const hp = clamp(c.hp, 0, 100); $('kcBan').querySelector('.kh small').textContent = c.killer === PLAYER_ENT ? 'YOUR HP' : 'THEIR HP'; $('kcBan').querySelector('.kh').hidden = !c.killer; $('kcBHp').style.transform = `scaleX(${hp / 100})`; $('kcBHp').style.background = hp > 50 ? '#5dff9a' : hp > 25 ? '#ffd166' : '#ff6b5d';
   $('kcBHpT').textContent = c.hp > 0 ? `${c.hp} HP` : 'DOWN';
+  $('kcBD').textContent = c.dist > 0 ? `${Math.round(c.dist)} m` : '-'; $('kcBD').parentNode.hidden = !(c.dist > 0);
   $('kcName').textContent = String(k.name || ''); $('kcName').style.color = k.cssCol || '';
   d.cross.style.color = k.cssCol || '#fff';
+}
+// the death screen's killer card (shown while you fall, and instead of the killcam when there is none)
+function deathCard(D) {
+  const el = $('death'); if (!el) return; dom();
+  let card = $('kcCard');
+  if (!card) { el.insertAdjacentHTML('beforeend', '<div id="kcCard" hidden><div><small>KILLED BY</small><b id="kcCName"></b></div><div><span class="kw" id="kcCW"></span><span class="kf" id="kcCF" hidden><i></i><span></span><small></small></span><em id="kcCHs" hidden>HEADSHOT</em></div><div><small>THEIR HP</small><span class="hp" id="kcCHp"></span></div><div class="kd"><small>DISTANCE</small><span class="hp" id="kcCD"></span></div></div>');
+    card = $('kcCard'); const t = $('deathT'); if (t) el.insertBefore(card, t); }
+  const k = D && D.killer;
+  if (!k || k === PLAYER_ENT) { card.hidden = true; el.classList.remove('kcc'); KC.card = null; return; }
+  card.style.setProperty('--kcc', k.cssCol || '#ff4a3d'); $('kcCName').textContent = String(k.name || 'Enemy');
+  const si = fillWeapon($('kcCW'), $('kcCF'), D.weapon, D.skin);
+  $('kcCHs').hidden = !D.crit; $('kcCHs').textContent = D.weapon === 'knife' ? 'BACKSTAB' : 'HEADSHOT'; const hp = Math.max(0, Math.ceil(D.hp || 0)); $('kcCHp').textContent = hp > 0 ? `${hp} HP` : 'DOWN';
+  $('kcCD').textContent = D.dist > 0 ? `${Math.round(D.dist)} m` : '-'; $('kcCD').parentNode.hidden = !(D.dist > 0);
+  card.hidden = false; el.classList.add('kcc');
+  KC.card = { killer: String(k.name || ''), weapon: D.weapon, title: wTitle(D.weapon), skin: D.skin || 'factory', fin: si, dist: Math.round(D.dist || 0) };
 }
 
 /* ================= start / stop / skip ================= */
@@ -393,12 +609,16 @@ const _startKillcam = startKillcam;
 startKillcam = function (killer) {
   REC.on = false; KC.clip = null; KC.live = false; KC.skipped = false; DC.T = DCT0;
   const D = R.death; let c = null;
-  try { if (D && killer && killer !== PLAYER_ENT) c = makeClip({ killer, victim: PLAYER_ENT, t: D.t, wall: D.wall, weapon: D.weapon, crit: D.crit, hp: D.hp }); } catch (e) { warnOnce(e); c = null; }
+  if (window.SPECTATE && window.SPECTATE.on) return;   // watching as a spectator: no killcam
+  const world = D && !D.killer && BLAST.has(D.weapon);  // the demolition charge (no killer): orbit replay of the blast
+  try { if (D && ((killer && killer !== PLAYER_ENT) || world)) c = makeClip({ killer: world ? null : killer, victim: PLAYER_ENT, t: D.t, wall: D.wall, weapon: D.weapon, crit: D.crit, hp: D.hp, dist: D.dist, skin: D.skin }); } catch (e) { warnOnce(e); c = null; }
+  KC.lastMiss = c ? null : { why: !D ? 'no death' : !killer && !world ? 'no killer' : 'no footage', t: D && D.t };
   if (!c) return;                                   // self, world, no footage: the normal death cam shows instead
   KC.clip = c; KC.first = true; KC.rt = c.t0; KC.lastRt = c.t0 - 1e-4; KC.bob = 0; KC.hmT = 0; KC.started = performance.now();
   DC.T = Math.max(DCT, RS - END_PAD - c.dur);      // short footage: the death cam simply runs a bit longer
   REC.on = true; REC.deathT = c.deathT; REC.killer = killer; REC.ki = robots.indexOf(killer); REC.lastRt = -1e9;
   fillBanner(c); if (KC.log) KC.log.length = 0; if (KC.snd) KC.snd.length = 0;
+  setTimeout(() => { try { if (KC.clip && KC.clip.deathT === c.deathT && !KC.live) prewarm(KC.clip); } catch (e) { warnOnce(e); } }, Math.max(100, (DC.T - .3) * 1000));   // after the actors are built (one per frame), before the replay
 };
 const _stopKillcam = stopKillcam;
 stopKillcam = function () {
@@ -406,10 +626,44 @@ stopKillcam = function () {
   hideGhosts(); hideProxies();
   if ($('scope')) setStyle($('scope'), 'opacity', '0');
   if ($('killcam')) $('killcam').hidden = true; if ($('death')) $('death').classList.remove('kc'); if ($('hud')) $('hud').classList.remove('kcview');
-  if (D0) { D0.fx.style.opacity = '0'; D0.hm.style.opacity = '0'; D0.down.hidden = true; }
+  if (D0) { D0.fx.style.opacity = '0'; D0.hm.style.opacity = '0'; D0.down.hidden = true; D0.you.style.opacity = '0'; } KC.youSet = false;
   if (was && camera.fov < 40) { camera.fov = 62; camera.updateProjectionMatrix(); }
   DC.T = DCT0; KC.clip = null; if (!KC.fin) duck(false);
+  vmRestore();
 };
+// the killer's finish on the first-person gun during the replay; your own finishes come back afterwards
+function vmFinish(vm, kw, c) {
+  const gs = GS(); if (!gs || !vm || !vm.group) return; const want = (c.fin && c.fin[kw]) || 'factory', g = vm.group;
+  if ((g.userData.gsSkin || 'factory') === want && g.userData.gsTemp) return;
+  if ((g.userData.gsSkin || 'factory') === want && !KC.vmTouched) return;
+  (KC.vmTouched || (KC.vmTouched = new Set())).add(kw); g.userData.gsTemp = true;
+  try { gs.apply(kw, want, g); } catch (e) { warnOnce(e); }
+}
+// put the killer's finish on their gun and compile it now, during the death cam, not on the first replay frame (a hitch)
+function prewarm(c) {
+  if (!c) return; const t0 = performance.now(), ws = new Set(c.orbit ? [] : [c.weapon]);
+  try { const K = c.ktr; for (let i = 0; i < K.t.length; i += 6) if (K.t[i] >= c.t0) ws.add(wname(K.v[i * S_ + 8])); } catch (e) {}
+  const shown = [], gh = [], extra = [];
+  try { buildGhosts(99);
+    // every gun an actor holds during the clip is built (and its finish applied) now, not when they switch to it mid-replay
+    for (const ent of c.cast) { const g = GH.get(ent), tr = ent === c.victim ? c.me : R.tracks.get(ent); if (!g || !tr) continue; const w0 = g.curW, seen = new Set();
+      for (let i = 0; i < tr.t.length; i += 4) if (tr.t[i] >= c.t0 - .1 && tr.t[i] <= c.t1) { const w = wname(tr.v[i * S_ + 8]); if (!seen.has(w)) { seen.add(w); setGhostWeapon(g, w); } }
+      if (w0) setGhostWeapon(g, w0); }
+    for (const g of GH.values()) if (g.kcScene === scene && !g.root.visible) { g.root.visible = true; g.gun.visible = true; g.root.position.y -= 400; g.gun.position.y -= 400; gh.push(g);
+      for (const k in g.guns) if (g.guns[k] !== g.gunInner && !g.guns[k].parent) { g.gun.add(g.guns[k]); extra.push(g.guns[k]); } } } catch (e) { warnOnce(e); }
+  for (const w of ws) { const vm = WM[w]; if (!vm || !vm.group) continue; vmFinish(vm, w, c); if (!vm.group.visible) { vm.group.visible = true; shown.push(vm.group); } }
+  try { if (shown.length && typeof renderer === 'object' && renderer.compile && typeof gunScene === 'object') { const prev = renderer.getRenderTarget(); if (typeof rt === 'object' && rt && rt.isWebGLRenderTarget) renderer.setRenderTarget(rt); renderer.compile(gunScene, gunCam); renderer.setRenderTarget(prev); } } catch (e) { warnOnce(e); }
+  try { if (gh.length && renderer.compile) { const prev = renderer.getRenderTarget(); if (typeof rt === 'object' && rt && rt.isWebGLRenderTarget) renderer.setRenderTarget(rt); renderer.compile(scene, camera); renderer.setRenderTarget(prev); } } catch (e) { warnOnce(e); }
+  for (const m of extra) if (m.parent) m.parent.remove(m);
+  for (const g of gh) { g.root.visible = false; g.gun.visible = false; g.root.position.y += 400; g.gun.position.y += 400; }
+  for (const g of shown) g.visible = false;
+  KC.warmMs = performance.now() - t0;
+}
+function vmRestore() {
+  if (!KC.vmTouched) return; const S = KC.vmTouched; KC.vmTouched = null;
+  for (const w of S) { const g = WM[w] && WM[w].group; if (g) g.userData.gsTemp = false; }
+  try { const gs = GS(); if (gs && gs._refresh) gs._refresh(); } catch (e) { warnOnce(e); }
+}
 function skip() {
   if (KC.fin) { endFinal(); return; }
   if (state !== 'dead' || !REC.on || !KC.clip) return;
@@ -531,10 +785,95 @@ function burst(p) {   // a replayed explosion: looks only, no damage
   lightFlash(p, 0x66ccff, 12, 18);
 }
 const ez = x => x * x * (3 - 2 * x);
+/* ---------- camera vs the map: world.colliders are the solid boxes the game collides with ---------- */
+const CAM_R = .18;
+function unclip(p, footY, walk) {   // push the eye out of any solid box (toward the side the body is on); returns metres moved
+  const C = (typeof world === 'object' && world && world.colliders) || []; let moved = 0;
+  for (let pass = 0; pass < 2; pass++) for (const b of C) {
+    if (b.walk && !walk) continue;
+    if (p.x <= b.min.x - CAM_R || p.x >= b.max.x + CAM_R || p.z <= b.min.z - CAM_R || p.z >= b.max.z + CAM_R || p.y <= b.min.y - CAM_R || p.y >= b.max.y + CAM_R) continue;
+    if (footY !== undefined && b.max.y <= footY + .35) continue;           // a step / the floor under you
+    const down = footY !== undefined && b.min.y > footY + .6 ? p.y - (b.min.y - CAM_R) : 1e9;   // a ceiling over the head: stay under it
+    const dx0 = p.x - (b.min.x - CAM_R), dx1 = b.max.x + CAM_R - p.x, dz0 = p.z - (b.min.z - CAM_R), dz1 = b.max.z + CAM_R - p.z, m = Math.min(dx0, dx1, dz0, dz1, down);
+    if (m === down) p.y -= down; else if (m === dx0) p.x -= dx0; else if (m === dx1) p.x += dx1; else if (m === dz0) p.z -= dz0; else p.z += dz1;
+    moved += m;
+  }
+  return moved;
+}
+const BODY_R = .62, KEEP = .95;
+// the replay camera never sits inside (or right up against) a body: a knife lunge carries the killer into the victim.
+// Pull it back along the view (the target stays in the middle) to ~1 m, like a melee killcam; sideways only if needed
+function unclipActors(p, c) {
+  let moved = 0; _c.set(0, 0, -1).applyQuaternion(camera.quaternion); let fx = _c.x, fz = _c.z; const fl = Math.hypot(fx, fz) || 1; fx /= fl; fz /= fl;
+  for (const g of GH.values()) { if (!g.root.visible || g.kcEnt === c.killer) continue; const q = g.root.position; if (p.y < q.y - .2 || p.y > q.y + 2.1) continue;
+    const dx = p.x - q.x, dz = p.z - q.z, d = Math.hypot(dx, dz); if (d >= KEEP) continue;
+    // solve |p - s*f - q| = KEEP for s >= 0
+    const b = dx * fx + dz * fz, cc = d * d - KEEP * KEEP, disc = b * b - cc;
+    if (b <= .05 && disc > 0) { const sb = b + Math.sqrt(disc); p.x -= fx * sb; p.z -= fz * sb; moved += sb; }
+    else if (d < BODY_R) { let nx = dx, nz = dz; if (d < 1e-3) { nx = -fx; nz = -fz; } const L = Math.hypot(nx, nz) || 1; p.x = q.x + nx / L * BODY_R; p.z = q.z + nz / L * BODY_R; moved += BODY_R - d; } }
+  return moved;
+}
+function inBody(p, c) {   // test probe
+  for (const g of GH.values()) { if (!g.root.visible || g.kcEnt === c.killer) continue; const q = g.root.position; if (Math.hypot(p.x - q.x, p.z - q.z) < BODY_R - .05 && p.y > q.y - .2 && p.y < q.y + 2.1) return true; }
+  return false;
+}
+function inWall(p) {   // test probe: the camera is inside a solid box (not counting its own clearance)
+  const C = (typeof world === 'object' && world && world.colliders) || [];
+  for (const b of C) if (!b.walk && p.x > b.min.x + .02 && p.x < b.max.x - .02 && p.y > b.min.y + .02 && p.y < b.max.y - .02 && p.z > b.min.z + .02 && p.z < b.max.z - .02) return true;
+  return false;
+}
+function segHit(a, b, walk) {   // first solid box along a -> b (0-1), slab test against the colliders (walk: ramps/stairs count too)
+  const C = (typeof world === 'object' && world && world.colliders) || []; let best = 1;
+  const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+  for (const B of C) { if (B.walk && !walk) continue; let t0 = 0, t1 = best;
+    for (const [o, d, lo, hi] of [[a.x, dx, B.min.x, B.max.x], [a.y, dy, B.min.y, B.max.y], [a.z, dz, B.min.z, B.max.z]]) {
+      if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) { t0 = 2; break; } continue; }
+      let u = (lo - o) / d, v = (hi - o) / d; if (u > v) { const w = u; u = v; v = w; } t0 = Math.max(t0, u); t1 = Math.min(t1, v); if (t0 > t1) break; }
+    if (t0 <= t1 && t0 < best && t0 > 0) best = t0; }
+  return best;
+}
+function orbitPos(O, k, out) { const a = lerp(O.a0, O.a1, k), r = lerp(O.r0, O.r1, k); return out.set(O.center.x + Math.sin(a) * r, O.center.y + lerp(2.6, 1.9, k), O.center.z + Math.cos(a) * r); }
+// grenade / rocket / charge kills: a slow orbit around the blast, the thrower and you both in view
+const _oc = new THREE.Vector3(), _ol = new THREE.Vector3(), _ov = new THREE.Vector3();
+function orbitCam(c, rt) {
+  if (!c.orb) {
+    lin(c.me, c.deathT, SA); const vp = new THREE.Vector3(SA[0], SA[1], SA[2]);
+    let bp = null, bd = 1e9; for (const b of c.booms) { const d = Math.abs(b.t - c.deathT) + b.p.distanceTo(vp) * .02; if (d < bd && Math.abs(b.t - c.deathT) < .4) { bd = d; bp = b.p.clone(); } }
+    const center = bp || vp.clone().setY(vp.y + .6);
+    let kp = null; if (c.killer !== c.victim) { if (lin(c.ktr, c.deathT - .8, SB)) kp = new THREE.Vector3(SB[0], SB[1], SB[2]); }
+    const from = kp ? Math.atan2(kp.x - center.x, kp.z - center.z) : 0;
+    // candidate start angles round the blast: room for the camera (no wall in the way), you and the thrower in sight,
+    // ideally behind you looking toward where the throw came from; then drift ~70 degrees toward the clearer side
+    const eyeOf = (a, r) => _ov.set(center.x + Math.sin(a) * r, center.y + 2.4, center.z + Math.cos(a) * r), up = new THREE.Vector3(center.x, center.y + .8, center.z);
+    // (visibility by a real ray against the map meshes: stairs, rails and props hide you too)
+    const sees = (e, x, y, z) => { try { return lineOfSight(e, _oc.set(x, y, z)); } catch (er) { return segHit(e, _oc.set(x, y, z), true) > .98; } };
+    let best = null;
+    for (let k = 0; k < 16; k++) { const a = from + Math.PI + (k - 8) / 16 * Math.PI * 2;
+      let sc = 0; for (const [da, w] of [[0, 3], [.6, 1], [-.6, 1]]) sc += segHit(up, eyeOf(a + da, 6.2), true) * w;
+      for (const [aa, rr] of [[a, 6.2], [a + .6, 4.8], [a - .6, 4.8]]) { const e = eyeOf(aa, rr).clone(); if (sees(e, vp.x, vp.y + 1.1, vp.z)) sc += 1.6; if (sees(e, center.x, center.y + .4, center.z)) sc += .8; if (kp && sees(e, kp.x, kp.y + 1.3, kp.z)) sc += .5; }
+      sc -= Math.abs(wrapPi(a - (from + Math.PI))) * .35;
+      if (!best || sc > best.sc) best = { a, sc }; }
+    const side = segHit(up, eyeOf(best.a + .7, 6.2), true) >= segHit(up, eyeOf(best.a - .7, 6.2), true) ? 1 : -1;
+    c.orb = { center, vp, kp, a0: best.a - side * .25, a1: best.a + side * .95, r0: 6.2, r1: 4.6, score: best.sc };
+    // how far out the camera may go along the whole path, worked out once: the safe distance is the minimum over a
+    // window and blended between samples, so a wall coming into the line pulls the camera in smoothly (no pop)
+    const N = 48, raw = [], O = c.orb; for (let i = 0; i <= N; i++) { const k = i / N; orbitPos(O, k, _oc); _ov.copy(O.center); _ov.y += .8; raw.push(Math.max(.15, Math.min(1, segHit(_ov, _oc, true)) - .06)); }
+    O.safe = raw.map((_, i) => { let m = 1; for (let j = Math.max(0, i - 3); j <= Math.min(N, i + 3); j++) m = Math.min(m, raw[j]); return m; });
+  }
+  const O = c.orb, k = smooth((rt - c.t0) / Math.max(.1, c.t1 - c.t0));
+  orbitPos(O, k, _oc); _ov.copy(O.center); _ov.y += .8;
+  { const x = k * (O.safe.length - 1), i = Math.min(O.safe.length - 2, Math.floor(x)), f = O.safe[i] + (O.safe[i + 1] - O.safe[i]) * (x - i); if (f < 1) _oc.lerpVectors(_ov, _oc, f); }
+  unclip(_oc, undefined, true);
+  // look: early at you (with the grenade coming), at the blast when it goes off
+  const kb = smooth((rt - (c.deathT - .5)) / .5);
+  lin(c.me, Math.min(rt, c.deathT), SA); _ol.set(SA[0], SA[1] + 1.1, SA[2]).lerp(_ov.copy(O.center).setY(O.center.y + .5), kb * .7);
+  camera.position.copy(_oc); camera.up.set(0, 1, 0); camera.lookAt(_ol); camera.rotation.setFromQuaternion(camera.quaternion, 'YXZ'); camera.rotation.z = 0; camera.updateMatrixWorld();
+  if (Math.abs(camera.fov - 62) > .01) { camera.fov = 62; camera.updateProjectionMatrix(); }
+}
 const _applyReplay = applyReplay, _restoreReplay = restoreReplay;
 applyReplay = function () {
   const c = KC.clip; if (!c || !REC.on) return false;
-  try { if (P.dieT > RS + .25) { stopKillcam(); $('death').hidden = false; return false; } return applyClip(c, Math.max(0, P.dieT - DC.T)); } catch (e) { warnOnce(e); KC.inReplay = false; try { restoreClip(); } catch (e2) {} REC.on = false; KC.clip = null; return false; }
+  try { if (P.dieT > RS + .25 || (window.SPECTATE && window.SPECTATE.on)) { stopKillcam(); if (!(window.SPECTATE && window.SPECTATE.on)) $('death').hidden = false; return false; } return applyClip(c, Math.max(0, P.dieT - DC.T)); } catch (e) { warnOnce(e); KC.inReplay = false; try { restoreClip(); } catch (e2) {} REC.on = false; KC.clip = null; return false; }
 };
 restoreReplay = function () { try { restoreClip(); } catch (e) { warnOnce(e); } };
 // pose the world as it was at replay time and look through the killer's eyes; el = seconds since the replay started
@@ -565,32 +904,37 @@ function applyClip(c, el) {
   }
   // ---- the killer's eyes ----
   const K = c.ktr; let tk = rt, kDown = false;
-  lin(K, rt, SB); if (SB[11] > .5) { kDown = true; let i = seg(K.t, rt); while (i > 0 && K.v[i * S_ + 11] > .5) i--; tk = K.t[i]; lin(K, tk, SB); }
+  lin(K, rt, SB); if (SB[11] > .5 && !c.orbit) { kDown = true; let i = seg(K.t, rt); while (i > 0 && K.v[i * S_ + 11] > .5) i--; tk = K.t[i]; lin(K, tk, SB); }
   let thrW = 0; for (const t of c.kthrows) { const q = rt - t; if (q > -.15 && q < .6) thrW = Math.max(thrW, q < 0 ? 1 + q / .15 : q < .45 ? 1 : 1 - (q - .45) / .15); }   // a throw takes the gun off their eye
   const kw = wname(SB[8]), W = WEAPONS[kw] || WEAPONS.carbine, cr = SB[5], ads = clamp(SB[6], 0, 1) * (1 - thrW), rl = SB[7], sw = SB[15], gnd = SB[9] > .5, sprint = SB[17] > .5;
   viewAt(K, tk, VIEW);
   velAt(K, tk, _a); const hs = Math.hypot(_a.x, _a.z), air = !gnd || Math.abs(_a.y) > 2;
   if (!air && !kDown) KC.bob += dt * hs * (sprint ? 1.25 : 1.45);
   const bobAmt = clamp(hs / 6, 0, 1.3) * (1 - ads * .85), kick = kDown ? 0 : kickAt(rt, c.fires), kAmp = clamp((W.kick || 1.5) / 1.5, .6, 2.6);
-  const scoped = !!W.scope && ads > .85 && rl < 0 && !kDown;
-  const eye = VIEW.y + (c.kind === 'bot' ? lerp(1.62, 1.12, cr) : lerp(1.65, 1.05, cr));
-  camera.position.set(VIEW.x, eye + Math.sin(KC.bob * 2) * .04 * bobAmt, VIEW.z);
+  const scoped = !c.orbit && !!W.scope && ads > .85 && rl < 0 && !kDown;
+  if (c.orbit) { orbitCam(c, rt); KC.wallFix = 0; } else {
+  const eyeH = clamp(herm(K, tk, 18), .8, 1.8) || 1.6;   // their recorded eye height (crouch, step-up smoothing)
+  camera.position.set(VIEW.x, VIEW.y + eyeH + Math.sin(KC.bob * 2) * .03 * bobAmt, VIEW.z);
+  KC.wallFix = unclip(camera.position, VIEW.y);          // never inside a wall or a ceiling
   let pitch = VIEW.pitch + kick * .011 * kAmp * (scoped ? .6 : 1), yaw = VIEW.yaw + Math.PI;
   if (scoped) { const t2 = rt; pitch += Math.sin(t2 * .9) * .0016; yaw += Math.sin(t2 * .63 + 1) * .002; }
-  camera.rotation.set(pitch, yaw, Math.sin(KC.bob) * .008 * bobAmt - cr * .02, 'YXZ');
+  camera.rotation.set(clamp(pitch, -1.5, 1.5), yaw, 0, 'YXZ');   // no camera roll in the replay
+  { const m = unclipActors(camera.position, c); if (m) { KC.wallFix += m; unclip(camera.position, VIEW.y); } }
   camera.updateMatrixWorld();
   { const base = lerp(sprint ? 84 : 78, W.adsFov || 60, ads), z = slow && !scoped ? (1 - sp) / (1 - SLOW) : 0, fv = base - 6 * ez(z);
     if (Math.abs(camera.fov - fv) > .01) { camera.fov = fv; camera.updateProjectionMatrix(); }
     const gf = lerp(60, 50, ads); if (Math.abs(gunCam.fov - gf) > .01) { gunCam.fov = gf; gunCam.updateProjectionMatrix(); } }
+  }
   // yaw rate drives the weapon sway, like a mouse does
   const yr = wrapPi(herm(K, tk + .03, 3, true) - herm(K, tk - .03, 3, true)) / .06, pr = (herm(K, tk + .03, 4) - herm(K, tk - .03, 4)) / .06;
   // ---- their weapon, in their hands ----
   const vm = WM[kw] || WM.carbine;
+  if (!c.orbit) vmFinish(vm, kw, c);
   live.vm = { gv: gunVisible, vis: [], vm, pos: vm.group.position.clone(), rot: vm.group.rotation.clone(), fl: vm.flash ? vm.flash.visible : false, ret: vm.reticle ? vm.reticle.visible : null, rear: vm.rear ? vm.rear.visible : null,
     mag: vm.mag ? [vm.mag.position.clone(), vm.mag.visible] : null, arm: vm.leftArm ? vm.leftArm.position.clone() : null };
   for (const id in WM) if (WM[id].group.visible) { live.vm.vis.push(WM[id].group); WM[id].group.visible = false; }
   let thr = 0; for (const t of c.kthrows) { const k = (rt - t) / .45; if (k >= 0 && k <= 1) thr = Math.max(thr, Math.sin(Math.PI * k)); }
-  const showVm = !scoped && !kDown;
+  const showVm = !scoped && !kDown && !c.orbit;
   vm.group.visible = showVm; gunVisible = showVm;
   { const tilt = rl >= 0 ? Math.sin(Math.PI * clamp(rl * 1.05, 0, 1)) : 0, magDrop = rl < 0 || kw === 'sniper' ? 0 : rl < .14 ? 0 : rl < .34 ? (rl - .14) / .2 : rl < .52 ? 1 : rl < .66 ? 1 - (rl - .52) / .14 : 0;
     if (vm.mag && vm.magPos) { vm.mag.position.set(vm.magPos.x, vm.magPos.y - magDrop * .35, vm.magPos.z + magDrop * .05); vm.mag.visible = !(rl >= 0 && magDrop > .97); }
@@ -607,11 +951,12 @@ function applyClip(c, el) {
     if (vm.glow && kw === 'knife') vm.glow.color.setRGB(.5, 2.6, 3.6).multiplyScalar(sw >= 0 ? 1.8 : 1);
   }
   grade.uniforms.uAds.value = ads;
+  if (kw === 'boomerang' && vm.boom) { try { poseBoomKC(vm, rt, dt, c, K); } catch (e) { warnOnce(e); } } else hideKcBlade();
   if (vm.group.visible && KC.onVm) { try { KC.onVm(vm, kw); } catch (e) { warnOnce(e); } }   // generic hook: a custom weapon module animates its own viewmodel here
   if (vm.group.visible) vm.group.updateMatrixWorld(true);
   // ---- their shots: tracer from their muzzle, flash, sound, sparks ----
   for (const s of c.kshots) if (s.t > prev && s.t <= rt) {
-    const mw = muzzleWorld(vm, scoped, _a), ww = WEAPONS[s.wid || kw] || W, wid = s.wid || kw, life = 1 / Math.max(sp, SLOW);
+    const kg = c.orbit ? GH.get(c.killer) : null, mw = kg && kg.root.visible ? kg.muzzle.getWorldPosition(_a) : muzzleWorld(vm, scoped, _a), ww = WEAPONS[s.wid || kw] || W, wid = s.wid || kw, life = 1 / Math.max(sp, SLOW);
     if (wid === 'arc') zap(mw.clone(), s.b.clone(), new THREE.Color(...(ww.glow || [1, 2, 4])).multiplyScalar(1.4));
     else if (wid === 'inferno') { const dir = _c.subVectors(s.b, mw).normalize(); for (let k = 0; k < 14; k++) { const v = rand(9, 14); FX.spawn(mw, dir.x * v + rand(-1.2, 1.2), dir.y * v + rand(-.6, 1.2), dir.z * v + rand(-1.2, 1.2), 3, rand(.8, 1.4), .2, rand(.08, .16), rand(.45, .7), -1.5, 1.4, .45); } }
     else { const col = s.c || new THREE.Color(...(ww.tracer || [5, 3.6, 2.2])), wd = s.w || (ww.beam ? .07 : ww.oneShot ? .035 : .022), lf2 = (s.l || (ww.beam ? .3 : ww.oneShot ? .14 : .06)) * life;
@@ -637,16 +982,21 @@ function applyClip(c, el) {
     if (kw === 'knife') fxSound('knifeHit', { rate: speedAt(h.t, c), delay: sched(h.t), t: h.t }, 'knifeHit'); if (h.kill && d) { d.fx.style.transition = 'none'; d.fx.style.background = ''; d.fx.style.opacity = '.9'; } }
   KC.hmT = Math.max(0, (KC.hmT || 0) - dt);
   if (d) {
-    d.hm.className = KC.hmK || ''; d.hm.style.opacity = KC.hmT > 0 ? '1' : '0'; d.hm.style.transform = `scale(${KC.hmT > 0 ? 1 + KC.hmT * 1.2 : 1})`;
+    d.hm.className = KC.hmK || ''; d.hm.style.opacity = KC.hmT > 0 && !c.orbit ? '1' : '0'; d.hm.style.transform = `scale(${KC.hmT > 0 ? 1 + KC.hmT * 1.2 : 1})`;
     if (!first && d.fx.style.opacity !== '0') { d.fx.style.transition = 'opacity .35s'; d.fx.style.opacity = '0'; }
-    const xh = !scoped && ads < .45 && !kDown, gap = (5 + hs * 1.6 + (air ? 14 : 0) + Math.min(1, kick * .7) * 14) * (1 - cr * .3);
+    const xh = !scoped && ads < .45 && !kDown && !c.orbit, gap = (5 + hs * 1.6 + (air ? 14 : 0) + Math.min(1, kick * .7) * 14) * (1 - cr * .3);
     d.cross.style.opacity = xh ? '1' : '0';
     if (xh) { const [u, dn, l, r] = d.xi; u.style.top = `${(-gap - 11).toFixed(1)}px`; dn.style.top = `${gap.toFixed(1)}px`; l.style.left = `${(-gap - 11).toFixed(1)}px`; r.style.left = `${gap.toFixed(1)}px`; for (const q of [u, dn, l, r]) q.style.display = kw === 'knife' ? 'none' : ''; }
     d.down.hidden = !kDown;
   }
   setStyle($('scope'), 'opacity', scoped ? '1' : '0');
+  if (d && d.you) { let show = false;   // a marker over the victim (you), like the name tag over you in a CoD killcam
+    if (gm && gm.root.visible && rt < c.deathT + .05) { _ndc.set(gm.root.position.x, gm.root.position.y + 2.05, gm.root.position.z).project(camera);
+      if (_ndc.z < 1 && Math.abs(_ndc.x) < 1.05 && Math.abs(_ndc.y) < 1.05) { show = true; d.you.style.transform = `translate(${((_ndc.x + 1) / 2 * innerWidth).toFixed(1)}px,${((1 - _ndc.y) / 2 * innerHeight).toFixed(1)}px) translate(-50%,-100%)`; } }
+    if (show && !KC.youSet) { KC.youSet = true; d.you.firstChild.textContent = c.victim === PLAYER_ENT ? 'YOU' : String(c.victim.name || '').toUpperCase(); d.you.style.setProperty('--yc', c.victim === PLAYER_ENT ? (NET.on ? '#' + new THREE.Color(...NET_COLORS[(NET.color | 0) % NET_COLORS.length]).getHexString() : '#ff8a3d') : (c.victim.cssCol || '#fff')); }
+    d.you.style.opacity = show ? (scoped ? '.75' : '1') : '0'; }
   { const A = KC.aud, r = speedAt(rt, c);
-    if (!kDown) {
+    if (!kDown && !c.orbit) {
       if (!air && A.air) fxSound('land', { rate: r, t: rt }, 'step'); A.air = air;
       if (!air && hs > 1) { A.step += hs * dt; if (A.step > (sprint ? 2.5 : 1.9)) { A.step = 0; fxSound(sprint ? 'stepSprint' : cr > .5 ? 'stepCrouch' : 'step', { rate: r, vol: .9, t: rt }, 'step'); } }
       if (rl >= 0 && A.rl < .14 && rl >= .14) fxSound(kw === 'sniper' ? 'bolt' : 'magOut', { rate: r, t: rt }, 'reload');
@@ -658,8 +1008,10 @@ function applyClip(c, el) {
     if (gm && gm.root.visible && rt < c.deathT) { const vh = Math.hypot(gm.vel.x, gm.vel.z); if (gm.onGround && vh > 1) { A.vstep += vh * dt; if (A.vstep > 2.1) { A.vstep = 0; fxSound('step', { rate: r, pos: gm.root.position.clone(), ref: 3, vol: 1.1, t: rt, who: 'victim' }, 'step'); } } }
   }
   setText('kcTime', rt >= c.deathT - .02 ? 'ELIMINATED' : slow ? 'SLOW MOTION' : `-${Math.max(0, c.deathT - rt).toFixed(1)}s`);
+  if (KC.log && renderer.info && renderer.info.programs) { const P0 = renderer.info.programs; if (first || !KC.prgSeen) { KC.prgSeen = new Set(P0.map(p => p.id)); KC.newPrg = []; } else if (P0.length !== KC.prgN) { for (const p of P0) if (!KC.prgSeen.has(p.id)) { KC.prgSeen.add(p.id); KC.newPrg.push([+(rt - c.deathT).toFixed(3), p.name, String(p.cacheKey).slice(0, 160)]); } } KC.prgN = P0.length; }
   if (KC.log) KC.log.push({ final: c.final, el, rt, wall: performance.now(), x: camera.position.x, y: camera.position.y, z: camera.position.z, yaw: camera.rotation.y, pitch: camera.rotation.x, fov: camera.fov, scoped, ads, kw, vm: vm.group.visible, xh: d ? d.cross.style.opacity === '1' : false,
-    hm: KC.hmT > 0, kDown, slow, me: gm ? meInfo(gm) : null, cast: c.cast.length, proxies: [...PX.values()].filter(m => m.visible).length });
+    hm: KC.hmT > 0, kDown, slow, me: gm ? meInfo(gm) : null, inWall: inWall(camera.position), inBody: inBody(camera.position, c), occ: gm && gm.root.visible ? !lineOfSight(camera.position, _ndc.set(gm.root.position.x, gm.root.position.y + 1.1, gm.root.position.z)) : null, fix: +(KC.wallFix || 0).toFixed(3), orbit: !!c.orbit, hi: !!c.hi,
+    fin: c.fin && c.fin[kw] || 'factory', vmFin: vm.group.visible ? vm.group.userData.gsSkin || 'factory' : null, roll: camera.rotation.z, scopeOp: scoped, prg: renderer.info && renderer.info.programs ? renderer.info.programs.length : 0, cast: c.cast.length, proxies: [...PX.values()].filter(m => m.visible).length });
   return true;
 }
 function meInfo(g) {   // test probe: where you are on the killer's screen and how your legs move
@@ -668,8 +1020,74 @@ function meInfo(g) {   // test probe: where you are on the killer's screen and h
   let fy = null; if (foot) { foot.getWorldPosition(_a); fy = [_a.x - p.x, _a.y - p.y, _a.z - p.z]; }
   return { vis: g.root.visible, ang: Math.acos(clamp(fwd.dot(toMe), -1, 1)), dist, walk: A.walk.w + A.jog.w + A.sprint.w + A.cwalk.w, air: A.air.w, death: A.death.getEffectiveWeight(), foot: fy, hs: Math.hypot(g.vel.x, g.vel.z) };
 }
+/* ---- Vortex boomerang in the killer's hands (killcam audit, player report #1: "kill cam with boomerang doesn't show the animation").
+   The throws are the recorded fire times: the blade is wound up and spun in the fingers just before each one, the arm whips on
+   release, the hand is empty while the blade flies (it is drawn flying toward you on the throw that killed you), and the
+   catch snaps it home. Same poses as the game's own poseBoomVM. */
+const BOOM_FLY = 1.7, KB = { m: null, blade: null, halo: null, ang: 0, ang2: 0 };
+function kcBlade() {
+  if (KB.m && KB.m.parent === scene) return KB.m;
+  if (KB.m) { try { KB.m.parent && KB.m.parent.remove(KB.m); } catch (e) {} KB.m = null; }
+  if (typeof buildBoomBlade !== 'function' || typeof boomMats !== 'function') return null;
+  const mats = (typeof BOOM_MATS !== 'undefined' && BOOM_MATS) || boomMats(new THREE.Color(...WEAPONS.boomerang.glow).multiplyScalar(1.3));
+  const m = new THREE.Group(), blade = buildBoomBlade(mats); blade.scale.setScalar(1.25); m.add(blade);
+  try { const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex(T.glow), color: new THREE.Color(...WEAPONS.boomerang.glow).multiplyScalar(.5), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); halo.scale.setScalar(1.1); m.add(halo); KB.halo = halo; } catch (e) {}
+  m.visible = false; m.frustumCulled = false; scene.add(m); KB.m = m; KB.blade = blade; return m;
+}
+function hideKcBlade() { if (KB.m) KB.m.visible = false; }
+function resetBoomVm() { const vm = WM && WM.boomerang, B = vm && vm.boom; if (B) { B.blade.visible = true; B.blur.visible = B.ring.visible = true; B.blur.material.opacity = 0; B.ring.material.opacity = 0; } }
+const KV = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 }, _bq = new THREE.Euler(), _bf = new THREE.Vector3(), _bs = new THREE.Vector3(), _be = new THREE.Vector3();
+function poseBoomKC(vm, rt, dt, c, K) {
+  const B = vm.boom, g = vm.group; if (!B) return;
+  let charge = 0, tw = -1, flyD = -1, catchK = 0, fl = -9;
+  for (const f of c.fires) {
+    const d = rt - f;
+    if (d > -.32 && d < 0) charge = Math.max(charge, clamp((d + .32) / .3, 0, 1));   // winding up before the throw
+    if (d >= 0 && d < .28) tw = d / .28;                                              // the arm whips through the release
+    if (d >= 0 && d < BOOM_FLY) { flyD = d; fl = f; }                                  // the blade is away
+    if (d >= BOOM_FLY && d < BOOM_FLY + .32) catchK = Math.max(catchK, (BOOM_FLY + .32 - d) / .32);   // caught: snaps home
+  }
+  const out = flyD >= 0, k = charge, sk = k * k * (3 - 2 * k);
+  B.blade.visible = !out; B.blur.visible = B.ring.visible = !out;
+  KB.ang = (KB.ang || 0) + dt * (sk * 34 + catchK * 20);
+  if (sk < .02 && catchK <= 0) { const T2 = Math.PI * 2, rest = Math.round(KB.ang / T2) * T2; KB.ang = rest + (KB.ang - rest) * Math.exp(-14 * Math.max(dt, .016)); }
+  B.spin.position.set(lerp(.17, .02, sk), lerp(0, .06, sk), lerp(-.005, -.02, sk)); B.spin.scale.setScalar(lerp(1, .72, sk));
+  B.spin.rotation.set(0, KB.ang, 0);
+  B.holder.rotation.x = lerp(.75, .16, sk); B.holder.rotation.z = lerp(-.25, -.08, sk); B.holder.rotation.y = lerp(.35, 0, sk);
+  B.blur.material.opacity = sk * .3; B.ring.material.opacity = sk * .7; B.ring.rotation.y = -KB.ang * .35;
+  g.position.y -= sk * .015; g.position.x += sk * .02; g.position.z -= sk * .05; g.rotation.z -= sk * .1;
+  const whip = tw >= 0 ? Math.sin(Math.PI * tw) : 0;
+  g.position.z -= whip * .22; g.position.x -= whip * .09; g.position.y += whip * .05; g.rotation.y -= whip * .7; g.rotation.z += whip * .4; g.rotation.x -= whip * .25;
+  const reach = out ? clamp((flyD / BOOM_FLY - .5) / .5, 0, 1) : 0;
+  g.position.z -= reach * .12; g.position.y += reach * .045; g.position.x -= reach * .03; g.rotation.x += reach * .15;
+  g.position.x += k * .04 - (out ? .04 : 0); g.position.y += k * .02 - (out ? .02 : 0) - catchK * .06; g.position.z += k * .08 + catchK * .05;
+  g.rotation.y += k * .25; g.rotation.z += -catchK * .3; g.rotation.x += k * .06 + catchK * .2;
+  B.fingers.forEach((f, i) => { f.rotation.copy(f.userData.rest); if (out) { f.rotation.y = -.5 - i * .08; f.position.y = .012; } else f.position.y = .004 - i * .002; });
+  B.glow.color.copy(B.col).multiplyScalar(1 + sk * 2.2 + catchK * 2);
+  g.updateMatrixWorld(true);
+  // the flying blade, in the world: the throw that killed you flies at you; any other throw flies out along the crosshair and curls home
+  const m = out && kcBlade(); if (!m) { hideKcBlade(); return; }
+  viewAt(K, fl, KV); lin(K, fl, SA);
+  const eyeH = c.kind === 'bot' ? 1.62 : 1.65;
+  _bf.set(0, 0, -1).applyEuler(_bq.set(KV.pitch, KV.yaw + Math.PI, 0, 'YXZ'));
+  _bs.set(KV.x, KV.y + eyeH - .25, KV.z).addScaledVector(_bf, .6);
+  const dd = c.deathT - fl, fatal = dd > .05 && dd <= BOOM_FLY && c.me;
+  if (fatal) {
+    lin(c.me, Math.max(c.me.t[0], c.deathT - c.victimDelay), SB); _be.set(SB[0], SB[1] + 1.1, SB[2]);
+    const u = clamp(flyD / dd, 0, 1);   // arrives exactly when the shot lands, then rides on the body
+    m.position.lerpVectors(_bs, _be, u < 1 ? 1 - (1 - u) * (1 - u) : 1);
+    if (flyD > dd) m.position.y -= Math.min(.3, (flyD - dd) * .2);
+  } else {
+    const OUT = .8, u = flyD / OUT;
+    _be.copy(_bs).addScaledVector(_bf, 16);
+    if (u < 1) m.position.lerpVectors(_bs, _be, 1 - (1 - u) * (1 - u)); else { const h = clamp((flyD - OUT) / (BOOM_FLY - OUT), 0, 1), e = h * h * (3 - 2 * h); m.position.lerpVectors(_be, _bs, e); m.position.y += Math.sin(Math.PI * e) * 1.3; }
+  }
+  KB.ang2 += dt * 26; KB.blade.rotation.set(.12 * Math.sin(flyD * 3), KB.ang2, 0);
+  m.visible = true;
+}
 function restoreClip() {
   if (!KC.inReplay) return; KC.inReplay = false;
+  hideKcBlade(); resetBoomVm();
   hideGhosts(); hideProxies(); showLive();
   const v = live.vm; if (v) { const vm = v.vm; vm.group.position.copy(v.pos); vm.group.rotation.copy(v.rot); if (vm.flash) vm.flash.visible = v.fl; if (vm.reticle && v.ret !== null) vm.reticle.visible = v.ret; if (vm.rear && v.rear !== null) vm.rear.visible = v.rear;
     if (v.mag) { vm.mag.position.copy(v.mag[0]); vm.mag.visible = v.mag[1]; } if (v.arm) vm.leftArm.position.copy(v.arm);
@@ -677,27 +1095,58 @@ function restoreClip() {
 }
 
 /* ================= FINAL KILLCAM: the match-winning kill, from the winner's eyes, for everyone at match end ================= */
+/* Like CoD / Valorant: the match-ending kill plays full screen FIRST; the results / podium (modules/roundfx.js) and the XP /
+   Shards summaries (profile.js, shop.js) come only after the replay ends or is skipped. Offline, roundfx celebrates inside
+   endMatch, so it is switched off for that one call and started from endFinal with the same standings it would have used.
+   Any results element that still shows up (an online server matchEnd) is hidden while the replay is on screen. */
+const finalKillOf = winner => { for (let i = R.kills.length - 1; i >= 0; i--) { const k = R.kills[i]; if (k.k === winner && k.v !== winner && G.time - k.t < 3) return k; } return null; };
+const HOLD = { list: [] };
+function holdSummaries() {   // XP / Shards popups wait for the replay (they then go through roundfx's own wait for its podium)
+  for (const [o, k] of [[window.S9Profile, 'matchXp'], [window.S9Shop, 'matchCoins'], [window.S9Shop, 'showLastMatch']]) {
+    if (!o || typeof o[k] !== 'function' || o[k].__kcHold) continue; const f = o[k];
+    const w = function () { if (!KC.fin) return f.apply(this, arguments); const a = arguments, me = this; return new Promise(res => HOLD.list.push(() => { try { res(f.apply(me, a)); } catch (e) { res(null); } })); };
+    w.__kcHold = true; for (const p in f) { try { w[p] = f[p]; } catch (e) {} } o[k] = w; }
+}
+function releaseSummaries() { const L = HOLD.list.splice(0); for (const fn of L) setTimeout(fn, 0); }
+function rfxTable(winner) {   // the same standings roundfx builds in its endMatch hook
+  const st = typeof standings === 'function' ? standings() : [], n = NET;
+  const table = st.map((e, i) => ({ id: e.isPlayer ? 'me' : 'bot' + i, n: e.isPlayer ? ((n && n.nick) || 'You') : e.name, kills: e.kills | 0, deaths: e.deaths | 0, score: e.score | 0 }));
+  return { result: 'win', mode: 'ffa', offline: true, table, me: 'me', winner: winner && !winner.isPlayer ? 'bot' + st.indexOf(winner) : winner ? 'me' : null };
+}
 const _endMatch = endMatch;
 endMatch = function (winner) {
-  const was = G.ended, res = _endMatch.apply(this, arguments);
-  if (!was && G.ended && winner && state === 'matchend') { try { startFinal(winner); } catch (e) { warnOnce(e); } }
+  const was = G.ended, RF = window.S9RoundFX;
+  const defer = !was && !!winner && !NET.on && !!finalKillOf(winner) && !!(RF && RF.enabled && typeof RF.celebrate === 'function');
+  if (defer) RF.enabled = false;
+  let res; try { res = _endMatch.apply(this, arguments); } finally { if (defer) RF.enabled = true; }
+  let started = false;
+  if (!was && G.ended && winner && state === 'matchend') { try { started = startFinal(winner); } catch (e) { warnOnce(e); } }
+  if (defer) { const o = rfxTable(winner); if (started) KC.finDefer = o; else { try { RF.celebrate(o); } catch (e) { warnOnce(e); } } }
   return res;
 };
 function startFinal(winner) {
-  let K = null; for (let i = R.kills.length - 1; i >= 0; i--) { const k = R.kills[i]; if (k.k === winner && k.v !== winner && G.time - k.t < 3) { K = k; break; } }
-  if (!K) return;
+  const K = finalKillOf(winner);
+  if (!K) return false;
   const c = makeClip({ killer: winner, victim: K.v, t: K.t, wall: K.wall, weapon: K.weapon, crit: K.crit, hp: K.hp, final: true });
-  if (!c) return;
+  if (!c) return false;
+  holdSummaries(); document.body.classList.add('kcFinal'); KC.finEndT = G.endT;   // (offline: the results get their full time after the replay)
   stopKillcam(); KC.fin = c; KC.clip = c; KC.first = true; KC.rt = c.t0; KC.bob = 0; KC.hmT = 0; c.startWall = 0;
   fillBanner(c); if (KC.log) KC.log.length = 0; if (KC.snd) KC.snd.length = 0;
   $('mend').hidden = true; $('hud').hidden = false; $('hud').classList.add('kcview'); $('death').hidden = true; $('killcam').hidden = false;
+  return true;
 }
 function endFinal() {
-  const c = KC.fin; if (!c) return; KC.fin = null; KC.clip = null; KC.live = false; duck(false);
+  const c = KC.fin; if (!c) return; KC.fin = null; KC.clip = null; KC.live = false; duck(false); vmRestore();
   hideGhosts(); hideProxies(); setStyle($('scope'), 'opacity', '0'); $('killcam').hidden = true; $('hud').classList.remove('kcview');
   if (state === 'matchend') { $('hud').hidden = true; $('mend').hidden = false; }
   if (camera.fov < 40) { camera.fov = 62; camera.updateProjectionMatrix(); }
   const tb = $('killcam').querySelector('.kc-top b'); if (tb) tb.textContent = 'KILLCAM';
+  document.body.classList.remove('kcFinal');
+  // now the results: roundfx's podium (deferred above), then the held XP / Shards summaries
+  if (state === 'matchend' && !NET.on && KC.finEndT > 0) G.endT = Math.max(G.endT, KC.finEndT); KC.finEndT = 0;
+  const o = KC.finDefer; KC.finDefer = null;
+  if (o && state === 'matchend') { try { const RF = window.S9RoundFX; if (RF && RF.enabled && RF.celebrate) RF.celebrate(o); } catch (e) { warnOnce(e); } }
+  releaseSummaries();
 }
 KC.endFinal = endFinal;
 // the match-end screen has no replay hook in the frame loop, so the final killcam poses the world around the render itself
@@ -720,7 +1169,7 @@ if (typeof composer === 'object' && composer && typeof composer.render === 'func
 addEventListener('keydown', e => { if (e.code === 'Space' && KC.fin && state === 'matchend') { e.preventDefault(); endFinal(); } });
 
 /* ---------- test hooks ---------- */
-KC.R = R; KC.ghosts = GH; KC.consts = { RS, DCT, SLOW, SLOW_PRE, POST, END_PAD, HIST };
+KC.R = R; KC.ghosts = GH; KC.wTitle = wTitle; KC.ghostLook = ghostLook; KC.poseBoomKC = poseBoomKC; KC.boomBlade = () => KB; KC.consts = { RS, DCT, SLOW, SLOW_PRE, POST, END_PAD, HIST };
 KC.orig = { recFrame: _recFrame, recShot: _recShot, recFire: _recFire, startKillcam: _startKillcam, stopKillcam: _stopKillcam, applyReplay: _applyReplay, restoreReplay: _restoreReplay };
 KC.ready = true;
 })();

@@ -469,8 +469,9 @@ async function open() {
     if (!FORM.ctx || FORM.closedAt) { FORM.ctx = context(); FORM.shot = null; }
     FORM.closedAt = 0;
     // screenshot: the one taken when the pause menu opened, else the frame on screen now
-    if (!FORM.shot) { let c = st === 'paused' && pauseShot && pauseShot.c; if (!c) { await afterFrame(); c = grabCanvas(1024); } FORM.shot = encode(c, MAX_SHOT); }
     UI.done.hidden = true; UI.body.hidden = false; UI.msg.textContent = ''; UI.msg.className = 's9b-msg'; UI.send.disabled = false;
+    // the form opens at once; the screenshot (needs one rendered frame, which can be slow on a busy machine) is filled in a moment later
+    if (!FORM.shot) { let c = st === 'paused' && pauseShot && pauseShot.c; if (!c) { UI.counts(); showForm(); await Promise.race([afterFrame(), new Promise(r => setTimeout(r, 1500))]); if (UI.root.hidden) return; c = grabCanvas(1024); } FORM.shot = encode(c, MAX_SHOT); }   // closed again while waiting: stay closed
     UI.counts(); showForm(); syncMarkers();
     setTimeout(() => { try { (UI.cat.value ? UI.title : UI.cat).focus({ preventScroll: true }); } catch (e) {} }, 0);
   } finally { opening = false; }

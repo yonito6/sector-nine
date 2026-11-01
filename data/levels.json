@@ -1,7 +1,7 @@
 {
  "version": 1,
- "about": "Sector Nine levels. 50 levels = 10 ranks x 5 steps (I-V). XP to go from level L to L+1 = round(400 + 120*L + 6*L*L). totalXp = lifetime XP needed to reach that level. After level 50 every prestige.xpPer XP adds one Prestige (level stays 50). XP is decided by the game server only.",
- "formula": "round(400 + 120*L + 6*L*L)",
+ "about": "Sector Nine levels. 50 levels = 10 ranks x 5 steps (I-V). XP to go from level L to L+1 = round(500 + 60*L + 4*L*L). totalXp = lifetime XP needed to reach that level. After level 50 every prestige.xpPer XP adds one Prestige (level stays 50). XP is decided by the game server only.",
+ "formula": "round(500 + 60*L + 4*L*L)",
  "maxLevel": 50,
  "ranks": [
   "Recruit",
@@ -24,25 +24,25 @@
  ],
  "badges": "assets/ui/badges/rank_<rank>.png (512px, transparent); step pips drawn by the UI",
  "xp": {
-  "kill": 100,
-  "headshot": 50,
-  "assist": 40,
-  "win": 500,
-  "loss": 150,
-  "plant": 150,
-  "defuse": 200,
-  "roundWin": 120,
-  "mvp": 200,
-  "firstMatchOfDay": 500
+  "kill": 25,
+  "headshot": 10,
+  "assist": 10,
+  "win": 300,
+  "loss": 100,
+  "plant": 50,
+  "defuse": 75,
+  "roundWin": 40,
+  "mvp": 100,
+  "firstMatchOfDay": 300
  },
  "antiAbuse": {
   "minSeconds": 60,
   "minRealPlayers": 2,
-  "maxMatchXp": 5000
+  "maxMatchXp": 1500
  },
  "prestige": {
-  "afterXp": 409150,
-  "xpPer": 21400
+  "afterXp": 259700,
+  "xpPer": 13500
  },
  "levels": [
   {
@@ -52,7 +52,7 @@
    "step": 1,
    "stepName": "I",
    "totalXp": 0,
-   "xpToNext": 526
+   "xpToNext": 564
   },
   {
    "level": 2,
@@ -60,8 +60,8 @@
    "rankName": "Recruit",
    "step": 2,
    "stepName": "II",
-   "totalXp": 526,
-   "xpToNext": 664
+   "totalXp": 564,
+   "xpToNext": 636
   },
   {
    "level": 3,
@@ -69,8 +69,8 @@
    "rankName": "Recruit",
    "step": 3,
    "stepName": "III",
-   "totalXp": 1190,
-   "xpToNext": 814
+   "totalXp": 1200,
+   "xpToNext": 716
   },
   {
    "level": 4,
@@ -78,8 +78,8 @@
    "rankName": "Recruit",
    "step": 4,
    "stepName": "IV",
-   "totalXp": 2004,
-   "xpToNext": 976
+   "totalXp": 1916,
+   "xpToNext": 804
   },
   {
    "level": 5,
@@ -87,8 +87,8 @@
    "rankName": "Recruit",
    "step": 5,
    "stepName": "V",
-   "totalXp": 2980,
-   "xpToNext": 1150
+   "totalXp": 2720,
+   "xpToNext": 900
   },
   {
    "level": 6,
@@ -96,8 +96,8 @@
    "rankName": "Private",
    "step": 1,
    "stepName": "I",
-   "totalXp": 4130,
-   "xpToNext": 1336
+   "totalXp": 3620,
+   "xpToNext": 1004
   },
   {
    "level": 7,
@@ -105,8 +105,8 @@
    "rankName": "Private",
    "step": 2,
    "stepName": "II",
-   "totalXp": 5466,
-   "xpToNext": 1534
+   "totalXp": 4624,
+   "xpToNext": 1116
   },
   {
    "level": 8,
@@ -114,8 +114,8 @@
    "rankName": "Private",
    "step": 3,
    "stepName": "III",
-   "totalXp": 7000,
-   "xpToNext": 1744
+   "totalXp": 5740,
+   "xpToNext": 1236
   },
   {
    "level": 9,
@@ -123,8 +123,8 @@
    "rankName": "Private",
    "step": 4,
    "stepName": "IV",
-   "totalXp": 8744,
-   "xpToNext": 1966
+   "totalXp": 6976,
+   "xpToNext": 1364
   },
   {
    "level": 10,
@@ -132,8 +132,8 @@
    "rankName": "Private",
    "step": 5,
    "stepName": "V",
-   "totalXp": 10710,
-   "xpToNext": 2200
+   "totalXp": 8340,
+   "xpToNext": 1500
   },
   {
    "level": 11,
@@ -141,8 +141,8 @@
    "rankName": "Corporal",
    "step": 1,
    "stepName": "I",
-   "totalXp": 12910,
-   "xpToNext": 2446
+   "totalXp": 9840,
+   "xpToNext": 1644
   },
   {
    "level": 12,
@@ -150,8 +150,8 @@
    "rankName": "Corporal",
    "step": 2,
    "stepName": "II",
-   "totalXp": 15356,
-   "xpToNext": 2704
+   "totalXp": 11484,
+   "xpToNext": 1796
   },
   {
    "level": 13,
@@ -159,8 +159,8 @@
    "rankName": "Corporal",
    "step": 3,
    "stepName": "III",
-   "totalXp": 18060,
-   "xpToNext": 2974
+   "totalXp": 13280,
+   "xpToNext": 1956
   },
   {
    "level": 14,
@@ -168,8 +168,8 @@
    "rankName": "Corporal",
    "step": 4,
    "stepName": "IV",
-   "totalXp": 21034,
-   "xpToNext": 3256
+   "totalXp": 15236,
+   "xpToNext": 2124
   },
   {
    "level": 15,
@@ -177,8 +177,8 @@
    "rankName": "Corporal",
    "step": 5,
    "stepName": "V",
-   "totalXp": 24290,
-   "xpToNext": 3550
+   "totalXp": 17360,
+   "xpToNext": 2300
   },
   {
    "level": 16,
@@ -186,8 +186,8 @@
    "rankName": "Sergeant",
    "step": 1,
    "stepName": "I",
-   "totalXp": 27840,
-   "xpToNext": 3856
+   "totalXp": 19660,
+   "xpToNext": 2484
   },
   {
    "level": 17,
@@ -195,8 +195,8 @@
    "rankName": "Sergeant",
    "step": 2,
    "stepName": "II",
-   "totalXp": 31696,
-   "xpToNext": 4174
+   "totalXp": 22144,
+   "xpToNext": 2676
   },
   {
    "level": 18,
@@ -204,8 +204,8 @@
    "rankName": "Sergeant",
    "step": 3,
    "stepName": "III",
-   "totalXp": 35870,
-   "xpToNext": 4504
+   "totalXp": 24820,
+   "xpToNext": 2876
   },
   {
    "level": 19,
@@ -213,8 +213,8 @@
    "rankName": "Sergeant",
    "step": 4,
    "stepName": "IV",
-   "totalXp": 40374,
-   "xpToNext": 4846
+   "totalXp": 27696,
+   "xpToNext": 3084
   },
   {
    "level": 20,
@@ -222,8 +222,8 @@
    "rankName": "Sergeant",
    "step": 5,
    "stepName": "V",
-   "totalXp": 45220,
-   "xpToNext": 5200
+   "totalXp": 30780,
+   "xpToNext": 3300
   },
   {
    "level": 21,
@@ -231,8 +231,8 @@
    "rankName": "Lieutenant",
    "step": 1,
    "stepName": "I",
-   "totalXp": 50420,
-   "xpToNext": 5566
+   "totalXp": 34080,
+   "xpToNext": 3524
   },
   {
    "level": 22,
@@ -240,8 +240,8 @@
    "rankName": "Lieutenant",
    "step": 2,
    "stepName": "II",
-   "totalXp": 55986,
-   "xpToNext": 5944
+   "totalXp": 37604,
+   "xpToNext": 3756
   },
   {
    "level": 23,
@@ -249,8 +249,8 @@
    "rankName": "Lieutenant",
    "step": 3,
    "stepName": "III",
-   "totalXp": 61930,
-   "xpToNext": 6334
+   "totalXp": 41360,
+   "xpToNext": 3996
   },
   {
    "level": 24,
@@ -258,8 +258,8 @@
    "rankName": "Lieutenant",
    "step": 4,
    "stepName": "IV",
-   "totalXp": 68264,
-   "xpToNext": 6736
+   "totalXp": 45356,
+   "xpToNext": 4244
   },
   {
    "level": 25,
@@ -267,8 +267,8 @@
    "rankName": "Lieutenant",
    "step": 5,
    "stepName": "V",
-   "totalXp": 75000,
-   "xpToNext": 7150
+   "totalXp": 49600,
+   "xpToNext": 4500
   },
   {
    "level": 26,
@@ -276,8 +276,8 @@
    "rankName": "Captain",
    "step": 1,
    "stepName": "I",
-   "totalXp": 82150,
-   "xpToNext": 7576
+   "totalXp": 54100,
+   "xpToNext": 4764
   },
   {
    "level": 27,
@@ -285,8 +285,8 @@
    "rankName": "Captain",
    "step": 2,
    "stepName": "II",
-   "totalXp": 89726,
-   "xpToNext": 8014
+   "totalXp": 58864,
+   "xpToNext": 5036
   },
   {
    "level": 28,
@@ -294,8 +294,8 @@
    "rankName": "Captain",
    "step": 3,
    "stepName": "III",
-   "totalXp": 97740,
-   "xpToNext": 8464
+   "totalXp": 63900,
+   "xpToNext": 5316
   },
   {
    "level": 29,
@@ -303,8 +303,8 @@
    "rankName": "Captain",
    "step": 4,
    "stepName": "IV",
-   "totalXp": 106204,
-   "xpToNext": 8926
+   "totalXp": 69216,
+   "xpToNext": 5604
   },
   {
    "level": 30,
@@ -312,8 +312,8 @@
    "rankName": "Captain",
    "step": 5,
    "stepName": "V",
-   "totalXp": 115130,
-   "xpToNext": 9400
+   "totalXp": 74820,
+   "xpToNext": 5900
   },
   {
    "level": 31,
@@ -321,8 +321,8 @@
    "rankName": "Major",
    "step": 1,
    "stepName": "I",
-   "totalXp": 124530,
-   "xpToNext": 9886
+   "totalXp": 80720,
+   "xpToNext": 6204
   },
   {
    "level": 32,
@@ -330,8 +330,8 @@
    "rankName": "Major",
    "step": 2,
    "stepName": "II",
-   "totalXp": 134416,
-   "xpToNext": 10384
+   "totalXp": 86924,
+   "xpToNext": 6516
   },
   {
    "level": 33,
@@ -339,8 +339,8 @@
    "rankName": "Major",
    "step": 3,
    "stepName": "III",
-   "totalXp": 144800,
-   "xpToNext": 10894
+   "totalXp": 93440,
+   "xpToNext": 6836
   },
   {
    "level": 34,
@@ -348,8 +348,8 @@
    "rankName": "Major",
    "step": 4,
    "stepName": "IV",
-   "totalXp": 155694,
-   "xpToNext": 11416
+   "totalXp": 100276,
+   "xpToNext": 7164
   },
   {
    "level": 35,
@@ -357,8 +357,8 @@
    "rankName": "Major",
    "step": 5,
    "stepName": "V",
-   "totalXp": 167110,
-   "xpToNext": 11950
+   "totalXp": 107440,
+   "xpToNext": 7500
   },
   {
    "level": 36,
@@ -366,8 +366,8 @@
    "rankName": "Colonel",
    "step": 1,
    "stepName": "I",
-   "totalXp": 179060,
-   "xpToNext": 12496
+   "totalXp": 114940,
+   "xpToNext": 7844
   },
   {
    "level": 37,
@@ -375,8 +375,8 @@
    "rankName": "Colonel",
    "step": 2,
    "stepName": "II",
-   "totalXp": 191556,
-   "xpToNext": 13054
+   "totalXp": 122784,
+   "xpToNext": 8196
   },
   {
    "level": 38,
@@ -384,8 +384,8 @@
    "rankName": "Colonel",
    "step": 3,
    "stepName": "III",
-   "totalXp": 204610,
-   "xpToNext": 13624
+   "totalXp": 130980,
+   "xpToNext": 8556
   },
   {
    "level": 39,
@@ -393,8 +393,8 @@
    "rankName": "Colonel",
    "step": 4,
    "stepName": "IV",
-   "totalXp": 218234,
-   "xpToNext": 14206
+   "totalXp": 139536,
+   "xpToNext": 8924
   },
   {
    "level": 40,
@@ -402,8 +402,8 @@
    "rankName": "Colonel",
    "step": 5,
    "stepName": "V",
-   "totalXp": 232440,
-   "xpToNext": 14800
+   "totalXp": 148460,
+   "xpToNext": 9300
   },
   {
    "level": 41,
@@ -411,8 +411,8 @@
    "rankName": "General",
    "step": 1,
    "stepName": "I",
-   "totalXp": 247240,
-   "xpToNext": 15406
+   "totalXp": 157760,
+   "xpToNext": 9684
   },
   {
    "level": 42,
@@ -420,8 +420,8 @@
    "rankName": "General",
    "step": 2,
    "stepName": "II",
-   "totalXp": 262646,
-   "xpToNext": 16024
+   "totalXp": 167444,
+   "xpToNext": 10076
   },
   {
    "level": 43,
@@ -429,8 +429,8 @@
    "rankName": "General",
    "step": 3,
    "stepName": "III",
-   "totalXp": 278670,
-   "xpToNext": 16654
+   "totalXp": 177520,
+   "xpToNext": 10476
   },
   {
    "level": 44,
@@ -438,8 +438,8 @@
    "rankName": "General",
    "step": 4,
    "stepName": "IV",
-   "totalXp": 295324,
-   "xpToNext": 17296
+   "totalXp": 187996,
+   "xpToNext": 10884
   },
   {
    "level": 45,
@@ -447,8 +447,8 @@
    "rankName": "General",
    "step": 5,
    "stepName": "V",
-   "totalXp": 312620,
-   "xpToNext": 17950
+   "totalXp": 198880,
+   "xpToNext": 11300
   },
   {
    "level": 46,
@@ -456,8 +456,8 @@
    "rankName": "Sector Legend",
    "step": 1,
    "stepName": "I",
-   "totalXp": 330570,
-   "xpToNext": 18616
+   "totalXp": 210180,
+   "xpToNext": 11724
   },
   {
    "level": 47,
@@ -465,8 +465,8 @@
    "rankName": "Sector Legend",
    "step": 2,
    "stepName": "II",
-   "totalXp": 349186,
-   "xpToNext": 19294
+   "totalXp": 221904,
+   "xpToNext": 12156
   },
   {
    "level": 48,
@@ -474,8 +474,8 @@
    "rankName": "Sector Legend",
    "step": 3,
    "stepName": "III",
-   "totalXp": 368480,
-   "xpToNext": 19984
+   "totalXp": 234060,
+   "xpToNext": 12596
   },
   {
    "level": 49,
@@ -483,8 +483,8 @@
    "rankName": "Sector Legend",
    "step": 4,
    "stepName": "IV",
-   "totalXp": 388464,
-   "xpToNext": 20686
+   "totalXp": 246656,
+   "xpToNext": 13044
   },
   {
    "level": 50,
@@ -492,7 +492,7 @@
    "rankName": "Sector Legend",
    "step": 5,
    "stepName": "V",
-   "totalXp": 409150,
+   "totalXp": 259700,
    "xpToNext": null
   }
  ]
