@@ -5189,6 +5189,7 @@ function serverTransport(code, create) {
       else if (d.k === 'st') { if (d.f && d.p) accept(d.f, d.p); }
       else if (d.k === 'mx') { api.match = d.v || null; if (api.onMatch) api.onMatch(d); else (api.mxQueue = api.mxQueue || []).push(d); }   // kept until the modes add-on attaches
       else if (d.k === 'note') { api.onNote && api.onNote(d.e); }
+      else if (d.k === 'ac' && d.t === 'pos' && Array.isArray(d.x) && d.x.length === 3 && d.x.every(Number.isFinite) && NET.inMatch && P.pos && !P.dead && P.pos.distanceTo(_v1.set(d.x[0], d.x[1], d.x[2])) > 1.5) { P.pos.set(d.x[0], d.x[1], d.x[2]); P.vel.set(0, 0, 0); }   // anti-cheat: the server refused a move, everyone else sees us here
       else if (d.k === 'meta') onMeta(d.m);
       else if (d.k === 'left') { if (remotes.has(d.id)) { forget(d.id); fire([], [{ peer: d.id }]); } }
       else if (d.k === 'welcome') { myId = d.id; retry = false; sent = null; done(api); onMeta(d.meta); fire(); }   // (in a room again: the next state is a full one)
