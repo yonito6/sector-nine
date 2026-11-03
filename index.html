@@ -2798,7 +2798,8 @@ function initAudio() {
     const c = new (window.AudioContext || window.webkitAudioContext)(); AU.ctx = c;
     const comp = c.createDynamicsCompressor(); comp.threshold.value = -9; comp.knee.value = 10; comp.ratio.value = 3; comp.attack.value = .003; comp.release.value = .3; AU.out = c.createGain(); AU.out.gain.value = 0; audioOn = null; comp.connect(AU.out); AU.out.connect(c.destination);
     AU.master = c.createGain(); AU.master.gain.value = CFG.vol; AU.master.connect(comp);
-    AU.dry = c.createGain(); AU.dry.connect(AU.master);
+    AU.dry = c.createGain(); AU.dry.connect(AU.master); AU.dry0 = AU.dry;
+    AU.foe = c.createGain(); AU.foe.connect(AU.master);   // enemy / remote sounds placed in 3D (see bus)
     const ir = (dur, decay) => { const len = c.sampleRate * dur, b = c.createBuffer(2, len, c.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); } return b; };
     AU.verb = c.createConvolver(); AU.verb.buffer = ir(2.6, 3); const vg = c.createGain(); vg.gain.value = .3; AU.verb.connect(vg); vg.connect(AU.master);
     AU.echo = c.createDelay(1); AU.echo.delayTime.value = .27; const fb = c.createGain(); fb.gain.value = .28; const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
@@ -2812,13 +2813,38 @@ function initAudio() {
     setTimeout(() => { try { AU.hitBuf = { body: hitSample('body'), head: hitSample('head'), shield: hitSample('shield') }; warmGunVoices(); } catch (e) {} }, 300);
   } catch (e) { AU.ctx = null; }
 }
-const VOICES = { bot: [0, 0, 9], step: [0, 0, 5], foestep: [0, 0, 12], impact: [0, 0, 6], whiz: [0, 0, 3], misc: [0, 0, 8] };
+// How other players' / bots' sounds are mixed (same numbers in data/sound_mix.json for the Unity port; qa/qa_sound.js
+// checks they match). CS2 / Valorant rules: an enemy shot or a close footstep is NEVER dropped: everything within `near`
+// metres always plays (only a hard safety cap per window, far above any real fight); sources between `near` and `range`
+// share a small `budget` per window, so far-away noise thins out first and can never starve a close enemy; beyond
+// `range` nothing plays. Falloff is the panner's inverse model: gain = ref / (ref + roll * (d - ref)), full volume inside ref.
+// close: inside this many metres not even the safety cap applies (only absCap, far above any real fight): a close enemy is
+// never refused, even when a frame hitch or a bundled packet piles many sounds into one window
+const SOUND_MIX = { v: 1, window: .5, hardCap: 64, absCap: 192, categories: {
+  shot:    { near: 30, close: 15, range: 120, budget: 8, ref: 5, roll: 1.1, prio: 3 },   // enemy / remote gunfire (all weapons)
+  foestep: { near: 15, close: 8, range: 40, budget: 6, ref: 3, roll: 1.25, prio: 2 },   // enemy footsteps + landings
+  foley:   { near: 15, close: 6, range: 30, budget: 4, ref: 3, roll: 1.2, prio: 2 },    // enemy reloads
+  whiz:    { near: 8, close: 4, range: 55, budget: 2, ref: 2, roll: 1, prio: 2 },       // near misses past your head
+  impact:  { near: 10, range: 55, budget: 3, ref: 3, roll: 1, prio: 1 },      // bullet impacts, disc bounces
+  step:    { near: 10, range: 55, budget: 3, ref: 3, roll: 1, prio: 1 },      // robot / bot steps (old synth)
+  misc:    { near: 15, range: 55, budget: 4, ref: 4, roll: 1, prio: 1 },      // deaths, nade bounces, add-on sounds
+} };
+const VOICE_CAT = { bot: 'shot', shot: 'shot', foestep: 'foestep', foley: 'foley', whiz: 'whiz', impact: 'impact', step: 'step', misc: 'misc' };
+const VOICES = {}; for (const k in VOICE_CAT) VOICES[k] = [0, 0, 0];   // per kind: [window start, far sounds in it, all sounds in it]
+const VOICE_ALL = [0, 0, 0, 0];   // [window start, sounds of prio 1, 2, 3]: a tier only sees itself and the tiers above it
 function voice(kind, pos) {
   if (!AU.ctx) return false;
-  if (pos && camera.position.distanceTo(pos) > 55) return false;
-  const v = VOICES[kind] || VOICES.misc, now = AU.ctx.currentTime;
-  if (now - v[0] >= .5) { v[0] = now; v[1] = 0; }
-  if (v[1] >= v[2] / 2) return false; v[1]++; return true;
+  const cat = SOUND_MIX.categories[VOICE_CAT[kind] || 'misc'], d = pos ? camera.position.distanceTo(pos) : 0;
+  if (d > cat.range) return false;
+  const v = VOICES[kind] || VOICES.misc, now = AU.ctx.currentTime, W = SOUND_MIX.window;
+  if (now - v[0] >= W) { v[0] = now; v[1] = 0; v[2] = 0; }
+  if (now - VOICE_ALL[0] >= W) { VOICE_ALL[0] = now; VOICE_ALL[1] = VOICE_ALL[2] = VOICE_ALL[3] = 0; }
+  const pr = Math.min(3, Math.max(1, cat.prio | 0));
+  if (d <= cat.near) {   // close: always plays; only a safety cap, and impacts / misc can never use up the room enemy shots need
+    let busy = 0; for (let i = pr; i <= 3; i++) busy += VOICE_ALL[i];
+    if (busy >= (d <= (cat.close || 0) ? SOUND_MIX.absCap : SOUND_MIX.hardCap * (pr === 3 ? 1 : pr === 2 ? .75 : .5))) return false;
+  } else { if (v[1] >= cat.budget) return false; v[1]++; }   // far: a small shared budget (far noise thins out first)
+  v[2]++; VOICE_ALL[pr]++; return true;
 }
 function bus({ pos = null, verb = 0, echo = 0, ref = 4, vol = 1, hrtf = false, roll = 1.1 } = {}) {
   AU.count = (AU.count || 0) + 1;
@@ -2828,7 +2854,9 @@ function bus({ pos = null, verb = 0, echo = 0, ref = 4, vol = 1, hrtf = false, r
     if (p.positionX) { p.positionX.value = pos.x; p.positionY.value = pos.y; p.positionZ.value = pos.z; } else p.setPosition(pos.x, pos.y, pos.z);
     g.connect(p); out = p;
   }
-  out.connect(AU.dry);
+  // positional sounds go to AU.foe (your hit-confirm ducks AU.dry, never enemy gunfire); while an add-on has swapped AU.dry
+  // for its own bus (killcam replay, footsteps volume) they follow that swap
+  const dest = pos && AU.foe && AU.dry === AU.dry0 ? AU.foe : AU.dry; out.connect(dest); AU.lastRoute = dest;
   if (verb) { const s = c.createGain(); s.gain.value = verb; out.connect(s); s.connect(AU.verb); }
   if (echo) { const s = c.createGain(); s.gain.value = echo; out.connect(s); s.connect(AU.echo); }
   return g;
@@ -3030,19 +3058,26 @@ const GUN_VOICE = {
   // Void lance: deep sub "vwoom" discharge with phasey tail
   voidfire: { dur: 1.4, verb: .8, echo: .5, vol: 1.2, fn: L => { L.tone(0, 1200, 45, .08, .5, .5, 'saw', 1.5); L.tone(0, 70, 32, .2, .5, 1.3, 'sin', 2.5); L.noise(0, 'bp', 600, 120, .3, 1, .45, .8); L.tone(.02, 220, 110, .4, .7, .18, 'fm'); L.noise(0, 'hp', 7000, 3000, .02, .7, .02, .7); } },
 };
-function gunVoice(name, pos, vol = 1) {
+function gunVoice(name, pos, vol = 1, delay = 0) {
   const v = GUN_VOICE[name]; if (!v || !AU.ctx) return false;
   if (!GSND[name]) GSND[name] = gsBuild(v.dur, v.fn);
   const c = AU.ctx, src = c.createBufferSource(); src.buffer = GSND[name]; src.playbackRate.value = rand(.96, 1.04);
-  const d = bus({ pos: pos || null, verb: pos ? v.verb * .7 : v.verb, echo: v.echo, ref: 5, vol: v.vol * vol });
+  const d = bus({ pos: pos || null, verb: pos ? v.verb * .7 : v.verb, echo: v.echo, ref: SOUND_MIX.categories.shot.ref, roll: SOUND_MIX.categories.shot.roll, vol: v.vol * vol });
   if (pos) { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = clamp(16000 - camera.position.distanceTo(pos) * 220, 1800, 16000); src.connect(f); f.connect(d); } else src.connect(d);
-  src.start(); return true;
+  src.start(delay > 0 ? c.currentTime + delay : 0); return true;
 }
 // warm every buffer in idle time after audio starts, so the first shot of each gun never stalls a frame
 function warmGunVoices() { if (!AU.ctx) return; const ks = Object.keys(GUN_VOICE).filter(k => !GSND[k]); if (!ks.length) return; GSND[ks[0]] = gsBuild(GUN_VOICE[ks[0]].dur, GUN_VOICE[ks[0]].fn); setTimeout(warmGunVoices, 30); }
-for (const k in GUN_VOICE) { const old = sfx[k]; sfx[k] = function (...a) { if (!gunVoice(k)) old && old.apply(sfx, a); }; }
+for (const k in GUN_VOICE) { const old = sfx[k]; sfx[k] = function (...a) { if (!gunVoice(k, a[0] && a[0].isVector3 ? a[0] : null)) old && old.apply(sfx, a); }; }   // (given a position = someone else's gun, placed in 3D)
 { const oldBot = sfx.botShot, BOTV = { sniper: 'sniper', helix: 'rail', breacher: 'shotgun', wasp: 'smg', pistol: 'pistol', carbine: 'shot', triad: 'burst', judge: 'judge', titan: 'minigun', arc: 'arc', inferno: 'flame', cryo: 'cryo', void: 'voidfire', nova: 'launch', stinger: 'crossbow', ricochet: 'disc', seeker: 'seeker' };
-  sfx.botShot = function (pos, kind) { const n = BOTV[kind === true ? 'sniper' : kind]; if (!n || !AU.ctx) return oldBot.call(sfx, pos, kind); if (!voice('bot', pos)) return; gunVoice(n, pos, .8); }; }
+  // every weapon has its own voice: the table above, else the weapon's own sound (add-on guns register theirs in GUN_VOICE)
+  sfx.botShot = function (pos, kind, delay) { const k = kind === true ? 'sniper' : kind, s = BOTV[k] || (WEAPONS[k] && GUN_VOICE[WEAPONS[k].sound] ? WEAPONS[k].sound : null);
+    if (!s || !AU.ctx) return oldBot.call(sfx, pos, kind); if (!voice('bot', pos)) return; gunVoice(s, pos, .8, delay || 0); }; }
+// an enemy reloading near you (CS2: you hear the mag come out): mag out, mag in, a bolt for the sniper; placed in 3D
+sfx.foeReload = function (pos, kind) { if (!voice('foley', pos)) return; const t = AU.ctx.currentTime, c = SOUND_MIX.categories.foley, d = bus({ pos, ref: c.ref, roll: c.roll, vol: .9, verb: .06 });
+  if (kind === 'sniper') { nz(d, t + .1, .05, 'bandpass', 2600, 5, .35); osc(d, t + .14, .05, 'square', 1200, 600, .1); nz(d, t + .5, .08, 'bandpass', 3400, 6, .3); return; }
+  osc(d, t + .1, .02, 'square', 900, 700, .08); nz(d, t + .12, .14, 'bandpass', 2200, 3, .22, .01, 900);
+  nz(d, t + .62, .06, 'bandpass', 1600, 4, .4); osc(d, t + .62, .04, 'square', 420, 260, .12); nz(d, t + .67, .04, 'highpass', 3000, 1, .2); };
 const camFwd = V3(), camUp = V3();
 function updateListener() {
   if (!AU.ctx) return; const l = AU.ctx.listener, p = camera.position;
@@ -3903,7 +3938,7 @@ function launchRocket(owner, from, dir) {
   const m = new THREE.Mesh(ROCKET_GEO, new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.3, .4) })); m.position.copy(from); m.lookAt(from.clone().add(dir)); scene.add(m);
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex(T.glow), color: new THREE.Color(2.4, 1, .3), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); glow.scale.setScalar(1.3); m.add(glow);
   ROCKETS.push({ m, v: dir.clone().normalize().multiplyScalar(44), owner, life: 3 });
-  sfx.launch(from.clone());
+  sfx.launch(owner === PLAYER_ENT ? null : from.clone());
 }
 function updateRockets(dt) {
   for (let i = ROCKETS.length - 1; i >= 0; i--) {
@@ -4854,7 +4889,7 @@ function botShoot(r, aimPoint) {
   }
   _v3.copy(mz);
   const audible = state === 'play' || state === 'dead';
-  if (audible && camera.position.distanceTo(_v3) < 70) sfx.botShot(_v3.clone(), r.weapon);
+  if (audible && camera.position.distanceTo(_v3) < SOUND_MIX.categories.shot.range) sfx.botShot(_v3.clone(), r.weapon);
   if (camera.position.distanceTo(_v3) < 16) lightFlash(_v3, 0xffaa55, 2.5, 7);
   noise(_v3, 42, r);
   if (res.ent) {
@@ -5332,18 +5367,20 @@ function netReceive(E, pr) {
   if (!r.snaps.length || st > r.snaps[r.snaps.length - 1].t) { r.snaps.push({ t: st, x: +pr.x[0], y: +pr.x[1], z: +pr.x[2], yaw: +pr.yw, pitch: +pr.pt }); if (r.snaps.length > 30) r.snaps.shift(); }
   r.ping = pr.pg | 0;
   if ((pr.K | 0) >= KILL_LIMIT && !G.ended && NET.inMatch) setTimeout(() => endMatch(r), 1200);
+  if (pr.rl && !r.reload && !r.dead) sfx.foeReload(r.root.position, NET_W[pr.w | 0]);
   r.netCrouch = +pr.cr || 0; r.netGround = !!pr.g; r.reload = pr.rl ? 1 : 0; r.shield = +pr.sd || 0; r.hp = clamp(+pr.hp || 0, 0, 100); r.kills = pr.K | 0; r.score = (pr.K | 0) * 100; r.shots = pr.sF | 0; r.hits = pr.sH | 0; r.headHits = pr.sHH | 0;
   const w = NET_W[pr.w | 0] || 'carbine';
   if (r.netW !== w) { r.netW = w; if (w !== 'knife') { r.gun.remove(r.gunInner); r.gunInner = rifleTP(w); r.gun.add(r.gunInner); r.muzzle.position.copy(r.gunInner.userData.muzzle || r.muzzle.position); } }
   // their shots: tracer, muzzle flash and sound
   if ((pr.sh | 0) > L.shot && Array.isArray(pr.sx)) {
+    const nShots = Math.min(6, (pr.sh | 0) - L.shot);   // a late / bundled packet can carry several shots: you hear each one (up to 6)
     L.shot = pr.sh | 0; r.flashT = .05; r.shotKick = 1; r.firedT = 1.4;
     const a = _v1.set(+pr.sx[0], +pr.sx[1], +pr.sx[2]), b = _v2.set(+pr.sx[3], +pr.sx[4], +pr.sx[5]);
     const wid = NET_W[pr.w | 0], ww = WEAPONS[wid] || WEAPONS.carbine;
     if (wid === 'arc') zap(a.clone(), b.clone(), new THREE.Color(...ww.glow).multiplyScalar(1.4));
     else if (wid === 'inferno') { const dir = _v3.subVectors(b, a).normalize(); for (let k = 0; k < 14; k++) { const sp = rand(9, 14); FX.spawn(a, dir.x * sp + rand(-1.2, 1.2), dir.y * sp + rand(-.6, 1.2), dir.z * sp + rand(-1.2, 1.2), 3, rand(.8, 1.4), .2, rand(.08, .16), rand(.45, .7), -1.5, 1.4, .45); } lightFlash(a, 0xff7a2a, 3, 8); }
     else tracer(a, b, new THREE.Color(...(ww.tracer || [5, 3.6, 2.2])), ww.beam ? .07 : ww.oneShot ? .035 : .022, ww.beam ? .3 : ww.oneShot ? .14 : .06);
-    sfx.botShot(a.clone(), wid);
+    for (let i = 0; i < nShots; i++) sfx.botShot(a.clone(), wid, i * 60 / Math.max(60, ww.rpm || 600));
     for (let i = 0; i < 3; i++) FX.spawn(b, rand(-2, 2), rand(0, 3), rand(-2, 2), 6, 3.2, 1.2, .03, .2, 14, 1);
   }
   // their hits on you (they aimed at you on their screen: shooter-side hit detection)
@@ -5352,7 +5389,7 @@ function netReceive(E, pr) {
     if (state === 'play' && !P.dead) { if (h.wb) { PLAYER_ENT.wbT = G.time; PLAYER_ENT.wbBy = r; } hurtPlayer(clamp(+h.a || 0, 0, 250), r.root.position, r, !!h.h, NET_W[h.w | 0] || 'carbine'); if (h.st) applyStatus(PLAYER_ENT, h.st === 1 ? 'chill' : 'burn', r); }
   }
   if ((pr.ns | 0) > L.nade && Array.isArray(pr.nv)) { L.nade = pr.ns | 0; const f = new THREE.Vector3(+pr.nv[0], +pr.nv[1], +pr.nv[2]), v = new THREE.Vector3(+pr.nv[3], +pr.nv[4], +pr.nv[5]); if (pr.nv[6]) launchRocket(r, f, v.normalize()); else throwNade(r, f, v); }
-  if (Array.isArray(pr.pj) && pr.pj[0] > (L.proj || 0)) { L.proj = pr.pj[0]; const k = ['bolt', 'disc', 'missile', 'boom'][pr.pj[1] | 0] || 'bolt', f = new THREE.Vector3(+pr.pj[2], +pr.pj[3], +pr.pj[4]), v = new THREE.Vector3(+pr.pj[5], +pr.pj[6], +pr.pj[7]); if (k === 'boom') { remoteBoom(r, f, v); } else spawnProj(k, r, f, v, true, k === 'missile' ? projTarget(r, f, v.clone().normalize()) : null); if (k === 'missile') sfx.seeker(); else if (k !== 'boom') (sfx[{ bolt: 'crossbow', disc: 'disc' }[k]] || sfx.shot)(); }
+  if (Array.isArray(pr.pj) && pr.pj[0] > (L.proj || 0)) { L.proj = pr.pj[0]; const k = ['bolt', 'disc', 'missile', 'boom'][pr.pj[1] | 0] || 'bolt', f = new THREE.Vector3(+pr.pj[2], +pr.pj[3], +pr.pj[4]), v = new THREE.Vector3(+pr.pj[5], +pr.pj[6], +pr.pj[7]); if (k === 'boom') { remoteBoom(r, f, v); } else spawnProj(k, r, f, v, true, k === 'missile' ? projTarget(r, f, v.clone().normalize()) : null); if (k === 'missile') sfx.seeker(f); else if (k !== 'boom') (sfx[{ bolt: 'crossbow', disc: 'disc' }[k]] || sfx.shot)(f); }
   // deaths are decided by the victim and reported here
   if (pr.dd && !r.dead) {
     const mine = pr.kb === NET.room.myId, killer = mine ? PLAYER_ENT : remoteById(pr.kb), w2 = NET_W[pr.kw | 0] || 'carbine';
@@ -6124,8 +6161,8 @@ function combatBot(r, dt) {
   r.aimYaw = wrapPi(r.aimYaw + clamp(dy, -turn, turn)); r.aimPitch = damp(r.aimPitch, clamp(desPitch, -.9, .9), 8, dt);
   // sniper telegraph: a lens glint while they line up the shot
   r.glint.visible = false;
-  if (!t || !r.targetVis || r.reload > 0) { r.scopeT = 0; if (!t && r.ammo < r.mag * .5 && r.reload <= 0) { r.reload = w.reload; r.act.reload.reset().play(); } return; }
-  if (r.ammo <= 0) { if (r.reload <= 0) { r.reload = w.reload; r.act.reload.reset().play(); } return; }
+  if (!t || !r.targetVis || r.reload > 0) { r.scopeT = 0; if (!t && r.ammo < r.mag * .5 && r.reload <= 0) { r.reload = w.reload; r.act.reload.reset().play(); if (state === 'play' || state === 'dead') sfx.foeReload(r.root.position, r.weapon); } return; }
+  if (r.ammo <= 0) { if (r.reload <= 0) { r.reload = w.reload; r.act.reload.reset().play(); if (state === 'play' || state === 'dead') sfx.foeReload(r.root.position, r.weapon); } return; }
   if (r.reactT > 0 || Math.abs(dy) > (sniper ? .05 : .14) || r.dashT > 0) return;
   if (sniper) {
     r.scopeT += dt; const need = 1.1 / r.skill;

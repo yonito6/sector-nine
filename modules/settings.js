@@ -324,6 +324,7 @@ function wireAudio() {
   AUD.fx.connect(M); AUD.amb.connect(M); AUD.foot.connect(AUD.fx);
   if (!edges.length) {   // audio was started before this module loaded: effects bus only covers new sounds
     try { AU.dry.disconnect(M); AU.dry.connect(AUD.fx); } catch (e) {}
+    if (AU.foe) try { AU.foe.disconnect(M); AU.foe.connect(AUD.fx); } catch (e) {}   // enemy sounds in 3D (index.html bus): same Effects volume
   } else {
     const up = n => edges.filter(e => e[1] === n).map(e => e[0]);
     const loopFed = (n, d = 0) => (window.AudioBufferSourceNode && n instanceof AudioBufferSourceNode && n.loop) || (d < 5 && up(n).some(u => loopFed(u, d + 1)));

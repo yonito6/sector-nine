@@ -332,10 +332,12 @@
   const VOICE_COST = { ftGurgle: 1, ftSniff: 1, ftTick: 1, ftSizzle: 1 };
   // own budget on top of the game's: background sounds (ticks, sizzles, reel-in, idle) give way when the weapon is busy
   const LOW = { ftTick: 1, ftSizzle: 1, ftRetract: 1, ftGurgle: 1, ftSniff: 1 }, recent = [];
+  const SHOT = { ftWhip: 1, ftSpit: 1 };
   function snd(name, pos, vol = 1) {
     try { if (!AU.ctx) return false;
       const now = performance.now(); while (recent.length && now - recent[0] > 1000) recent.shift();
-      if (recent.length >= (LOW[name] ? 6 : 10)) return false; recent.push(now); if (pos && !voice('misc', pos)) return false; if (!pos && VOICE_COST[name] && !voice('misc', null)) return false; return gunVoice(name, pos || null, vol); } catch (e) { warn(e); return false; }
+      const shot = pos && SHOT[name];   // someone else's bite / spit = their gunshot: the game's enemy-shot rules (always heard up close)
+      if (!shot && recent.length >= (LOW[name] ? 6 : 10)) return false; recent.push(now); if (pos && !voice(shot ? 'bot' : 'misc', pos)) return false; if (!pos && VOICE_COST[name] && !voice('misc', null)) return false; return gunVoice(name, pos || null, vol); } catch (e) { warn(e); return false; }
   }
   function warm() { try { if (typeof warmGunVoices === 'function' && AU.ctx) warmGunVoices(); } catch (e) {} warmShaders(); }
   function warmShaders() {   // compile the Flytrap materials up front (first use on Windows can stall)
