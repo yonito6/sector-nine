@@ -1182,12 +1182,76 @@
   setInterval(hookFriends, 1500);
   setInterval(() => { if (ST.built && (ST.screen === 'create' || ST.screen === 'lobby')) syncSpec(); }, 300);
 
+  // ---- Pause menu: clear "Leave match" button + confirm dialog + first-match HUD hint (S9 leave-flow) ----
+  function setupLeave() {
+    const q = $('btnQuit'); if (!q) return;
+    const st = document.createElement('style');
+    st.textContent = `
+#btnQuit.s9-leave{order:99;flex:1 1 100%;display:flex;align-items:center;justify-content:center;gap:10px;min-height:48px;margin-top:10px;background:#7a1620;border:1px solid #ff4d5e;color:#fff;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+#btnQuit.s9-leave:hover,#btnQuit.s9-leave:focus-visible{background:#a31c2a;outline:2px solid #ff8a95;outline-offset:2px}
+#btnQuit.s9-leave .s9m-i{width:20px;height:20px}
+#s9LeaveDlg{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;padding:16px;background:rgba(5,6,8,.78)}
+#s9LeaveDlg[hidden]{display:none!important}
+#s9LeaveDlg .box{width:min(420px,100%);background:#0e1115;border:1px solid #ff4d5e;padding:22px;display:grid;gap:14px;color:var(--ink,#e8eaed);font-family:var(--mo,monospace)}
+#s9LeaveDlg h3{margin:0;font-size:20px;letter-spacing:.08em;text-transform:uppercase}
+#s9LeaveDlg p{margin:0;font-size:14px;line-height:1.5;color:#b9bec6}
+#s9LeaveDlg .acts{display:flex;gap:10px}
+#s9LeaveDlg button{flex:1;min-height:48px;font:inherit;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;border:1px solid #5a606a;background:#1a1f26;color:#fff}
+#s9LeaveDlg button.go2{background:#7a1620;border-color:#ff4d5e}
+#s9LeaveDlg button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+#s9EscHint{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:50;padding:7px 14px;background:rgba(11,13,16,.82);border:1px solid rgba(255,255,255,.25);color:#e8eaed;font:12px/1.2 var(--mo,monospace);letter-spacing:.1em;text-transform:uppercase;pointer-events:none;transition:opacity .6s}
+@media (pointer:coarse){#pause .sheet{padding-bottom:12px}#btnQuit.s9-leave{min-height:56px;font-size:15px}#s9EscHint{top:56px}}`;
+    document.head.appendChild(st);
+    q.classList.add('s9-leave');
+    const online = () => { try { return !!(NET && NET.on); } catch (e) { return false; } };
+    const label = () => online() ? 'Leave match' : 'Quit to menu';
+    const paint = () => { q.innerHTML = svg('door') + label(); };
+    paint();
+    const dlg = document.createElement('div'); dlg.id = 's9LeaveDlg'; dlg.hidden = true; dlg.setAttribute('role', 'alertdialog'); dlg.setAttribute('aria-modal', 'true');
+    dlg.innerHTML = '<div class="box"><h3 id="s9LdT"></h3><p id="s9LdP"></p><div class="acts"><button type="button" id="s9LdNo">Cancel</button><button type="button" class="go2" id="s9LdYes"></button></div></div>';
+    document.body.appendChild(dlg);
+    const no = dlg.querySelector('#s9LdNo'), yes = dlg.querySelector('#s9LdYes');
+    const closeDlg = () => { dlg.hidden = true; try { q.focus(); } catch (e) {} };
+    const openDlg = () => {
+      const on = online(); paint();
+      dlg.querySelector('#s9LdT').textContent = on ? 'Leave match?' : 'Quit to menu?';
+      dlg.querySelector('#s9LdP').textContent = on ? 'You will leave the room and go back to the main menu. The other players keep playing.' : 'This run ends and you go back to the main menu. Your kills and score in this run are lost.';
+      yes.textContent = on ? 'Leave' : 'Quit';
+      dlg.hidden = false; no.focus();
+    };
+    // real (trusted) clicks on the pause button ask first; script clicks (tests, spectate "leave") go straight through
+    document.addEventListener('click', e => { if (e.isTrusted && e.target.closest && e.target.closest('#btnQuit')) { e.stopImmediatePropagation(); e.preventDefault(); openDlg(); } }, true);
+    no.addEventListener('click', closeDlg);
+    yes.addEventListener('click', () => { dlg.hidden = true; q.click(); });
+    dlg.addEventListener('click', e => { if (e.target === dlg) closeDlg(); });
+    window.addEventListener('keydown', e => {
+      if (dlg.hidden) return;
+      if (e.code === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); closeDlg(); }
+      else if (e.code === 'Tab') { e.preventDefault(); (document.activeElement === no ? yes : no).focus(); }
+    }, true);
+    new MutationObserver(() => { if ($('pause').hidden) dlg.hidden = true; else paint(); }).observe($('pause'), { attributes: true, attributeFilter: ['hidden'] });
+    // first-match hint
+    let seen = false; try { seen = !!localStorage.getItem('sector9-esc-hint'); } catch (e) {}
+    if (!seen) {
+      const t = setInterval(() => {
+        let s = ''; try { s = state; } catch (e) {}
+        if (s !== 'play') return;
+        clearInterval(t); try { localStorage.setItem('sector9-esc-hint', '1'); } catch (e) {}
+        const h = document.createElement('div'); h.id = 's9EscHint';
+        h.textContent = matchMedia('(pointer:coarse)').matches ? 'II = menu / leave' : 'Esc = menu / leave';
+        document.body.appendChild(h);
+        setTimeout(() => { h.style.opacity = '0'; setTimeout(() => h.remove(), 800); }, 8000);
+      }, 700);
+    }
+  }
+
   function init() {
     const s = S9();
     if (!s || !document.body || !$('menu') || !$('btnPlay') || !$('oRoom') || !$('roomList')) { setTimeout(init, 100); return; }
     if (ST.built) return;
     keepFocus(() => {   // building re-parents the old menu's buttons (maybe the focused one): keep the player's focus
       build(); hookGame(); adopt(); watch(); hookFriends();
+      try { setupLeave(); } catch (e) { console.warn('[menu] leave setup', e); }
       if (pending) { for (const [b, o] of pending) { dock.appendChild(b); addNavButton(o); } pending = null; }
     });
     // late modules (modes.js adds #rMode after us): keep the create form in sync

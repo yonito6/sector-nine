@@ -76,7 +76,7 @@ function loadTex(file, srgb) {
   const t = new T.Texture(); t.wrapS = t.wrapT = T.RepeatWrapping; t.anisotropy = maxAniso(); if (srgb) t.encoding = T.sRGBEncoding;
   t.generateMipmaps = true; t.minFilter = T.LinearMipmapLinearFilter; t.userData.gsLoaded = false;
   const img = new Image(); img.decoding = 'async';
-  t.userData.gsPromise = new Promise(res => { img.onload = () => { t.image = img; t.needsUpdate = true; t.userData.gsLoaded = true; res(true); }; img.onerror = () => res(false); });
+  t.userData.gsPromise = new Promise(res => { img.onload = () => { t.image = img; t.needsUpdate = true; t.userData.gsLoaded = true; upload(t); res(true); }; img.onerror = () => { t.userData.gsFailed = true; res(false); }; });
   img.src = BASE + 'assets/tex/gunskins/' + file;
   TEXC.set(file, t); return t;
 }
@@ -85,6 +85,11 @@ function skinTex(s) {
   if (!s._tex) s._tex = { a: loadTex(L.tex + '_a.jpg', true), m: loadTex(L.tex + '_m.jpg', false), e: L.emi ? loadTex(L.tex + '_e.jpg', true) : null };
   return s._tex;
 }
+// a texture is sent to the graphics card the moment it arrives, one per frame, so its first draw never has to (no hitch)
+const UPQ = []; let upBusy = false;
+function upload(t) { UPQ.push(t); if (upBusy) return; upBusy = true; const step = () => { const x = UPQ.shift(); try { const r = gv('renderer'); if (x && r && typeof r.initTexture === 'function') r.initTexture(x); } catch (e) {} if (UPQ.length) requestAnimationFrame(step); else upBusy = false; }; requestAnimationFrame(step); }
+// state of a finish's pictures: 'ready' | 'wait' (still downloading) | 'failed'
+function texState(s) { const t = s && s !== FACTORY ? skinTex(s) : null; if (!t) return 'ready'; const l = [t.a, t.m, t.e].filter(Boolean); if (l.some(x => x.userData.gsFailed)) return 'failed'; return l.every(x => x.userData.gsLoaded) ? 'ready' : 'wait'; }
 const texReady = s => { const t = skinTex(s); return t ? Promise.all([t.a, t.m, t.e].filter(Boolean).map(x => x.userData.gsPromise)) : Promise.resolve(); };
 
 /* ======================================================================================= shared uniforms + shader */
@@ -385,7 +390,17 @@ function apply(weapon, skinId, root, opts = {}) {
   if (!root || !weapon || weapon === 'knife') return false;
   if (!roleInit()) return false;
   let s = skinOf(skinId); if (!s || !fits(s, weapon)) s = FACTORY;
-  root.userData.gsSkin = s.id; root.userData.gsWeapon = weapon;
+  // a finish whose pictures are still downloading would draw the gun pitch black (an image-less texture samples as black):
+  // the gun keeps its own factory look until they are here, then the finish goes on (bots, online players, killcam, drops, your own)
+  const ts = texState(s);
+  if (ts === 'failed') s = FACTORY;
+  else if (ts === 'wait') {
+    const want = s.id; root.userData.gsPend = want;
+    apply(weapon, 'factory', root, opts); root.userData.gsSkin = want; root.userData.gsWeapon = weapon; root.userData.gsPend = want;
+    texReady(s).then(() => { if (root.userData.gsPend === want && root.userData.gsSkin === want && root.userData.gsWeapon === weapon) { root.userData.gsPend = null; apply(weapon, want, root, opts); } });
+    return true;
+  }
+  root.userData.gsSkin = s.id; root.userData.gsWeapon = weapon; root.userData.gsPend = null;
   const meshes = [];
   root.traverse(o => { if (o.isMesh && !o.userData.gsAccent) meshes.push(o); });
   root.userData.gsMeshN = meshes.length;   // refresh re-applies when a model fills in later (creature guns load their parts after the skin was set)

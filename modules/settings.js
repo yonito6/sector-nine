@@ -11,7 +11,7 @@ if (window.S9Settings) return;
 /* ============ defaults (identical to data/settings_default.json, the QA test checks they match) ============ */
 const DEFAULTS = {
   v: 1,
-  gameplay: { damageNumbers: true, killFeedSize: 'normal', hitSound: true, colorblind: 'off' },
+  gameplay: { damageNumbers: true, killFeedSize: 'normal', hitSound: true, colorblind: 'off', lowViolence: false },
   controls: {
     adsMode: 'hold',
     binds: {
@@ -24,7 +24,7 @@ const DEFAULTS = {
   },
   mouse: { sens: 1, adsMult: 1, invertY: false },
   crosshair: { style: 'crossdot', color: '#ece6d8', length: 9, thickness: 2, gap: 5, outline: true, outlineThickness: 1, outlineOpacity: .5, dot: 2, opacity: 1, dynamic: true, adsShow: false },
-  video: { fov: 78, quality: 'medium', fps: true, shake: 1, brightness: 1, gamma: 1 },
+  video: { fov: 78, quality: 'medium', fps: true, fpsMode: 'simple', fpsCap: 'off', shake: 1, brightness: 1, gamma: 1 },
   audio: { master: .8, effects: 1, ambience: 1, footsteps: 1, voice: 1, muteUnfocused: false }
 };
 // number limits and allowed values (used to clean anything loaded from storage, the server or a share code)
@@ -38,9 +38,18 @@ const NUM = {
 const ENUM = {
   'gameplay.killFeedSize': ['small', 'normal', 'large'], 'gameplay.colorblind': ['off', 'deuteranopia', 'protanopia', 'tritanopia'],
   'controls.adsMode': ['hold', 'toggle'], 'crosshair.style': ['cross', 'dot', 'circle', 'tshape', 'crossdot', 'chevron'],
-  'video.quality': ['low', 'medium', 'high', 'ultra', 'auto']
+  'video.quality': ['low', 'medium', 'high', 'ultra', 'auto'], 'video.fpsMode': ['off', 'simple', 'detailed'], 'video.fpsCap': ['off', '30', '60', '120', '144', '240']
 };
 const LS_KEY = 'sector9-settings';
+// frame rate limit: the game's whole frame (and every wrapper around it) runs only when its slot is due. vs = the screen's
+// refresh step (smallest gap seen); a frame up to half a step early still counts and the slot clock advances by exactly one
+// interval, so 60 on a 144 Hz screen averages 60.
+const CAP = { ms: 0, next: 0, prev: 0, vs: 16.7, ran: 0, skipped: 0 };
+function capSkip(t) {
+  const d = t - CAP.prev; CAP.prev = t; if (d > 2 && d < 60) CAP.vs = d < CAP.vs ? d : CAP.vs + (d - CAP.vs) * .02;
+  if (t + CAP.vs / 2 < CAP.next) { CAP.skipped++; return true; }
+  CAP.next = t - CAP.next > CAP.ms * 2 ? t + CAP.ms : CAP.next + CAP.ms; CAP.ran++; return false;
+}
 
 /* ============ actions (what the game does) -> the key code index.html listens for ============ */
 const ACTIONS = [
@@ -82,6 +91,10 @@ function sanitize(src) {
       else if (k === 'color') { if (typeof v === 'string' && HEX.test(v)) out[sec][k] = v.toLowerCase(); }
     }
   }
+  // the old on/off FPS switch becomes Off/Simple; fps (boolean) always mirrors fpsMode for older readers
+  const sv = src.video;
+  if (sv && typeof sv === 'object' && !ENUM['video.fpsMode'].includes(sv.fpsMode) && typeof sv.fps === 'boolean') out.video.fpsMode = sv.fps ? 'simple' : 'off';
+  out.video.fps = out.video.fpsMode !== 'off';
   const c = src.controls;
   if (c && typeof c === 'object') {
     if (ENUM['controls.adsMode'].includes(c.adsMode)) out.controls.adsMode = c.adsMode;
@@ -289,9 +302,13 @@ const Q_TO_GAME = { low: 'performance', medium: 'balanced', high: 'high', ultra:
 const GAME_TO_Q = { performance: 'low', balanced: 'medium', high: 'high', ultra: 'ultra' };
 function autoQuality() { if (window.S9GFX && S9GFX.detected) return S9GFX.detected; const strong = (navigator.hardwareConcurrency || 4) >= 8 && (navigator.deviceMemory || 8) >= 8; return strong ? 'high' : 'balanced'; }   // graphics module reads the real GPU
 function applyMouse() { driveInput('msens', String(S.mouse.sens)); }
+// browser drawing without the graphics card (graphics.js S9GFX.software): Low for this session unless the player picks a quality now
+// (their saved choice is kept for when acceleration is back)
+const QPICK = { user: false };
 function applyQualitySetting(force) {
   const sel = $('mq'); if (!sel) return;
-  const want = S.video.quality === 'auto' ? (firstRun || force ? autoQuality() : null) : Q_TO_GAME[S.video.quality];
+  let want = S.video.quality === 'auto' ? (firstRun || force ? autoQuality() : null) : Q_TO_GAME[S.video.quality];
+  if (window.S9GFX && S9GFX.software && !QPICK.user) want = 'performance';
   if (want && sel.value !== want) { sel.value = want; sel.dispatchEvent(new Event('change', { bubbles: true })); }
 }
 // the player may still use the small quick sliders on the menu/pause screen: keep our copy in step with them
@@ -394,7 +411,10 @@ function hookRenderer() {
 function applyGrade() { const m = GRADE.mat; if (!m) return; m.uniforms.uExposure.value = (GRADE.base || .9) * S.video.brightness; if (m.uniforms.uGamma) m.uniforms.uGamma.value = S.video.gamma; }
 function applyVideo() {
   const s = S9(); if (s && s.camera && fovActive()) s.camera.updateProjectionMatrix();
+  S.video.fps = S.video.fpsMode !== 'off';
   document.documentElement.classList.toggle('s9-nofps', !S.video.fps);
+  if (s && s.HUDFPS && s.HUDFPS.mode !== S.video.fpsMode) { s.HUDFPS.mode = S.video.fpsMode; s.HUDFPS.last = ''; const e = $('fps'); if (e) e.textContent = ''; }
+  CAP.ms = S.video.fpsCap === 'off' ? 0 : 1000 / +S.video.fpsCap;
   applyGrade();
 }
 
@@ -710,7 +730,8 @@ const fovExtra = () => `${S.video.fov}° vertical ≈ ${Math.round(360 / Math.PI
 function tabHTML(t) {
   if (t === 'gameplay') return NOTE() + sec('Feedback', rToggle('gameplay.damageNumbers', 'Damage numbers', 'Numbers that pop out of an enemy when you hit them.') +
       rToggle('gameplay.hitSound', 'Hit sound', 'The thock / ding you hear when a shot lands.') +
-      rSeg('gameplay.killFeedSize', 'Kill feed size', 'Size of the kill list in the top right.', [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large']])) +
+      rSeg('gameplay.killFeedSize', 'Kill feed size', 'Size of the kill list in the top right.', [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large']]) +
+      rToggle('gameplay.lowViolence', 'Low violence', 'Hits show armour sparks instead of blood, and leave no marks.')) +
     sec('Accessibility', rSeg('gameplay.colorblind', 'Colour-blind mode', 'Paints every enemy visor, body glow and health bar in one colour that stands out for your type of colour vision.',
       [['off', 'Off'], ['deuteranopia', 'Deuteranopia'], ['protanopia', 'Protanopia'], ['tritanopia', 'Tritanopia']]) +
       `<div class="s9s-row"><div class="s9s-lab"><b>Enemy colour</b><span>What enemies look like with the current mode.</span></div><div class="s9s-ctl"><span><i class="s9s-cbsw" style="background:${CB[S.gameplay.colorblind] || 'linear-gradient(90deg,#ff5a3c,#3fd0ff,#ffd23f)'}"></i>${S.gameplay.colorblind === 'off' ? 'Each player keeps their own colour' : escH(CB[S.gameplay.colorblind])}</span></div></div>`);
@@ -738,7 +759,10 @@ function tabHTML(t) {
       `<div class="s9s-row"><div class="s9s-lab"><b id="l-dm">Display mode</b><span>Full screen hides the browser bars. Shortcut <kbd class="s9s-kbd">Alt+Enter</kbd> (or the browser's <kbd class="s9s-kbd">F11</kbd>).</span></div>
       <div class="s9s-ctl"><div class="s9s-seg" role="radiogroup" aria-labelledby="l-dm"><button role="radio" data-fsmode="window" aria-checked="${!fsEl()}">Windowed</button><button role="radio" data-fsmode="full" aria-checked="${!!fsEl()}">Full screen</button></div></div></div>` +
       rRange('video.fov', 'Field of view', 'Wider shows more around you, narrower makes targets look bigger.', { step: 1, dp: 0, unit: '°', extra: fovExtra }) +
-      rToggle('video.fps', 'FPS counter', 'Frames per second at the bottom of the screen.')) +
+      rSeg('video.fpsMode', 'FPS counter', 'Top right corner. Detailed adds frame time, 1% low, ping and your graphics card (with a warning if the browser is not using it).',
+        [['off', 'Off'], ['simple', 'Simple'], ['detailed', 'Detailed']]) +
+      rSeg('video.fpsCap', 'Frame rate limit', 'Caps frames per second. Lower = cooler, quieter computer and longer battery. Off = as fast as your screen refreshes.',
+        [['off', 'Off'], ['30', '30'], ['60', '60'], ['120', '120'], ['144', '144'], ['240', '240']])) +
     sec('Quality', rSeg('video.quality', 'Graphics quality', 'Low = no shadows, lower resolution, no glow (smoothest). Auto picks for your computer. The game may still lower quality by itself if frames drop.',
       [['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['auto', 'Auto']])) +
     sec('Image', rRange('video.brightness', 'Brightness', '', { step: .01, k: 100, dp: 0, unit: '%' }) + rRange('video.gamma', 'Gamma', 'Brightens dark corners without washing out bright areas.', { step: .01, dp: 2 })) +
@@ -822,6 +846,7 @@ function refreshControls(path) {
 function set(path, v, opts = {}) {
   const d = getP(DEFAULTS, path);
   if (typeof d === 'number') v = clamp(+v, ...NUM[path]); if (typeof d === 'number' && !isFinite(v)) return;
+  if (path === 'video.quality') QPICK.user = true;
   setP(S, path, v); save(); applySection(path.split('.')[0]);
   if (opts.rerender) renderTab(); else refreshControls(path);
   if (path.startsWith('crosshair.')) drawPreview();
@@ -985,7 +1010,7 @@ function hookFrame() {
   // enemy colours are applied before that frame renders. Falls back to our own loop if the game's loop isn't seen.
   const raf = window.requestAnimationFrame.bind(window); let seen = false;
   window.requestAnimationFrame = function (cb) {
-    if (typeof cb === 'function' && cb.name === 'frame') { seen = true; return raf(t => { try { tick(); } catch (e) {} cb(t); }); }
+    if (typeof cb === 'function' && cb.name === 'frame') { seen = true; return raf(t => { if (CAP.ms && capSkip(t)) { window.requestAnimationFrame(cb); return; } try { tick(); } catch (e) {} cb(t); }); }
     return raf(cb);
   };
   setTimeout(() => { if (!seen) { const loop = () => { try { tick(); } catch (e) {} raf(loop); }; raf(loop); } }, 1500);
@@ -998,7 +1023,7 @@ const api = {
   open: (t) => openPanel(t), close, isOpen: () => open, reset: w => { reset(w || 'all'); if (open) renderTab(); },
   exportCrosshair: () => exportCode(), importCrosshair: code => { const r = importCode(code); if (r.ok) { S.crosshair = r.c; save(); applyCrosshair(); if (open) renderTab(); } return r; },
   applyRemote, keyName, toggleFullscreen, sync: syncRemote,
-  _audio: AUD, _grade: GRADE, _drawXH: drawXH
+  _audio: AUD, _grade: GRADE, _drawXH: drawXH, _cap: CAP
 };
 window.S9Settings = api;
 startAudioWatch();

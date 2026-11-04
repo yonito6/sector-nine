@@ -1143,10 +1143,15 @@ function endFinal() {
   const tb = $('killcam').querySelector('.kc-top b'); if (tb) tb.textContent = 'KILLCAM';
   document.body.classList.remove('kcFinal');
   // now the results: roundfx's podium (deferred above), then the held XP / Shards summaries
-  if (state === 'matchend' && !NET.on && KC.finEndT > 0) G.endT = Math.max(G.endT, KC.finEndT); KC.finEndT = 0;
+  if (state === 'matchend' && KC.finEndT > 0) {   // the replay time is given back; online, never past the server's own results clock (it sends toLobby at its phaseEnd)
+    let t = Math.max(G.endT, KC.finEndT);
+    if (NET.on) { try { const M = window.MODE && window.MODE.MX, v = M && M.v; if (v && v.over && v.end > 0) t = Math.min(t, Math.max(0, (v.end - (Date.now() - (M.off || 0))) / 1000)); } catch (e) {} }
+    G.endT = t; }
+  KC.finEndT = 0;
   const o = KC.finDefer; KC.finDefer = null;
   if (o && state === 'matchend') { try { const RF = window.S9RoundFX; if (RF && RF.enabled && RF.celebrate) RF.celebrate(o); } catch (e) { warnOnce(e); } }
   releaseSummaries();
+  { const f = KC.afterFinal; KC.afterFinal = null; if (typeof f === 'function' && state === 'matchend') { try { f(); } catch (e) { warnOnce(e); } } }   // roundfx's online podium (held while the replay played)
 }
 KC.endFinal = endFinal;
 // the match-end screen has no replay hook in the frame loop, so the final killcam poses the world around the render itself

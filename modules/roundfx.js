@@ -824,13 +824,18 @@ html.rfx-cel #hud,html.rfx-cel #mxHud,html.rfx-cel #mxTip,html.rfx-cel #mxBar,ht
         if (ST.pendCel || now() - (ST.lastMatchEndT || -1e9) < 30000) break; ST.lastMatchEndT = now();   // a duplicate matchEnd must not restart (and hand over early)
         const delay = mode === 'demo' ? 2600 : 300;   // let the last round banner play first
         pendingCel();
-        later(delay, () => { clear('stage'); ST.busyUntil = 0; try { final({ result: res, winner: w, score: e.score, table: e.table, mode, me: myId(), myTeam: t }); } finally { if (!CEL) dropPending(); } });
+        later(delay, () => {
+          clear('stage'); ST.busyUntil = 0;
+          const run = () => { try { final({ result: res, winner: w, score: e.score, table: e.table, mode, me: myId(), myTeam: t }); } finally { if (!CEL) dropPending(); } };
+          const K = window.S9KC;   // the final killcam plays full screen first: hold the podium until it ends (killcam.js endFinal calls K.afterFinal)
+          if (K && K.fin) { K.afterFinal = () => { K.afterFinal = null; ST.kcHold = null; run(); }; ST.kcHold = K; } else run();
+        });
         break;
       }
       case 'toLobby': clearAll(true); break;
     }
   }
-  function clearAll(keepEnd) { if (!keepEnd) ST.lastMatchEndT = 0; cancelPending(); for (const k of Object.keys(SLOT)) clear(k); stopEdge(); ST.clutch = null; ST.busyUntil = 0; skipSlot = skipRec = null; dropPending(); }
+  function clearAll(keepEnd) { if (ST.kcHold) { ST.kcHold.afterFinal = null; ST.kcHold = null; } if (!keepEnd) ST.lastMatchEndT = 0; cancelPending(); for (const k of Object.keys(SLOT)) clear(k); stopEdge(); ST.clutch = null; ST.busyUntil = 0; skipSlot = skipRec = null; dropPending(); }
 
   /* ---- per-frame: countdown, clutch, charge pulse speed, progress bar, TDM match point, attach to new rooms ---- */
   function frame() {

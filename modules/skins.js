@@ -1394,7 +1394,8 @@ function warmSkins() {
     const m = T.SkeletonUtils.clone(A.soldier.scene); m.name = 's9skins-warm-plain'; m.position.set(0, -600, 0);
     m.traverse(o => { if (!o.isMesh) return; o.frustumCulled = true; o.castShadow = o.receiveShadow = false; o.material = o.material.clone(); o.material.transparent = !!tr; o.material.depthWrite = !tr; o.material.opacity = tr ? .5 : 1; });
     m.updateMatrixWorld(true); return m; }));
-  if (warmScene !== sc) { for (const m of WARM) sc.add(m); warmScene = sc;
+  // they never move: skip them in the scene's per-frame matrix update (4 skeletons = ~280 objects every frame)
+  if (warmScene !== sc) { for (const m of WARM) { sc.add(m); m.updateMatrixWorld(true); m.updateMatrixWorld = function () {}; } warmScene = sc;
     const prev = R.getRenderTarget(), rt = gv('rt'); try { if (rt) R.setRenderTarget(rt); R.compile(sc, cam); } catch (e) { console.warn('skins warm', e); } R.setRenderTarget(prev); }
   return true;
 }

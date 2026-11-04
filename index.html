@@ -85,7 +85,11 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);overflow:hi
 #dnums{position:absolute;inset:0;overflow:hidden}
 .dn{position:absolute;left:0;top:0;font-weight:600;font-size:15px;color:var(--ink);will-change:transform,opacity;white-space:nowrap}
 .dn.crit{color:#ffd27a;font-size:21px}
-#fps{position:absolute;left:50%;bottom:calc(8px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);font-size:10px;color:var(--dim);letter-spacing:.12em}
+/* FPS counter: first row of the top-right corner, never wider than the gap right of the compass (wraps on phones) */
+#fps{font:600 10px/1.35 var(--mono,ui-monospace,Consolas,monospace);color:var(--dim);letter-spacing:.04em;text-align:right;max-width:min(330px,calc(50vw - min(220px,23vw) - 34px));overflow-wrap:anywhere;pointer-events:none}
+#fps:empty{display:none}#fps b{color:var(--ink);font-weight:700}#fps i{font-style:normal;display:block}#fps .w{color:#ff5a4a;font-weight:800}
+/* phones: compact 3 short lines that start above the compass row and end before the match timer */
+@media (max-width:760px){#fps{font-size:9px;line-height:1.3;margin-top:-14px}#fps i{white-space:nowrap;overflow:hidden}}
 /* overlays */
 .overlay{position:fixed;inset:0;display:grid;place-items:center;padding:24px 16px;background:linear-gradient(90deg,rgba(11,13,16,.9) 0 36%,rgba(11,13,16,.2));overflow:auto}
 .overlay[hidden]{display:none!important}
@@ -249,6 +253,7 @@ tr.me td{color:#ffd27a;background:rgba(255,154,60,.08)} td:nth-child(n+3),th:nth
     <div id="combobar"><i id="combofill"></i></div>
   </div>
   <div class="corner tr">
+    <div id="fps"></div>
     <div id="kfeed"></div>
     <div class="label">Score</div>
     <div class="big sodium" id="hScore">0</div>
@@ -289,7 +294,6 @@ tr.me td{color:#ffd27a;background:rgba(255,154,60,.08)} td:nth-child(n+3),th:nth
   <div id="reloadbar"><i id="reloadfill"></i></div>
   <div id="callout"></div>
   <div id="banner"><div class="huge" id="bannerT">WAVE 01</div><div class="label" id="bannerS">Hostiles inbound</div></div>
-  <div id="fps"></div>
   <div id="killcam" hidden><div class="kc-top"><i></i><b>KILLCAM</b><span id="kcName"></span><em id="kcTime"></em></div><div id="kcCross"><i class="u"></i><i class="d"></i><i class="l"></i><i class="r"></i><i class="c"></i></div></div>
   <div id="death" hidden><div class="huge">Eliminated</div><div id="deathBy"></div><div id="deathT">Respawning in 3</div></div>
   <div id="board" hidden></div>
@@ -1409,12 +1413,56 @@ function bvhHit(T, ray, near, far) {
   return bt < 0 ? null : [best, bt];
 }
 const _lray = new THREE.Ray(), _imat = new THREE.Matrix4();
+// Box-proxy raycast: the invisible proxy mesh is ~250 merged axis-aligned boxes (12 triangles each). three's Mesh.raycast tested
+// every triangle of it for every ray (bots' sight lines: dozens of rays a frame = the biggest CPU cost of a match). Same answer,
+// done as a slab test per box through a small box tree: the entry face of each box the ray hits from outside (front faces only,
+// like the triangle test), faceIndex = box*12 + face*2 as before. Falls back to three's test if the mesh isn't a plain box set.
+const _boxTrees = new WeakMap();
+function boxTree(mesh) {
+  if (_boxTrees.has(mesh)) return _boxTrees.get(mesh);
+  const g = mesh.geometry, P = g.attributes.position, n = P.count / 24; let T = null;
+  if (Number.isInteger(n) && n > 0 && g.index && g.index.count === n * 36 && mesh.matrixWorld.equals(_imat.identity())) {
+    const B = new Float32Array(n * 6);
+    for (let i = 0; i < n; i++) { const o = i * 6; B[o] = B[o + 1] = B[o + 2] = Infinity; B[o + 3] = B[o + 4] = B[o + 5] = -Infinity;
+      for (let v = i * 24; v < i * 24 + 24; v++) { const x = P.getX(v), y = P.getY(v), z = P.getZ(v);
+        if (x < B[o]) B[o] = x; if (y < B[o + 1]) B[o + 1] = y; if (z < B[o + 2]) B[o + 2] = z; if (x > B[o + 3]) B[o + 3] = x; if (y > B[o + 4]) B[o + 4] = y; if (z > B[o + 5]) B[o + 5] = z; } }
+    const build = ids => { const b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+      for (const i of ids) for (let k = 0; k < 3; k++) { b[k] = Math.min(b[k], B[i * 6 + k]); b[k + 3] = Math.max(b[k + 3], B[i * 6 + k + 3]); }
+      if (ids.length <= 6) return { b, ids };
+      const ax = [0, 1, 2].reduce((a, k) => b[k + 3] - b[k] > b[a + 3] - b[a] ? k : a, 0), c = i => B[i * 6 + ax] + B[i * 6 + ax + 3];
+      ids.sort((p, q) => c(p) - c(q)); const h = ids.length >> 1; return { b, l: build(ids.slice(0, h)), r: build(ids.slice(h)) }; };
+    T = { B, root: build([...Array(n).keys()]), st: [] };
+  }
+  _boxTrees.set(mesh, T); return T;
+}
+// ray (origin o, 1/direction iv) against box b at offset k: [enter, exit] distances in _slab, entry axis in _slab[2]
+const _slab = [0, 0, 0];
+function slab(o, iv, b, k) {
+  let t0 = -Infinity, t1 = Infinity, ax = 0;
+  for (let a = 0; a < 3; a++) { let n = (b[k + a] - o[a]) * iv[a], f = (b[k + a + 3] - o[a]) * iv[a]; if (n > f) { const s = n; n = f; f = s; } if (n > t0) { t0 = n; ax = a; } if (f < t1) t1 = f; }
+  _slab[0] = t0; _slab[1] = t1; _slab[2] = ax; return t0 <= t1;
+}
+function boxRaycast(mesh, rc, out) {
+  const T = boxTree(mesh); if (!T) return THREE.Mesh.prototype.raycast.call(mesh, rc, out);
+  const r = rc.ray, O = [r.origin.x, r.origin.y, r.origin.z], D = [r.direction.x, r.direction.y, r.direction.z], iv = [1 / D[0], 1 / D[1], 1 / D[2]], near = rc.near, far = rc.far, B = T.B, st = T.st;
+  st.length = 0; st.push(T.root);
+  while (st.length) {
+    const nd = st.pop(); if (!slab(O, iv, nd.b, 0) || _slab[1] < Math.max(0, near) || _slab[0] > far) continue;
+    if (!nd.ids) { st.push(nd.l, nd.r); continue; }
+    for (const i of nd.ids) {
+      if (!slab(O, iv, B, i * 6)) continue; const t = _slab[0], ax = _slab[2];
+      if (t < 0 || t < near || t > far) continue;   // starts inside the box: only back faces ahead (not hit, as before)
+      const nrm = new THREE.Vector3(); nrm.setComponent(ax, D[ax] > 0 ? -1 : 1);
+      out.push({ distance: t, point: r.at(t, new THREE.Vector3()), object: mesh, face: { a: 0, b: 0, c: 0, normal: nrm, materialIndex: 0 }, faceIndex: i * 12 + (ax * 2 + (D[ax] > 0 ? 1 : 0)) * 2 });
+    }
+  }
+}
 // real shots (bullets, boomerang) use the precise check; bots' sight checks stay on the boxes (much cheaper)
 function shotHits(objs, rec) { ray.precise = true; try { return ray.intersectObjects(objs, rec); } finally { ray.precise = false; } }
 function mkPreciseRaycast(owners) {
   return function (rc, out) {
-    if (!rc.precise) return THREE.Mesh.prototype.raycast.call(this, rc, out);
-    _mkHits.length = 0; THREE.Mesh.prototype.raycast.call(this, rc, _mkHits);
+    if (!rc.precise) return boxRaycast(this, rc, out);
+    _mkHits.length = 0; boxRaycast(this, rc, _mkHits);
     if (!_mkHits.length) return;
     const hits = _mkHits.slice().sort((a, b) => a.distance - b.distance), done = new Set(); let first = Infinity;
     for (const h of hits) {
@@ -5369,7 +5417,9 @@ function netReceive(E, pr) {
   if ((pr.K | 0) >= KILL_LIMIT && !G.ended && NET.inMatch) setTimeout(() => endMatch(r), 1200);
   if (pr.rl && !r.reload && !r.dead) sfx.foeReload(r.root.position, NET_W[pr.w | 0]);
   r.netCrouch = +pr.cr || 0; r.netGround = !!pr.g; r.reload = pr.rl ? 1 : 0; r.shield = +pr.sd || 0; r.hp = clamp(+pr.hp || 0, 0, 100); r.kills = pr.K | 0; r.score = (pr.K | 0) * 100; r.shots = pr.sF | 0; r.hits = pr.sH | 0; r.headHits = pr.sHH | 0;
-  const w = NET_W[pr.w | 0] || 'carbine';
+  // the exact weapon id (wid) first: NET_W's order depends on which add-ons each client loaded (a mid-release session, a module
+  // that failed to load), and an index from a different list draws the wrong gun in their hands
+  const w = typeof pr.wid === 'string' && Object.prototype.hasOwnProperty.call(WEAPONS, pr.wid) ? pr.wid : NET_W[pr.w | 0] || 'carbine';
   if (r.netW !== w) { r.netW = w; if (w !== 'knife') { r.gun.remove(r.gunInner); r.gunInner = rifleTP(w); r.gun.add(r.gunInner); r.muzzle.position.copy(r.gunInner.userData.muzzle || r.muzzle.position); } }
   // their shots: tracer, muzzle flash and sound
   if ((pr.sh | 0) > L.shot && Array.isArray(pr.sx)) {
@@ -5412,7 +5462,7 @@ function netSend(dt) {
   const R2 = v => Math.round(v * 100) / 100;
   const st = {
     v: 1, lob: NET.inMatch ? 0 : 1, mp: CUR_MAP, jt: NET.joinT, n: NET.nick, c: NET.color | 0, x: [R2(P.pos.x), R2(P.pos.y), R2(P.pos.z)], yw: R2(P.yaw + Math.PI), pt: R2(P.pitch), cr: R2(P.crouch), g: P.onGround ? 1 : 0,
-    w: Math.max(0, NET_W.indexOf(P.weapon)), rl: P.reload > 0 ? 1 : 0, hp: Math.round(P.hp), sd: R2(P.shield), dd: P.dead ? 1 : 0, D: PLAYER_ENT.deaths, K: PLAYER_ENT.kills,
+    w: Math.max(0, NET_W.indexOf(P.weapon)), wid: P.weapon, rl: P.reload > 0 ? 1 : 0, hp: Math.round(P.hp), sd: R2(P.shield), dd: P.dead ? 1 : 0, D: PLAYER_ENT.deaths, K: PLAYER_ENT.kills,
     kb: P.killer ? (P.killer.netId || 's') : 's', kw: NET.killW | 0, kh: NET.killH ? 1 : 0, kwb: NET.killWB ? 1 : 0, pj: NET.proj || null, sF: G.fired | 0, sH: G.hits | 0, sHH: G.headHits | 0, sh: NET.seq.shot, sx: NET.shot || null, hs: NET.seq.hit, hl: NET.hits, ns: NET.seq.nade, nv: NET.nade || null };
   NET.room.presence(st).catch(() => {});
 }
@@ -6526,13 +6576,29 @@ addEventListener('contextmenu', e => { if (state === 'play' || e.target === rend
 let last = performance.now(), menuT = 0, frameAvg = 16, prTimer = 0, fpsT = 0, frames = 0, benchT = 0, benchDone = false, sdt = 1 / 60, frameNo = 0;
 const xh = { u: document.querySelector('#xh .u'), d: document.querySelector('#xh .d'), l: document.querySelector('#xh .l'), r: document.querySelector('#xh .r') };
 const perf = { upd: 0, render: 0, bots: 0, hist: [] };
+// FPS counter (Settings > Video): 'off' | 'simple' (FPS) | 'detailed' (FPS, frame ms, 1% low, ping, graphics card + a warning when the
+// browser renders without the graphics card). settings.js sets mode; graphics.js sets gpu/warn. Written twice a second, only when changed.
+const HUDFPS = { mode: 'simple', gpu: '', warn: '', warnShort: '', last: '' };
+function fpsHud(fps) {
+  let h;
+  if (HUDFPS.mode === 'detailed') {
+    const a = perf.hist, n = Math.min(a.length, 300), w = a.slice(a.length - n).sort((x, y) => y - x), k = Math.max(1, Math.round(n / 100));
+    let sum = 0, worst = 0; for (let i = 0; i < n; i++) { sum += w[i]; if (i < k) worst += w[i]; }
+    const ms = n ? sum / n : 0, low = n ? 1000 / (worst / k) : 0;
+    const ping = NET.on ? (SRV.rtt !== null ? Math.round(SRV.rtt) : Math.round(NET.rtt || 0)) : -1;
+    if (VW <= 760) h = `<i><b>${Math.round(fps)}</b> FPS ${ms.toFixed(1)}ms</i><i>1% ${Math.round(low)}${ping >= 0 ? ` ${ping}ms` : ''}</i>` + (HUDFPS.warnShort ? `<i class="w">${escH(HUDFPS.warnShort)}</i>` : '');   // phone: short
+    else h = `<i><b>${Math.round(fps)}</b> FPS · ${ms.toFixed(1)} ms · 1% low ${Math.round(low)}${ping >= 0 ? ` · ${ping} ms ping` : ''}</i>` +
+      (HUDFPS.gpu ? `<i>${escH(HUDFPS.gpu)}</i>` : '') + (HUDFPS.warn ? `<i class="w">${escH(HUDFPS.warn)}</i>` : '');
+  } else h = `${Math.round(fps)} FPS`;
+  if (h !== HUDFPS.last) { HUDFPS.last = h; if (HUDFPS.mode === 'detailed') $('fps').innerHTML = h; else $('fps').textContent = h; }
+}
 function frame(now) {
   syncAudio();
   requestAnimationFrame(frame);
   let rdt = (now - last) / 1000; last = now; rdt = Math.min(rdt, 1 / 20);
   // adaptive resolution keeps the frame rate smooth
   frameAvg = lerp(frameAvg, rdt * 1000, .05); prTimer += rdt; frames++; fpsT += rdt;
-  if (fpsT > .5) { $('fps').textContent = `${Math.round(frames / fpsT)} FPS`; frames = 0; fpsT = 0; }
+  if (fpsT > .5) { if (HUDFPS.mode !== 'off') fpsHud(frames / fpsT); frames = 0; fpsT = 0; }
   // resolution is tuned once early in a run (resizing render targets mid-game causes hitches), then only lowered if the game stays slow
   if (state === 'play') {
     benchT += rdt;
@@ -6632,10 +6698,13 @@ async function boot() {
   await loadMap(mapPref === 'random' ? 'yard' : mapPref);
   initDecals(); clearDecals();
   const tg = new THREE.BoxGeometry(1, 1, 1); tg.translate(0, 0, .5);
-  for (let i = 0; i < 90; i++) { const m = new THREE.Mesh(tg, new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); m.visible = false; m.frustumCulled = false; scene.add(m); tracers.push({ m, life: 0, max: 1 }); }
-  for (let i = 0; i < 60; i++) { const m = new THREE.Mesh(tg, new THREE.MeshBasicMaterial({ blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); m.visible = false; m.frustumCulled = false; scene.add(m); streaks.push({ m, a: V3(), dir: V3(), dist: 0, d: 0, len: 1, w: .02, on: false }); }
+  // pooled effect meshes (tracers, streaks, casings) are hidden most of the time: skip their matrix work while hidden
+  // (three updates every object's matrix every frame, visible or not); a shown one is updated before it is drawn
+  const skipHidden = function (f) { if (this.visible) THREE.Object3D.prototype.updateMatrixWorld.call(this, f); };
+  for (let i = 0; i < 90; i++) { const m = new THREE.Mesh(tg, new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); m.visible = false; m.frustumCulled = false; m.updateMatrixWorld = skipHidden; scene.add(m); tracers.push({ m, life: 0, max: 1 }); }
+  for (let i = 0; i < 60; i++) { const m = new THREE.Mesh(tg, new THREE.MeshBasicMaterial({ blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); m.visible = false; m.frustumCulled = false; m.updateMatrixWorld = skipHidden; scene.add(m); streaks.push({ m, a: V3(), dir: V3(), dist: 0, d: 0, len: 1, w: .02, on: false }); }
   const cg = new THREE.CylinderGeometry(.006, .006, .03, 8), cm = new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 1, roughness: .25 });
-  for (let i = 0; i < 40; i++) { const m = new THREE.Mesh(cg, cm); m.visible = false; scene.add(m); casings.push({ m, v: V3(), av: V3(), life: 0 }); }
+  for (let i = 0; i < 40; i++) { const m = new THREE.Mesh(cg, cm); m.visible = false; m.updateMatrixWorld = skipHidden; scene.add(m); casings.push({ m, v: V3(), av: V3(), life: 0 }); }
   for (let i = 0; i < 1; i++) { const l = new THREE.PointLight(0xffaa55, 0, 10, 2); scene.add(l); flashLights.push(l); }
   resetPlayer(); setModel(P.weapon); Object.assign(G, { time: 0, matchT: MATCH_TIME, score: 0, kills: 0, heads: 0, fired: 0, hits: 0, combo: 0, comboT: 0, multi: 0, multiT: 0 });
   for (const sc of [gunScene]) sc.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { if (m.envMapIntensity !== undefined) m.envMapIntensity *= .55; }); });
@@ -6646,7 +6715,7 @@ async function boot() {
   $('loading').remove();
   requestAnimationFrame(t => { last = t; frame(t); });
   window.__snd = { GUN_VOICE, gsBuild, hitSample };
-  window.__s9 = { get world() { return world; }, menuScene, get scene() { return scene; }, get SPAWNS() { return SPAWNS; }, cellOf, cellX, cellZ, nearestOk, groundAt, PF, sfx, MKIT, MKMETA, MKLOG, MOVE, get WEAPONS() { return WEAPONS; }, get BOTW() { return BOTW; }, get MAPS() { return MAPS; }, SLOTS, get CAMPS() { return CAMPS; }, get HALF() { return HALF; }, gunCam, P, G, robots, hurtPlayer, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS, AU, initAudio, loadMap, MAPS, REC, GUN_IDS, get CUR_MAP() { return CUR_MAP; }, get SPAWNS() { return SPAWNS; }, get MAPFX() { return MAPFX; }, get MAPROOT() { return MAPROOT; }, killBot(r, crit) { damageBot(r, 999, !!crit, r.root.position.clone().setY(r.root.position.y + 1.2), new THREE.Vector3(0, 0, 1), 'body', PLAYER_ENT, P.weapon); }, DROPS, pickNearDrop, BOOM, RBOOMS, NET, openRoom, leaveOnline, boomRoute, lineOfSight, explode, damageEntity, scene, world };
+  window.__s9 = { HUDFPS, get world() { return world; }, menuScene, get scene() { return scene; }, get SPAWNS() { return SPAWNS; }, cellOf, cellX, cellZ, nearestOk, groundAt, PF, sfx, MKIT, MKMETA, MKLOG, MOVE, get WEAPONS() { return WEAPONS; }, get BOTW() { return BOTW; }, get MAPS() { return MAPS; }, SLOTS, get CAMPS() { return CAMPS; }, get HALF() { return HALF; }, gunCam, P, G, robots, hurtPlayer, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS, AU, initAudio, loadMap, MAPS, REC, GUN_IDS, get CUR_MAP() { return CUR_MAP; }, get SPAWNS() { return SPAWNS; }, get MAPFX() { return MAPFX; }, get MAPROOT() { return MAPROOT; }, killBot(r, crit) { damageBot(r, 999, !!crit, r.root.position.clone().setY(r.root.position.y + 1.2), new THREE.Vector3(0, 0, 1), 'body', PLAYER_ENT, P.weapon); }, DROPS, pickNearDrop, BOOM, RBOOMS, NET, openRoom, leaveOnline, boomRoute, lineOfSight, explode, damageEntity, scene, world };
 }
 requestAnimationFrame(() => setTimeout(boot, 30));
 </script>

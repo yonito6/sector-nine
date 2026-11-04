@@ -62,7 +62,8 @@
   /* ---------- state ---------- */
   const read = () => { try { return JSON.parse(localStorage.getItem(LS) || 'null'); } catch (e) { return null; } };
   const write = o => { try { localStorage.setItem(LS, JSON.stringify(o)); } catch (e) {} };
-  const gpuName = (() => { try { const x = gl.getExtension('WEBGL_debug_renderer_info'); return String(x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); } catch (e) { return '?'; } })();
+  // __s9FakeGpu: tests only (software / integrated paths)
+  const gpuName = window.__s9FakeGpu ? String(window.__s9FakeGpu) : (() => { try { const x = gl.getExtension('WEBGL_debug_renderer_info'); return String(x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); } catch (e) { return '?'; } })();
   function detectTier() {
     const n = gpuName, mobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || (matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 600);
     if (!WEBGL2 || /swiftshader|llvmpipe|software|basic render/i.test(n)) return 'performance';
@@ -75,11 +76,16 @@
   }
   const detected = detectTier();
   const saved = read();
-  const startTier = saved && saved.user && TIERS[saved.tier] ? saved.tier : detected;
+  // the browser draws with the CPU (graphics acceleration off / GPU blocked): every frame costs the processor, so start on the
+  // lightest tier whatever was saved, and say how to fix it. Integrated: a laptop whose browser runs on the built-in chip.
+  const mobileUA = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+  const software = /swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/i.test(gpuName);
+  const integrated = !software && !mobileUA && /intel|uhd|iris|hd graphics|radeon\(tm\) graphics|radeon graphics|vega \d+ graphics/i.test(gpuName) && !/arc\(tm\)|\barc a\d|\bnvidia|geforce|\brtx|\bgtx/i.test(gpuName);
+  const startTier = software ? 'performance' : saved && saved.user && TIERS[saved.tier] ? saved.tier : detected;
   CFG.q = startTier; try { saveCfg(); } catch (e) {}
   const S = {
     ready: false, tier: startTier, detected, gpu: gpuName, user: !!(saved && saved.user), map: null, look: lookOf(null),
-    aoMaps: {}, aoLoaded: {}, hdLoaded: {}, gpuMs: 0, cpuMs: 0, adapt: { lowered: 0, gpuBound: 0, own: false }, warmMs: 0, applied: { hd: null, aniso: 0 },
+    software, integrated, aoMaps: {}, aoLoaded: {}, hdLoaded: {}, gpuMs: 0, cpuMs: 0, adapt: { lowered: 0, gpuBound: 0, own: false }, warmMs: 0, applied: { hd: null, aniso: 0 },
   };
 
   /* ---------- shared uniforms (one object in every patched shader: switching tiers never recompiles) ---------- */
@@ -438,9 +444,43 @@ void main(){
   /* ---------- public ---------- */
   S.TIERS = TIERS; S.LOOK = LOOK;
   S.setTier = (t, user) => { if (!TIERS[t]) return false; CFG.q = t; if (user) { S.user = true; write({ tier: t, user: true, detected: S.detected }); } try { saveCfg(); } catch (e) {} applyQuality(); try { syncSettings(); } catch (e) {} return true; };
-  S.status = () => ({ tier: S.tier, detected: S.detected, gpu: S.gpu, user: S.user, map: S.map, ao: !!S.aoMaps[S.map], aoStr: ACT.ao, fogH: ACT.fogH, probeK: ACT.probe, hd: S.applied.hd, aniso: S.applied.aniso, pr: has('PR') ? PR : null, msaa: composer.renderTarget1.samples, bloom: bloom.enabled, shadows: renderer.shadowMap.enabled, shadowSize: sun && sun.shadow ? sun.shadow.mapSize.x : 0, patched: patchedCount, probe: S.probe ? S.probeAt : null, probeMs: S.probeMs, gpuMs: S.gpuMs, cpuMs: S.cpuMs, frameMs: S.frameMs, adaptive: S.adapt.own, lowered: S.adapt.lowered, warmMs: S.warmMs });
+  S.status = () => ({ tier: S.tier, detected: S.detected, gpu: S.gpu, user: S.user, map: S.map, ao: !!S.aoMaps[S.map], aoStr: ACT.ao, fogH: ACT.fogH, probeK: ACT.probe, hd: S.applied.hd, aniso: S.applied.aniso, pr: has('PR') ? PR : null, msaa: composer.renderTarget1.samples, bloom: bloom.enabled, shadows: renderer.shadowMap.enabled, shadowSize: sun && sun.shadow ? sun.shadow.mapSize.x : 0, patched: patchedCount, probe: S.probe ? S.probeAt : null, probeMs: S.probeMs, software: S.software, integrated: S.integrated, gpuMs: S.gpuMs, cpuMs: S.cpuMs, frameMs: S.frameMs, adaptive: S.adapt.own, lowered: S.adapt.lowered, warmMs: S.warmMs });
   S.aoAt = aoAt; S.uniforms = U; S.grade = GU;
   window.S9GFX = S;
+
+  /* ---------- graphics card check: FPS counter label + a one-time fix-it banner ---------- */
+  const shortGpu = n => String(n).replace(/^ANGLE \((.*)\)$/, '$1').replace(/^(NVIDIA|AMD|Intel|Google|Microsoft|Apple)( Corporation| Inc\.)?, /i, '').replace(/ Direct3D.*$| \(0x[0-9a-f]+\).*$|, D3D11.*$| vs_\d.*$/i, '').replace(/\(TM\)|\(R\)/g, '').replace(/\s+/g, ' ').trim().slice(0, 48);
+  const warnText = software ? 'SOFTWARE RENDERING - graphics card not used' : integrated ? 'integrated GPU' : '';
+  function gpuHud() { try { if (typeof HUDFPS !== 'undefined') { HUDFPS.gpu = shortGpu(gpuName); HUDFPS.warn = warnText; HUDFPS.warnShort = software ? 'SOFTWARE GPU' : integrated ? 'iGPU' : ''; HUDFPS.last = ''; } } catch (e) {} }
+  gpuHud();
+  const GW = 'sector9-gpuwarn';
+  function gpuBanner(force) {
+    if (!software && !integrated) return false;
+    if (!force && (navigator.webdriver && !window.__s9ForceGpuWarn)) return false;   // test browsers: only when a test asks
+    let seen = null; try { seen = localStorage.getItem(GW); } catch (e) {}
+    if (!force && seen === gpuName) return false;
+    if (document.getElementById('s9gpuwarn')) return true;
+    const css = document.createElement('style'); css.textContent = `
+#s9gpuwarn{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;width:min(560px,calc(100vw - 32px));box-sizing:border-box;
+ background:rgba(14,10,12,.96);border:1px solid #ff5a4a;border-left-width:4px;color:#ece6d8;font:13px/1.45 system-ui,sans-serif;padding:12px 40px 12px 14px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+#s9gpuwarn b{color:#ff7a6a;display:block;font-size:14px;margin-bottom:4px}#s9gpuwarn ol{margin:6px 0 0 18px;padding:0}#s9gpuwarn li{margin:2px 0}#s9gpuwarn small{color:#9aa0a6;display:block;margin-top:6px;word-break:break-word}
+#s9gpuwarn button{position:absolute;top:6px;right:6px;width:30px;height:30px;border:0;background:transparent;color:#ece6d8;font-size:20px;cursor:pointer}`;
+    document.head.appendChild(css);
+    const d = document.createElement('div'); d.id = 's9gpuwarn'; d.setAttribute('role', 'alert');
+    const steps = software
+      ? '<ol><li>Chrome / Edge: Settings &gt; System &gt; turn on <b style="display:inline;font-size:inherit">Use graphics acceleration when available</b>, then restart the browser.</li><li>Still slow? Windows Settings &gt; System &gt; Display &gt; Graphics &gt; your browser &gt; Options &gt; <b style="display:inline;font-size:inherit">High performance</b>.</li><li>Update your graphics driver (NVIDIA / AMD / Intel website).</li></ol>'
+      : '<ol><li>Windows Settings &gt; System &gt; Display &gt; Graphics &gt; your browser &gt; Options &gt; <b style="display:inline;font-size:inherit">High performance</b>, then restart the browser.</li><li>Laptop: plug in the charger (on battery the fast card often stays off).</li></ol>';
+    d.innerHTML = `<b>${software ? 'Your browser is not using your graphics card' : 'The game is running on your built-in graphics chip'}</b>` +
+      (software ? 'The game is drawn by the processor instead, so it runs slowly and heats the CPU. Graphics were set to Performance.' : 'If your computer also has an NVIDIA or AMD card, tell Windows to use it for your browser:') + steps +
+      `<small>Detected: ${String(gpuName).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';')}</small><button type="button" aria-label="Close">×</button>`;
+    const close = () => { d.remove(); try { localStorage.setItem(GW, gpuName); } catch (e) {} };
+    d.querySelector('button').addEventListener('click', close);
+    document.body.appendChild(d);
+    // shown in the menu; gone once a match starts (it is remembered as seen)
+    const iv = setInterval(() => { if (!d.isConnected) return clearInterval(iv); if (has('state') && state !== 'menu' && state !== 'loading') { clearInterval(iv); close(); } }, 500);
+    return true;
+  }
+  S.gpuBanner = gpuBanner; S.shortGpu = shortGpu;
 
   /* ---------- start ---------- */
   syncOptions();
@@ -457,6 +497,7 @@ void main(){
     const A = S.aoMaps[S.map]; if (A) { try { renderer.initTexture(A.tex); } catch (e) {} }
     try { warmShaders(); } catch (e) {}
     S.ready = true; syncing = false;
+    gpuHud(); try { gpuBanner(false); } catch (e) {}
     window.dispatchEvent(new Event('s9gfx'));
   }
   const iv = setInterval(() => { if (has('state') && state === 'menu' && has('CUR_MAP') && CUR_MAP) { clearInterval(iv); ensure(); } }, 50);
