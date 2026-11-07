@@ -1,0 +1,31 @@
+{
+ "tris": 7571,
+ "verts": 3930,
+ "bones": [
+  "forearm",
+  "hand",
+  "index_01",
+  "index_02",
+  "index_03",
+  "middle_01",
+  "middle_02",
+  "middle_03",
+  "ring_01",
+  "ring_02",
+  "ring_03",
+  "pinky_01",
+  "pinky_02",
+  "pinky_03",
+  "thumb_01",
+  "thumb_02",
+  "thumb_03"
+ ],
+ "zones": [
+  "hand_glove",
+  "hand_plate",
+  "hand_pad",
+  "hand_cuff",
+  "hand_glow",
+  "hand_sleeve"
+ ]
+}

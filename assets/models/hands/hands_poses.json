@@ -1,0 +1,86 @@
+{
+ "about": "Sector Nine first-person hands. poses: bone rotations (Euler XYZ, degrees, in each bone's own frame, applied on top of the rest pose; a NEGATIVE x curls a finger toward the palm; 'hand' bends the wrist, which swings the forearm because hands are baked in palm space). 'from' inherits another pose. families/weapons: which pose each hand uses and where it sits, in the local space of the group the game's old hand lived in (so reload/feeding animations still move it). rot = Euler XYZ degrees of the palm frame; at = where the palm centre (palm-space point 'ref', default [0,-0.017,-0.05]) lands; pos = wrist position (used when 'at' is absent). bones on a weapon entry override single fingers for that gun. alt = extra poses switched live (boomerang open hand, poopgun feeding).",
+ "poses": {
+  "flat": { "bones": {} },
+  "rifle_trigger": { "bones": {
+   "hand": [20, 0, -35],
+   "index_01": [-40, 0, 0], "index_02": [-50, 0, 0], "index_03": [-25, 0, 0],
+   "middle_01": [-75, 0, 0], "middle_02": [-90, 0, 0], "middle_03": [-55, 0, 0],
+   "ring_01": [-78, 0, 0], "ring_02": [-90, 0, 0], "ring_03": [-55, 0, 0],
+   "pinky_01": [-82, 0, 0], "pinky_02": [-88, 0, 0], "pinky_03": [-50, 0, 0],
+   "thumb_01": [-20, 0, -30], "thumb_02": [-10, 0, 0], "thumb_03": [-20, 0, 0] } },
+  "pistol_trigger": { "from": "rifle_trigger", "bones": { "hand": [10, 0, -25] } },
+  "rifle_support": { "bones": {
+   "hand": [15, 0, -30],
+   "index_01": [-45, 0, 0], "index_02": [-55, 0, 0], "index_03": [-35, 0, 0],
+   "middle_01": [-45, 0, 0], "middle_02": [-55, 0, 0], "middle_03": [-35, 0, 0],
+   "ring_01": [-45, 0, 0], "ring_02": [-55, 0, 0], "ring_03": [-35, 0, 0],
+   "pinky_01": [-45, 0, 0], "pinky_02": [-55, 0, 0], "pinky_03": [-35, 0, 0],
+   "thumb_01": [0, 0, 20], "thumb_02": [0, 0, 0], "thumb_03": [-5, 0, 0] } },
+  "pistol_support": { "bones": {
+   "hand": [10, 0, -35],
+   "index_01": [-55, 0, 0], "index_02": [-60, 0, 0], "index_03": [-40, 0, 0],
+   "middle_01": [-55, 0, 0], "middle_02": [-60, 0, 0], "middle_03": [-40, 0, 0],
+   "ring_01": [-55, 0, 0], "ring_02": [-60, 0, 0], "ring_03": [-40, 0, 0],
+   "pinky_01": [-55, 0, 0], "pinky_02": [-60, 0, 0], "pinky_03": [-40, 0, 0],
+   "thumb_01": [0, 0, 10], "thumb_02": [0, 0, 0], "thumb_03": [0, 0, 0] } },
+  "vgrip": { "bones": {
+   "hand": [10, 0, -30],
+   "index_01": [-80, 0, 0], "index_02": [-95, 0, 0], "index_03": [-55, 0, 0],
+   "middle_01": [-80, 0, 0], "middle_02": [-95, 0, 0], "middle_03": [-55, 0, 0],
+   "ring_01": [-80, 0, 0], "ring_02": [-95, 0, 0], "ring_03": [-55, 0, 0],
+   "pinky_01": [-82, 0, 0], "pinky_02": [-92, 0, 0], "pinky_03": [-50, 0, 0],
+   "thumb_01": [-30, 0, -40], "thumb_02": [-15, 0, 0], "thumb_03": [-20, 0, 0] } },
+  "pump": { "from": "vgrip", "bones": {
+   "index_01": [-70, 0, 0], "index_02": [-85, 0, 0], "index_03": [-50, 0, 0],
+   "middle_01": [-70, 0, 0], "middle_02": [-85, 0, 0], "middle_03": [-50, 0, 0],
+   "ring_01": [-70, 0, 0], "ring_02": [-85, 0, 0], "ring_03": [-50, 0, 0],
+   "pinky_01": [-72, 0, 0], "pinky_02": [-82, 0, 0], "pinky_03": [-45, 0, 0],
+   "thumb_01": [-10, 0, -20] } },
+  "fist": { "bones": {
+   "hand": [0, 0, -10],
+   "index_01": [-90, 0, 0], "index_02": [-100, 0, 0], "index_03": [-60, 0, 0],
+   "middle_01": [-90, 0, 0], "middle_02": [-100, 0, 0], "middle_03": [-60, 0, 0],
+   "ring_01": [-90, 0, 0], "ring_02": [-100, 0, 0], "ring_03": [-60, 0, 0],
+   "pinky_01": [-90, 0, 0], "pinky_02": [-98, 0, 0], "pinky_03": [-55, 0, 0],
+   "thumb_01": [-40, 0, -50], "thumb_02": [-20, 0, 0], "thumb_03": [-25, 0, 0] } },
+  "open": { "bones": {
+   "hand": [0, 0, -10],
+   "index_01": [-12, 0, 0], "index_02": [-12, 0, 0], "index_03": [-6, 0, 0],
+   "middle_01": [-14, 0, 0], "middle_02": [-14, 0, 0], "middle_03": [-6, 0, 0],
+   "ring_01": [-18, 0, 0], "ring_02": [-16, 0, 0], "ring_03": [-8, 0, 0],
+   "pinky_01": [-22, 0, 0], "pinky_02": [-18, 0, 0], "pinky_03": [-10, 0, 0],
+   "thumb_01": [0, 0, 20], "thumb_02": [0, 0, 0], "thumb_03": [0, 0, 0] } },
+  "feed": { "bones": {
+   "hand": [15, 0, -30],
+   "index_01": [-40, 0, 0], "index_02": [-45, 0, 0], "index_03": [-25, 0, 0],
+   "middle_01": [-80, 0, 0], "middle_02": [-95, 0, 0], "middle_03": [-55, 0, 0],
+   "ring_01": [-85, 0, 0], "ring_02": [-95, 0, 0], "ring_03": [-55, 0, 0],
+   "pinky_01": [-88, 0, 0], "pinky_02": [-92, 0, 0], "pinky_03": [-50, 0, 0],
+   "thumb_01": [-35, 0, -35], "thumb_02": [-10, 0, 0], "thumb_03": [-15, 0, 0] } }
+ },
+ "families": {
+  "rifle":   { "R": { "pose": "rifle_trigger", "at": [0.04, -0.215, 0.105], "rot": [-12, 0, -90] },
+               "L": { "pose": "rifle_support", "at": [0, -0.0175, -0.36], "rot": [180, -90, 0] } },
+  "vgrip":   { "R": { "pose": "rifle_trigger", "at": [0.04, -0.215, 0.105], "rot": [-12, 0, -90] },
+               "L": { "pose": "vgrip", "at": [0.017, -0.08, -0.36], "rot": [-10, 0, -90] } },
+  "shotgun": { "R": { "pose": "rifle_trigger", "at": [0.04, -0.215, 0.105], "rot": [-12, 0, -90] },
+               "L": { "pose": "pump", "at": [0, -0.0175, -0.36], "rot": [180, -90, 0] } },
+  "handgun": { "R": { "pose": "pistol_trigger", "at": [0.04, -0.215, 0.105], "rot": [-12, 0, -90] },
+               "L": { "pose": "pistol_support", "at": [-0.035, -0.22, -0.35], "rot": [-45, 0, 90] } },
+  "knife":   { "R": { "pose": "fist", "at": [0, 0, 0.06], "rot": [0, 0, -90] } },
+  "boomerang": { "R": { "pose": "fist", "at": [0, 0, 0.06], "rot": [0, 0, -90], "alt": { "open": { "pose": "open" } } } },
+  "flytrap": { "R": { "pose": "rifle_trigger", "at": [0.02, 0, 0], "rot": [0, 0, -90] },
+               "L": { "pose": "rifle_support", "at": [0, -0.045, 0], "rot": [180, -90, 0] } },
+  "poopgun": { "R": { "pose": "rifle_trigger", "at": [0.02, -0.07, 0.07], "rot": [-15, 0, -90] },
+               "L": { "pose": "rifle_support", "at": [-0.03, 0, 0], "rot": [180, -90, 0], "alt": { "feed": { "pose": "feed" } } } }
+ },
+ "weapons": {
+  "carbine": "rifle", "sniper": "rifle", "wasp": "rifle", "helix": "rifle", "stinger": "rifle", "triad": "rifle", "arc": "rifle",
+  "cryo": "rifle", "inferno": "rifle", "void": "rifle",
+  "nova": "vgrip", "titan": "vgrip", "ricochet": "vgrip", "seeker": "vgrip",
+  "breacher": "shotgun",
+  "pistol": { "family": "handgun", "R": { "at": [0.0251, -0.1743, 0.1112] } }, "judge": { "family": "handgun", "R": { "at": [0.0087, -0.1674, 0.1051] }, "L": { "at": [-0.013, -0.2148, -0.3352] } },
+  "knife": "knife", "boomerang": "boomerang", "flytrap": "flytrap", "poopgun": { "family": "poopgun", "L": { "rot": [90, 0, 0] } }
+ }
+}

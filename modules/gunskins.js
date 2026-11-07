@@ -204,6 +204,7 @@ function patchAccent(sh) {
 // role of a mesh in a gun: body (main surfaces), acc (painted panels), trim (secondary dark parts), metal (bright steel),
 // grip (rubber), tank, wood; null = never touched (sights, lenses, glow, hands, reticles, flashes, displays)
 let ROLEMAP = null, SIGHT = null, RIFLE = null;
+const ALIAS = new WeakMap();   // twin material -> the kit/rifle material it was cloned from (S9GunSkins.alias)
 function roleInit() {
   if (ROLEMAP) return true;
   const KITMAT = gv('KITMAT'), PAINTM = gv('PAINTM'), KIT = gv('KIT'), ASSET = gv('ASSET'); if (!KITMAT || !KIT || !ASSET || !ASSET.gunMat) return false;
@@ -241,7 +242,7 @@ const CREATURE = {
 function roleOf(mesh, weapon) {
   const m = mesh.material; if (!m || Array.isArray(m) || !m.isMeshStandardMaterial) return null;
   if (mesh.userData.gsAccent) return null;
-  const src = mesh.userData.gsOrig || m;
+  const src0 = mesh.userData.gsOrig || m, src = ALIAS.get(src0) || src0;   // a per-gun upgraded twin (modules/guns2026.js) keeps its source's role
   if (src.transparent || src.depthTest === false || src === gv('GLOVE_M') || src === gv('SLEEVE_M')) return null;
   const r = ROLEMAP && ROLEMAP.get(src);
   if (CREATURE[weapon]) return CREATURE[weapon](src, r);
@@ -749,6 +750,7 @@ const API = window.S9GunSkins = {
   version: 1, ready, RARITY, FACTORY,
   list, get, equipped: () => Object.assign({}, state.eq), skin: id => skinOf(id),
   apply, applyToViewmodel, preview, applyGunSkin: (w, id, target) => target ? apply(w, id, target) : applyToViewmodel(w, id),
+  alias(twin, src) { if (twin && src && twin !== src) ALIAS.set(twin, ALIAS.get(src) || src); },
   isAnimated, setBotMode(m) { botMode = m === 'factory' ? 'factory' : 'random'; },
   _onBot: onBot, _refresh: refreshViewmodels, _arsenal: decorateArsenal, openPicker, closePicker, _onRemote: onRemote, _send: sendPresence, _onDeathcam: onDeathcam, _onDrop: onDrop, _warm: warm,
   _state: state, _mats: MATS, _acc: ACC, _time: U.time, _loadAccents: loadAccents, _frameOf: frameOf, _roleOf: (o, w) => (roleInit(), roleOf(o, w)), _texReady: id => texReady(skinOf(id))

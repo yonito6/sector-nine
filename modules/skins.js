@@ -1349,14 +1349,26 @@ function refreshAll() {
   applyHands();
 }
 // first-person gloves + sleeves follow your own skin (shared viewmodel materials, originals kept)
-let HAND0 = null;
+// handLook(look): the one source for first-person hand colours (hands.js reads it; also the killer's look in the killcam).
+// Same palette as the third-person soldier: the slot the soldier's own gloves use (HANDS), dark-tactical graded, linear.
+// { skin, std, slots: [glove, sleeve], glove, sleeve, plate, glow: [r,g,b] linear, gloveRM, sleeveRM: [rough, metal] }
+const HL_CACHE = new Map();
+function handLook(l) {
+  const n = normLook(l || wornLook()), k = lookCode(n); let h = HL_CACHE.get(k); if (h) return h;
+  const d = SKIN[n.skin] || SKIN.std, md = MATDEF[n.skin] || MATDEF.std, [gs, ss] = HANDS[n.skin] || [2, 1];
+  const lin = i => { const c = new T.Color(i === 0 ? '#' + n.p : i === 1 ? '#' + n.s : i === 4 ? '#' + n.v : d.pal[i]); if (i !== 4) grimTone(c, i); c.convertSRGBToLinear(); return [c.r, c.g, c.b]; };
+  const cl = md.crm[1] || [.6, 0];
+  h = { skin: n.skin, std: n.skin === 'std', slots: [gs, ss], glove: lin(gs), sleeve: lin(ss), plate: lin(7), glow: lin(4), gloveRM: [.6, .05], sleeveRM: [Math.min(.95, cl[0] + .12), Math.min(.5, cl[1])] };
+  if (HL_CACHE.size > 64) HL_CACHE.clear(); HL_CACHE.set(k, h); return h;
+}
+let HAND0 = null, handsGen = 0;
 function applyHands(look) {   // look: another player's look (killcam shows the KILLER's gloves); omitted = what you wear
+  handsGen++;
   const gm = gv('GLOVE_M'), sm = gv('SLEEVE_M'); if (!gm || !sm) return;
   if (!HAND0) HAND0 = { g: [gm.color.clone(), gm.roughness, gm.metalness], s: [sm.color.clone(), sm.roughness, sm.metalness] };
-  const l = look && look.skin && SKIN[look.skin] ? look : wornLook(), d = SKIN[l.skin], [gs, ss] = HANDS[l.skin] || [2, 1];
-  const pick = i => i === 0 ? '#' + l.p : i === 1 ? '#' + l.s : d.pal[i];
-  if (l.skin === 'std') { gm.color.copy(HAND0.g[0]); sm.color.copy(HAND0.s[0]); return; }
-  gm.color.set(pick(gs)).convertSRGBToLinear().multiplyScalar(.75); sm.color.set(pick(ss)).convertSRGBToLinear().multiplyScalar(.7);
+  const h = handLook(look);
+  if (h.std) { gm.color.copy(HAND0.g[0]); sm.color.copy(HAND0.s[0]); return; }
+  gm.color.setRGB(...h.glove); sm.color.setRGB(...h.sleeve);
 }
 
 /* ======================================================================================= hooks into the game (globals; no index.html edits needed) */
@@ -1868,6 +1880,7 @@ function registerExternal(e) {
   MATDEF[e.id] = Object.assign({}, MATDEF[e.id] || MATDEF.std, M && Array.isArray(M.pat) ? { pat: M.pat.slice(0, 5), patCol: M.patCol ?? 5, patS: M.patS } : {}, M && Array.isArray(M.base) ? { base: M.base.slice(0, 5) } : {}, M && Array.isArray(M.crm) ? { crm: M.crm.slice(0, 5) } : {},
     Array.isArray(e.pattern) ? { pat: [String(e.pattern[0]), +e.pattern[1] || 0, +e.pattern[2] || 0, +e.pattern[3] || 0, +e.pattern[4] || 0] } : {});
   if (Array.isArray(e.hands)) HANDS[e.id] = e.hands.slice(0, 2).map(v => clamp(v | 0, 0, 7));
+  HL_CACHE.clear(); handsGen++;
   if (typeof e.thumbnail === 'string' && /^[\w./-]+$/.test(e.thumbnail)) THUMB[e.id] = e.thumbnail;
   const x = EXT[e.id] = { e, data: {}, ready: false };
   const getText = url => fetch(url, { cache: 'no-store' }).then(r => r.ok ? r.text() : Promise.reject(new Error(url + ' ' + r.status)));
@@ -1976,6 +1989,7 @@ window.S9Skins = {
   preview: (el, look, opts) => preview(el, look, opts),
   open: tab => openUI(tab), close: () => closeUI(), get isOpen() { return isOpen(); },
   get look() { return Object.assign({}, state.look); }, setLook, handsFor: l => applyHands(l || null),
+  handLook: l => handLook(l), get handsGen() { return handsGen; },
   lookCode: l => lookCode(l || state.look), parseLook: parseCode, readRemoteLook: pr => parseCode(pr && typeof pr === 'object' ? pr.lk : pr),
   toAccount, fromAccount, emblems: () => EMBLEMS.map(e => Object.assign({ unlocked: unlocked(e), unlockAt: levelName(e.level) }, e)),
   get botMode() { return state.botMode; }, set botMode(v) { state.botMode = v === 'standard' ? 'standard' : 'random'; saveState(false); refreshAll(); },

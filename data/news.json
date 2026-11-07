@@ -2,6 +2,30 @@
   "about": "What's New feed shown in the game (modules/news.js). Newest first is not required: the game sorts by date + version. Fields: id (unique), date YYYY-MM-DD, version, title, items[], big (highlighted card), image (optional, relative path like assets/ui/news/x.jpg). Written by the release manager (qa/release) when a big feature goes live.",
   "entries": [
     {
+      "id": "mod-hands",
+      "date": "2026-11-07",
+      "version": "2026.11.07-r8",
+      "title": "New first-person hands",
+      "big": false,
+      "items": [
+        "Futuristic gloves and sleeves on every gun",
+        "They match your soldier skin",
+        "The killcam shows your killer's gloves"
+      ]
+    },
+    {
+      "id": "mod-guns2026",
+      "date": "2026-11-07",
+      "version": "2026.11.07-r8",
+      "title": "Sharper-looking guns",
+      "big": false,
+      "items": [
+        "K-7, M-2 and Longbow get new future materials",
+        "Clean dot sights on every gun",
+        "Smoother aim-down-sights"
+      ]
+    },
+    {
       "id": "mod-hitfx",
       "date": "2026-11-07",
       "version": "2026.11.07-r6",

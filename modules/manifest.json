@@ -1,5 +1,5 @@
 {
-  "v": "7",
+  "v": "9",
   "modules": [
     "settings",
     "graphics",
@@ -26,6 +26,8 @@
     "announce",
     "shop",
     "gunpolish",
+    "guns2026",
+    "hands",
     "news",
     "roomflow",
     "spectate",

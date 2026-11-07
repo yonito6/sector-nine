@@ -13,6 +13,9 @@
    - Hands, muzzle/tracer origin, ADS sight line and reticle position are untouched (parts keep the old envelopes).
    - The Void's charge animation (spinning, pulsing rings) now spins the whole carrier on its bearing and pulses
      the glow instead of scaling, so the rings never detach from the barrel.
+   - assets/models/guns_polish/mounts.gltf.json (render/guns_polish/mounts.py): pm_<gun>_mount = rail mount under every
+     optic (receiver pad set into the receiver, rail jaws round the optic clamp with cross bolts, saddles that close the
+     deck-to-housing gap, scope rings / cradles on tube optics); contact AO baked in vertex colour; first person only.
    API: ready (true when swapped), enabled(), disable() / enable() (live rollback), report(), _parts.
    Load order: anywhere; works before or after the game boots (rebuilds the affected viewmodels + bot guns). */
 (() => {
@@ -52,6 +55,44 @@ function parseKit(gltf) {
   }
   return out;
 }
+const MFILE = 'assets/models/guns_polish/mounts.gltf.json';
+const MOUNT_GUNS = ['carbine', 'sniper', 'helix', 'cryo', 'wasp', 'nova', 'stinger', 'titan', 'triad', 'arc', 'ricochet', 'seeker', 'breacher', 'inferno', 'void'];
+let MPARTS = null;
+const mountsLoaded = fetch(BASE + MFILE).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }).then(txt => new Promise((res, rej) => {
+  new T.GLTFLoader().parse(txt, '', g => res(parseMounts(g)), rej); })).then(p => (MPARTS = p)).catch(e => { console.warn('gunpolish: mounts', e); return null; });
+function parseMounts(gltf) {   // like parseKit, but keeps the baked contact-AO vertex colour
+  const out = {}; gltf.scene.updateMatrixWorld(true);
+  for (const root of gltf.scene.children) {
+    const by = {}, inv = root.matrixWorld.clone().invert();
+    root.traverse(o => { if (!o.isMesh) return;
+      let g = o.geometry.clone().applyMatrix4(new T.Matrix4().multiplyMatrices(inv, o.matrixWorld)); g = g.index ? g.toNonIndexed() : g;
+      const n = g.attributes.position.count;
+      if (!g.attributes.color) g.setAttribute('color', new T.BufferAttribute(new Float32Array(n * 3).fill(1), 3));
+      else if (g.attributes.color.itemSize === 4) { const c = g.attributes.color, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.getX(i); a[i * 3 + 1] = c.getY(i); a[i * 3 + 2] = c.getZ(i); } g.setAttribute('color', new T.BufferAttribute(a, 3)); }
+      for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(k)) g.deleteAttribute(k);
+      if (!g.attributes.uv) g.setAttribute('uv', new T.BufferAttribute(new Float32Array(n * 2), 2));
+      const mn = (o.material && o.material.name || 's9_dark').replace(/\.\d+$/, ''); (by[mn] = by[mn] || []).push(g); });
+    out[root.name.replace(/^k_/, '')] = Object.entries(by).map(([m, list]) => { const geo = T.BufferGeometryUtils.mergeBufferGeometries(list); geo.setAttribute('uv2', geo.attributes.uv); geo.computeBoundingSphere(); return { m, geo }; });
+  }
+  return out;
+}
+const MOUNTMAT = new Map();
+function mountMat(slot) {   // the gun's own kit material + vertex colour (contact AO); finishes still find it (alias)
+  let c = MOUNTMAT.get(slot); if (c) return c;
+  const src = gv('kitMat')(slot, false); c = src.clone(); c.vertexColors = true; c.name = (src.name || slot) + '|gp-mount';
+  if (src.userData && src.userData.tile) c.userData.tile = src.userData.tile; c.userData.gpDim = true;
+  try { window.S9GunSkins && S9GunSkins.alias && S9GunSkins.alias(c, src); } catch (e) {}
+  MOUNTMAT.set(slot, c); return c;
+}
+function addMount(id, vm) {   // first person only (bots' guns are too small on screen to show the gap)
+  if (!on || !MPARTS || !vm || !vm.group || vm.group.userData.gpMount) return false;
+  const parts = MPARTS['pm_' + id + '_mount']; if (!parts) return false;
+  const g = new T.Group(); g.name = 'gp-mount';
+  for (const { m, geo } of parts) { const me = new T.Mesh(geo, mountMat(m)); me.castShadow = false; me.name = 'gp-mount-' + m; g.add(me); }
+  vm.group.add(g); vm.group.userData.gpMount = g; return true;
+}
+function removeMount(vm) { const g = vm && vm.group && vm.group.userData.gpMount; if (!g) return; if (g.parent) g.parent.remove(g); delete vm.group.userData.gpMount; }
+function mountAll() { const WM = gv('WM'); if (!WM) return 0; let n = 0; for (const id of MOUNT_GUNS) if (WM[id]) { if (on) { if (addMount(id, WM[id])) n++; } else removeMount(WM[id]); } return n; }
 const loaded = fetch(BASE + FILE).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }).then(txt => new Promise((res, rej) => {
   const L = new T.GLTFLoader(); L.parse(txt, '', g => res(parseKit(g)), e => rej(e));
 })).then(p => { PARTS = p; for (const n of REPLACE) if (p[n]) for (const e of p[n]) if (/_sight$/.test(n)) SIGHTGEO.add(e.geo); return p; })
@@ -161,6 +202,7 @@ function rebuildViewmodels() {
     if (on && ADS_Z[id] && vm.adsPos) vm.adsPos.z = ADS_Z[id];
     // the game dims every first-person material once at boot (x .55); do the same for materials that are new here
     if (booted()) vm.group.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { if (!before.has(m) && !m.userData.gpDim && m.envMapIntensity !== undefined && !SIGHTMAT_HAS(m)) { m.envMapIntensity *= .55; m.userData.gpDim = true; } }); });
+    addMount(id, vm);
     WM[id] = vm; n++;
     try { const GS = window.S9GunSkins; if (GS && GS.apply && GS.get) GS.apply(id, GS.get(id), vm.group); } catch (e) {}
   }
@@ -187,7 +229,7 @@ function rebuildBots() {
   return n;
 }
 function refresh() {
-  const a = rebuildViewmodels(), b = rebuildBots();
+  const a = rebuildViewmodels(), b = rebuildBots(); mountAll();
   try { if (booted() && typeof gv('warmShaders') === 'function') gv('warmShaders')(); } catch (e) {}
   return { viewmodels: a, bots: b };
 }
@@ -240,10 +282,12 @@ function tick() {
 function report() {
   const KIT = gv('KIT') || {}, tri = list => (list || []).reduce((a, e) => a + (e.geo.index ? e.geo.index.count : e.geo.attributes.position.count) / 3, 0);
   const parts = {}; for (const n of REPLACE.concat(Object.values(RINGS), 'pm_ricochet_hub')) parts[n] = { now: Math.round(tri(KIT[n])), orig: n in ORIG ? Math.round(tri(ORIG[n])) : null };
-  return { on, ready: API.ready, error: API.error, parts };
+  const mounts = {}; const WM = gv('WM') || {};
+  for (const id of MOUNT_GUNS) { const g = WM[id] && WM[id].group.userData.gpMount; mounts[id] = g ? Math.round(g.children.reduce((a, m) => a + m.geometry.attributes.position.count / 3, 0)) : 0; }
+  return { on, ready: API.ready, error: API.error, parts, mounts };
 }
 function start() {
-  loaded.then(p => {
+  Promise.all([loaded, mountsLoaded]).then(([p]) => {
     if (!p) return;
     const go = () => {
       const KIT = gv('KIT');
@@ -256,6 +300,6 @@ function start() {
     go(); requestAnimationFrame(tick);
   });
 }
-Object.assign(API, { enable, disable, enabled: () => on, report, refresh, _postUnique: postUnique, _postRevolver: postRevolver, _parts: () => PARTS, AFFECTED });
+Object.assign(API, { MOUNT_GUNS, _mounts: () => MPARTS, enable, disable, enabled: () => on, report, refresh, _postUnique: postUnique, _postRevolver: postRevolver, _parts: () => PARTS, AFFECTED });
 start();
 })();
