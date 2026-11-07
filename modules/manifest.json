@@ -1,5 +1,5 @@
 {
-  "v": "5",
+  "v": "7",
   "modules": [
     "settings",
     "graphics",
@@ -30,7 +30,10 @@
     "roomflow",
     "spectate",
     "joinmid",
-    "touch"
+    "hitfx",
+    "radar",
+    "touch",
+    "perfreport"
   ],
   "notes": "Add-ons in load order. Only qa/release edits this. It holds a CANDIDATE only while the release gate runs (the tests load this file); on any failure it is put back to the live list at once. What is really live: qa/release/log.md."
 }

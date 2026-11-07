@@ -2,6 +2,30 @@
   "about": "What's New feed shown in the game (modules/news.js). Newest first is not required: the game sorts by date + version. Fields: id (unique), date YYYY-MM-DD, version, title, items[], big (highlighted card), image (optional, relative path like assets/ui/news/x.jpg). Written by the release manager (qa/release) when a big feature goes live.",
   "entries": [
     {
+      "id": "mod-hitfx",
+      "date": "2026-11-07",
+      "version": "2026.11.07-r6",
+      "title": "Hits you can feel",
+      "big": true,
+      "items": [
+        "Enemies flinch where you hit them: heads snap back, bodies twist, legs buckle",
+        "Impact bursts that match the soldier: blood mist, alien goo, sparks on robots",
+        "Heavier guns knock harder, and the fallen drop away from the shot",
+        "All of it in the killcam replay and for online players too",
+        "New setting: Low violence (sparks instead of blood, no marks)"
+      ]
+    },
+    {
+      "id": "mod-perfreport",
+      "date": "2026-11-07",
+      "version": "2026.11.07-r6",
+      "title": "Smoother game, thanks to you",
+      "big": false,
+      "items": [
+        "The game now sends one tiny anonymous speed report per match (no names). Turn it off with ?noperf=1"
+      ]
+    },
+    {
       "id": "mod-bugreport",
       "date": "2026-10-26",
       "version": "2026.10.26-r4",

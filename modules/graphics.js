@@ -20,7 +20,7 @@
     ASSET: typeof ASSET !== 'undefined', MAPS: typeof MAPS !== 'undefined', sun: typeof sun !== 'undefined', scene: typeof scene !== 'undefined', bloom: typeof bloom !== 'undefined',
     grade: typeof grade !== 'undefined', state: typeof state !== 'undefined', CUR_MAP: typeof CUR_MAP !== 'undefined', mergeStatic: typeof mergeStatic === 'function',
     newRoster: typeof newRoster === 'function', loadMap: typeof loadMap === 'function', warmShaders: typeof warmShaders === 'function', frame: typeof frame === 'function',
-    prTimer: typeof prTimer !== 'undefined', PR: typeof PR !== 'undefined', resize: typeof resize === 'function', feed: typeof feed === 'function', gunScene: typeof gunScene !== 'undefined',
+    prTimer: typeof prTimer !== 'undefined', PR: typeof PR !== 'undefined', VH: typeof VH !== 'undefined', resize: typeof resize === 'function', feed: typeof feed === 'function', gunScene: typeof gunScene !== 'undefined',
     camera: typeof camera !== 'undefined', HALF: typeof HALF !== 'undefined', startMatch: typeof startMatch === 'function', syncSettings: typeof syncSettings === 'function',
   };
   const has = n => !!H[n];
@@ -179,10 +179,116 @@ if (s9ProbeK > 0.001) {
   if (WEBGL2) {
     T.MeshStandardMaterial.prototype.onBeforeCompile = obcLit; T.MeshStandardMaterial.prototype.customProgramCacheKey = keyLit;
     T.MeshBasicMaterial.prototype.onBeforeCompile = obcBasic; T.MeshBasicMaterial.prototype.customProgramCacheKey = keyBasic;
-    if (has('scene')) {
-      scene.onBeforeRender = () => { U.s9AOStr.value = ACT.ao; U.s9ProbeK.value = ACT.probe; U.s9FogH.value = ACT.fogH; U.s9SunScat.value = ACT.scat; };
-      scene.onAfterRender = () => { U.s9AOStr.value = 0; U.s9ProbeK.value = 0; U.s9FogH.value = 0; U.s9SunScat.value = 0; };
-    }
+  }
+  /* ---------- render optimizer: same pixels, less work (all tiers) ----------
+     1. Single-pass see-through surfaces. three.js draws every transparent double-sided object TWICE (back faces, then front
+        faces) and marks its material changed both times (a shader lookup per draw). Where one pass gives the same pixels it
+        is drawn once: additive glow with no depth writes (adding is order-free), and flat (one-plane) normal-blended surfaces
+        (every pixel is covered by exactly one face). Same blend state (normal blending is restated as the identical custom
+        blend); the double-sided shader variant is prepared at load (warmShaders), never mid-match.
+     2. Off-screen soldiers are skipped. Their skinned meshes (and gfxmat's rim overlay) are never frustum-culled by three.js
+        (bind-pose bounds), so every bot was drawn even behind you. A generous sphere (2.4 m around the body) is tested against the camera of each render.
+     3. Performance tier only: far soldiers animate at a lower rate (every 2nd frame beyond 22 m, 3rd beyond 40 m). */
+  const RO = S.ro = { sp: true, cull: true, lod: true, restore: [], culled: [], spDraws: 0, culledN: 0, lodSkips: 0, warmed: 0 };
+  {
+    const DS = T.DoubleSide, planarC = new WeakMap(), _a = new T.Vector3(), _b = new T.Vector3(), _c = new T.Vector3(), _n = new T.Vector3(), _t = new T.Vector3(), _e = new T.Vector3();
+    // flat geometry: every vertex on one plane and every triangle wound the same way
+    const planar = g => {
+      let v = planarC.get(g); if (v !== undefined) return v; v = false;
+      try {
+        const P = g.attributes.position, I = g.index, n = I ? I.count : (P ? P.count : 0);
+        if (P && n >= 3 && !(g.morphAttributes && g.morphAttributes.position)) {
+          if (!g.boundingSphere) g.computeBoundingSphere();
+          const eps = Math.max(1e-5, (g.boundingSphere ? g.boundingSphere.radius : 1) * 1e-4); let ok = true, have = false, d0 = 0;
+          for (let i = 0; i + 2 < n && ok; i += 3) {
+            const ia = I ? I.getX(i) : i, ib = I ? I.getX(i + 1) : i + 1, ic = I ? I.getX(i + 2) : i + 2;
+            _a.fromBufferAttribute(P, ia); _b.fromBufferAttribute(P, ib); _c.fromBufferAttribute(P, ic);
+            _t.subVectors(_c, _b).cross(_e.subVectors(_a, _b)); const L = _t.length(); if (L < 1e-12) continue; _t.divideScalar(L);
+            if (!have) { _n.copy(_t); d0 = _n.dot(_a); have = true; }
+            if (_t.dot(_n) < .9999) ok = false;
+            else for (const q of [_a, _b, _c]) if (Math.abs(_n.dot(q) - d0) > eps) { ok = false; break; }
+          }
+          if (ok && have) for (let i = 0; i < P.count; i++) { _a.fromBufferAttribute(P, i); if (Math.abs(_n.dot(_a) - d0) > eps) { ok = false; break; } }
+          v = ok && have;
+        }
+      } catch (e) { v = false; }
+      planarC.set(g, v); return v;
+    };
+    // 0 = keep three's two passes, 1 = additive glow (order-free), 2 = flat normal-blended surface
+    const spKind = (m, o, g) => {
+      if (!o || !o.isMesh || !g) return 0;
+      if (m.blending === T.AdditiveBlending && m.depthWrite === false) return 1;
+      if (m.blending === T.NormalBlending && !o.isInstancedMesh && !o.isSkinnedMesh && planar(g)) return 2;
+      return 0;
+    };
+    RO.spKind = spKind; RO.planar = planar;
+    const toSingle = (m, k) => {
+      m.transparent = false;
+      if (k === 2) { m.userData.s9spB = [m.blending, m.blendSrc, m.blendDst, m.blendEquation, m.blendSrcAlpha, m.blendDstAlpha, m.blendEquationAlpha];
+        m.blending = T.CustomBlending; m.blendEquation = T.AddEquation; m.blendEquationAlpha = T.AddEquation;
+        m.blendSrc = m.premultipliedAlpha ? T.OneFactor : T.SrcAlphaFactor; m.blendDst = T.OneMinusSrcAlphaFactor; m.blendSrcAlpha = T.OneFactor; m.blendDstAlpha = T.OneMinusSrcAlphaFactor; }
+    };
+    const back = (m, k) => { m.transparent = true; if (k === 2 && m.userData.s9spB) { const b = m.userData.s9spB; m.blending = b[0]; m.blendSrc = b[1]; m.blendDst = b[2]; m.blendEquation = b[3]; m.blendSrcAlpha = b[4]; m.blendDstAlpha = b[5]; m.blendEquationAlpha = b[6]; } };
+    const restoreSP = () => { const L = RO.restore; while (L.length) { const k = L.pop(), m = L.pop(); back(m, k); } };
+    RO.restoreSP = restoreSP;
+    T.Material.prototype.onBeforeRender = function (r, sc, cam, g, o) {
+      if (!RO.sp || this.transparent !== true || this.side !== DS || !RO.ready.has(this)) return;   // only materials whose one-pass shader is prepared
+      const k = spKind(this, o, g); if (!k) return;
+      toSingle(this, k); RO.restore.push(this, k); RO.spDraws++; if (RO.dbg) { const wp = o.getWorldPosition(new T.Vector3()); RO.dbg.add(k + ' ' + this.type + ' ' + (this.name || '') + ' ' + g.type + ' dw' + this.depthWrite + ' po' + this.polygonOffset + ' am' + !!this.alphaMap + ' map' + !!this.map + ' op' + this.opacity + ' @' + wp.toArray().map(v => v.toFixed(1)).join(',') + ' par:' + (o.parent && (o.parent.name || o.parent.type))); }
+      // the program three last used for this material may be a one-sided one (from its two-pass path): ask for the double-sided one
+      if (this.version !== this.userData.s9spV) { this.needsUpdate = true; this.userData.s9spV = this.version; }
+    };
+    T.Object3D.prototype.onAfterRender = function () { if (RO.restore.length) restoreSP(); };
+    // prepare the double-sided variants now (loading / warm-up), so the first single-pass draw never builds a shader
+    // (hidden objects too: their branch is shown for the compile only; a material never prepared here keeps the two passes)
+    RO.ready = new WeakSet();
+    RO.warm = () => {
+      if (!RO.sp || !has('scene') || !has('camera')) return 0;
+      const kinds = new Map(), shown = new Set();
+      scene.traverse(o => { if (!o.isMesh || !o.material) return; let hit = false;
+        for (const m of [].concat(o.material)) if (m.transparent === true && m.side === DS) { const k = spKind(m, o, o.geometry); if (k && (!kinds.has(m) || kinds.get(m) === k)) { kinds.set(m, k); hit = true; } }
+        if (hit) for (let q = o; q && q !== scene; q = q.parent) if (!q.visible) shown.add(q); });
+      for (const q of shown) q.visible = true;
+      for (const [m, k] of kinds) { toSingle(m, k); m.needsUpdate = true; }
+      // into the kind of target the game really draws into (the post buffer), like the game's own warmShaders
+      const prevRT = renderer.getRenderTarget(); try { renderer.setRenderTarget(composer.renderTarget1); renderer.compile(scene, camera); } catch (e) {} renderer.setRenderTarget(prevRT);
+      for (const [m, k] of kinds) { back(m, k); m.needsUpdate = true; m.userData.s9spV = undefined; RO.ready.add(m); }
+      for (const q of shown) q.visible = false;
+      return kinds.size;
+    };
+    // off-screen soldiers
+    const _fr = new T.Frustum(), _pm = new T.Matrix4(), _sp = new T.Sphere();
+    RO.before = cam => {
+      if (RO.culled.length) RO.after();
+      if (!RO.cull || !has('robots') || !cam || !cam.isCamera) return;
+      _fr.setFromProjectionMatrix(_pm.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+      for (const r of robots) {
+        const o = r && r.root; if (!o || !o.visible) continue;
+        _sp.center.setFromMatrixPosition(o.matrixWorld); _sp.center.y += .9; _sp.radius = 2.4 * Math.max(o.scale.x, o.scale.y, o.scale.z, 1);
+        if (!_fr.intersectsSphere(_sp)) {   // the body, its gun (a separate scene object) and gfxmat's rim overlay (also separate, never culled)
+          o.visible = false; RO.culled.push(o); RO.culledN++;
+          if (r.gun && r.gun.visible && r.gun.parent !== o) { r.gun.visible = false; RO.culled.push(r.gun); }
+          const ov = r.gmRim && r.gmRim.ov; if (ov && ov.visible) { ov.visible = false; RO.culled.push(ov); }
+        }
+      }
+    };
+    RO.after = () => { const L = RO.culled; for (let i = 0; i < L.length; i++) L[i].visible = true; L.length = 0; restoreSP(); };
+    // far soldiers animate less often (Performance tier, in a match); the skipped time is added to the next update
+    RO.lodOn = () => RO.lod && S.tier === 'performance' && has('state') && (state === 'play' || state === 'dead');
+    RO.lodBot = r => {
+      const m = r && r.mixer; if (!m || m.__s9lod) return; m.__s9lod = 1;
+      const up = m.update; let acc = 0, k = 0;
+      m.update = function (dt) {
+        if (!RO.lodOn() || !has('camera') || !r.root) { if (acc) { dt += acc; acc = 0; } return up.call(this, dt); }
+        const d = camera.position.distanceTo(r.root.position), every = d > 40 ? 3 : d > 22 ? 2 : 1;
+        acc += dt; if (every > 1 && (++k % every)) { RO.lodSkips++; return this; }
+        const a = acc; acc = 0; return up.call(this, a);
+      };
+    };
+  }
+  if (has('scene')) {
+    scene.onBeforeRender = (r, sc, cam) => { if (WEBGL2) { U.s9AOStr.value = ACT.ao; U.s9ProbeK.value = ACT.probe; U.s9FogH.value = ACT.fogH; U.s9SunScat.value = ACT.scat; } try { RO.before(cam); } catch (e) {} };
+    scene.onAfterRender = () => { if (WEBGL2) { U.s9AOStr.value = 0; U.s9ProbeK.value = 0; U.s9FogH.value = 0; U.s9SunScat.value = 0; } RO.after(); };
   }
   const upgraded = m => m.onBeforeCompile === obcLit || m.onBeforeCompile === obcBasic;
   function patchMat(m, recompile) {
@@ -361,7 +467,7 @@ void main(){
     if (prev !== S.tier) syncOptions();
   };
   if (has('mergeStatic')) { const _ms = mergeStatic; mergeStatic = function () { const r = _ms.apply(this, arguments); patchWorld(false); return r; }; }
-  if (has('newRoster')) { const _nr = newRoster; newRoster = function () { const r = _nr.apply(this, arguments); for (const b of robots) patchTree(b.root, false); return r; }; }
+  if (has('newRoster')) { const _nr = newRoster; newRoster = function () { const r = _nr.apply(this, arguments); for (const b of robots) { patchTree(b.root, false); RO.lodBot(b); } return r; }; }
   if (has('loadMap')) {
     const _lm = loadMap;
     loadMap = async function (id) {
@@ -375,7 +481,7 @@ void main(){
       return r;
     };
   }
-  if (has('warmShaders')) { const _ws = warmShaders; warmShaders = function () { patchWorld(false); const r = _ws.apply(this, arguments); warmExtra(); return r; }; }
+  if (has('warmShaders')) { const _ws = warmShaders; warmShaders = function () { patchWorld(false); const r = _ws.apply(this, arguments); try { RO.warmed = RO.warm(); } catch (e) {} warmExtra(); return r; }; }
 
   /* ---------- GPU timing + smarter auto-quality ---------- */
   const tq = WEBGL2 ? gl.getExtension('EXT_disjoint_timer_query_webgl2') : null;
@@ -391,24 +497,51 @@ void main(){
   };
   const med = a => { if (!a.length) return 0; const s = a.slice().sort((x, y) => x - y); return s[s.length >> 1]; };
   let winT = 0, frameWin = [], lastNow = 0, gunLights = null, gunAO = 1;
-  // Auto-quality: the game's own auto-lowering stays in charge (measured: on this laptop the slow frames are mostly CPU, and
-  // dropping glow/resolution does shorten them), but what it lowers is no longer saved forever - next session starts again
-  // from the detected/chosen tier. adapt() only records GPU/CPU timings for status() and the tests.
+  // Auto-quality = AUTO RESOLUTION (dynamic render scale of the 3D picture only; the HUD/menus are page elements and stay sharp).
+  // The game's own one-shot auto-lowering (resolution steps + tier drops, any tier) is switched off: it changed the look on High.
+  // Setting video.autoRes (settings.js): 'auto' = active on Performance/Balanced, only while frames stay over budget;
+  // 'always' = also on High/Ultra (the player opted in); 'off' = never. High/Ultra on 'auto' are never touched.
+  // Budget = the frame-rate limit or 60 fps. With GPU timers, resolution only drops when the GRAPHICS CARD is the bottleneck
+  // (a CPU-bound frame does not get faster at a lower resolution). Floor: never below 0.5 or ~430 rendered lines.
+  // Each change resizes the render targets once (a few ms), at most one change per second, in steps of 0.05.
   S.adapt.own = false;
+  const DR = S.dynres = { mode: 'auto', active: false, scale: 0, max: 0, floor: .5, over: 0, under: 0, lastT: 0, raisedT: -1e9, noRaiseUntil: 0, changes: 0, lastDir: 0, atFloor: 0 };
+  try { const v = window.S9Settings && S9Settings.get().video.autoRes; if (v === 'auto' || v === 'always' || v === 'off') DR.mode = v; } catch (e) {}
+  const prMax = () => Math.min(devicePixelRatio || 1, TIERS[S.tier] ? TIERS[S.tier].maxPR : 1);
+  const drWanted = () => DR.mode === 'always' || (DR.mode === 'auto' && (S.tier === 'performance' || S.tier === 'balanced'));
+  const capMs = () => { try { const c = window.S9Settings && S9Settings._cap; return c && c.ms ? c.ms : 0; } catch (e) { return 0; } };
+  function setPR(v, now) { v = Math.round(v * 20) / 20; if (v < DR.floor - 1e-6) v = Math.min(DR.max || v, Math.ceil(DR.floor * 20 - 1e-6) / 20); /* a .05 step never lands below the floor */ if (Math.abs(v - PR) < .001) return false; PR = v; resize(); DR.lastT = now; DR.changes++; return true; }
+  function dynRes(f, g, now, c) {
+    const max = prMax(); DR.max = max; DR.floor = Math.min(max, Math.max(.5, 430 / Math.max(1, (has('VH') ? VH : innerHeight))));
+    DR.active = drWanted();
+    if (!DR.active) { DR.over = DR.under = 0; if (DR.scale && PR < max - .001) setPR(max, now); DR.scale = 0; return; }
+    if (PR > max + .001) { setPR(max, now); }
+    DR.scale = PR;
+    if (!has('state') || state !== 'play' || !f) { DR.over = DR.under = 0; return; }
+    const B = Math.max(1000 / 60, capMs()), gpuKnown = !!tq && g > 0;
+    // a GPU timer also counts the gaps while a slow CPU is still sending the frame: GPU-bound only if the card's time clearly
+    // exceeds the CPU time spent submitting the frame (c)
+    const gpuBound = !gpuKnown || (g > B * .45 && !(c > 0 && g < c * 1.25));
+    if (f > B * 1.15 && gpuBound) { DR.over++; DR.under = 0; } else if (f <= B * 1.05 && (!gpuKnown || g * (max * max) / (PR * PR) < B * .6)) { DR.under++; DR.over = 0; } else { DR.over = 0; DR.under = 0; }
+    if (now - DR.lastT < 1000) return;
+    if (DR.over >= 2 && PR > DR.floor + .001) {
+      if (now - DR.raisedT < 3000) DR.noRaiseUntil = now + 30000;   // the last raise did not fit: stay lower for a while
+      setPR(Math.max(DR.floor, PR - (f > B * 1.5 ? .1 : .05)), now); DR.over = 0; DR.lastDir = -1; S.adapt.lowered++;
+    } else if (DR.under >= (gpuKnown ? 4 : 8) && PR < max - .001 && now > DR.noRaiseUntil) {
+      setPR(Math.min(max, PR + .05), now); DR.under = 0; DR.raisedT = now; DR.lastDir = 1;
+    }
+    // at the floor and still too slow on Balanced: one tier down at the next match start (never mid-fight, never from High/Ultra)
+    if (PR <= DR.floor + .001 && DR.over >= 2) { if (++DR.atFloor >= 12 && DR.mode === 'auto' && S.tier === 'balanced' && !S.pendingTier) { S.pendingTier = 'performance'; try { feed('Graphics lowered for smoother play'); } catch (e) {} } }
+    else DR.atFloor = 0;
+  }
+  S._dynRes = dynRes;   // tests: feed it frame/GPU timings
+  S.setAutoRes = mode => { if (!['auto', 'always', 'off'].includes(mode)) return false; DR.mode = mode; DR.over = DR.under = 0; DR.noRaiseUntil = 0; try { dynRes(0, 0, performance.now()); } catch (e) {} return true; };
   function adapt(now) {
     const dt = lastNow ? now - lastNow : 16; lastNow = now; frameWin.push(dt); winT += dt;
     if (winT < 500) return;
     const g = med(gpuWin), c = med(cpuWin), f = med(frameWin); S.gpuMs = +g.toFixed(2); S.cpuMs = +c.toFixed(2); S.frameMs = +f.toFixed(2);
     gpuWin.length = 0; cpuWin.length = 0; frameWin = []; winT = 0;
-    if (!S.adapt.own || state !== 'play') { S.adapt.gpuBound = 0; return; }
-    // the graphics card is the bottleneck only if its own work per frame is near the frame budget
-    if (g > 12.5 && f > 17.5) S.adapt.gpuBound++; else S.adapt.gpuBound = 0;
-    if (S.adapt.gpuBound >= 3) {
-      S.adapt.gpuBound = 0;
-      if (PR > .62) { PR = Math.max(.6, PR - .1); resize(); S.adapt.lowered++; }
-      else { const i = ORDER.indexOf(S.tier); if (i > 0) { S.pendingTier = ORDER[i - 1]; } }   // takes effect at the next match start
-      try { feed('Graphics lowered for smoother play'); } catch (e) {}
-    }
+    dynRes(f, g, now, c);
   }
   function gunShade() {
     // first-person gun: darker in tunnels and under roofs, like the world around it (light intensities only)
@@ -421,7 +554,7 @@ void main(){
   if (has('frame')) {
     const _frame = frame;
     frame = function (now) {
-      if (S.adapt.own) prTimer = 0;      // the game's own CPU-blind auto-lowering stays off; adapt() decides with GPU timings
+      if (has('prTimer')) prTimer = 0;   // the game's own auto-lowering stays off: auto resolution (dynRes) decides
       _frame(now);
       try { adapt(now); gunShade(); } catch (e) {}
     };
@@ -444,7 +577,7 @@ void main(){
   /* ---------- public ---------- */
   S.TIERS = TIERS; S.LOOK = LOOK;
   S.setTier = (t, user) => { if (!TIERS[t]) return false; CFG.q = t; if (user) { S.user = true; write({ tier: t, user: true, detected: S.detected }); } try { saveCfg(); } catch (e) {} applyQuality(); try { syncSettings(); } catch (e) {} return true; };
-  S.status = () => ({ tier: S.tier, detected: S.detected, gpu: S.gpu, user: S.user, map: S.map, ao: !!S.aoMaps[S.map], aoStr: ACT.ao, fogH: ACT.fogH, probeK: ACT.probe, hd: S.applied.hd, aniso: S.applied.aniso, pr: has('PR') ? PR : null, msaa: composer.renderTarget1.samples, bloom: bloom.enabled, shadows: renderer.shadowMap.enabled, shadowSize: sun && sun.shadow ? sun.shadow.mapSize.x : 0, patched: patchedCount, probe: S.probe ? S.probeAt : null, probeMs: S.probeMs, software: S.software, integrated: S.integrated, gpuMs: S.gpuMs, cpuMs: S.cpuMs, frameMs: S.frameMs, adaptive: S.adapt.own, lowered: S.adapt.lowered, warmMs: S.warmMs });
+  S.status = () => ({ tier: S.tier, detected: S.detected, gpu: S.gpu, user: S.user, map: S.map, ao: !!S.aoMaps[S.map], aoStr: ACT.ao, fogH: ACT.fogH, probeK: ACT.probe, hd: S.applied.hd, aniso: S.applied.aniso, pr: has('PR') ? PR : null, msaa: composer.renderTarget1.samples, bloom: bloom.enabled, shadows: renderer.shadowMap.enabled, shadowSize: sun && sun.shadow ? sun.shadow.mapSize.x : 0, patched: patchedCount, probe: S.probe ? S.probeAt : null, probeMs: S.probeMs, software: S.software, integrated: S.integrated, gpuMs: S.gpuMs, cpuMs: S.cpuMs, frameMs: S.frameMs, adaptive: S.adapt.own, lowered: S.adapt.lowered, autoRes: DR.mode, autoResActive: DR.active, autoResFloor: +DR.floor.toFixed(3), autoResChanges: DR.changes, warmMs: S.warmMs });
   S.aoAt = aoAt; S.uniforms = U; S.grade = GU;
   window.S9GFX = S;
 

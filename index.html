@@ -1442,9 +1442,11 @@ function slab(o, iv, b, k) {
   for (let a = 0; a < 3; a++) { let n = (b[k + a] - o[a]) * iv[a], f = (b[k + a + 3] - o[a]) * iv[a]; if (n > f) { const s = n; n = f; f = s; } if (n > t0) { t0 = n; ax = a; } if (f < t1) t1 = f; }
   _slab[0] = t0; _slab[1] = t1; _slab[2] = ax; return t0 <= t1;
 }
+const _brO = [0, 0, 0], _brD = [0, 0, 0], _brI = [0, 0, 0];
 function boxRaycast(mesh, rc, out) {
   const T = boxTree(mesh); if (!T) return THREE.Mesh.prototype.raycast.call(mesh, rc, out);
-  const r = rc.ray, O = [r.origin.x, r.origin.y, r.origin.z], D = [r.direction.x, r.direction.y, r.direction.z], iv = [1 / D[0], 1 / D[1], 1 / D[2]], near = rc.near, far = rc.far, B = T.B, st = T.st;
+  const r = rc.ray, O = _brO, D = _brD, iv = _brI, near = rc.near, far = rc.far, B = T.B, st = T.st;
+  O[0] = r.origin.x; O[1] = r.origin.y; O[2] = r.origin.z; D[0] = r.direction.x; D[1] = r.direction.y; D[2] = r.direction.z; iv[0] = 1 / D[0]; iv[1] = 1 / D[1]; iv[2] = 1 / D[2];
   st.length = 0; st.push(T.root);
   while (st.length) {
     const nd = st.pop(); if (!slab(O, iv, nd.b, 0) || _slab[1] < Math.max(0, near) || _slab[0] > far) continue;
@@ -1569,6 +1571,21 @@ const YARD = { size: 72,
 const MAPROOT = new THREE.Group(); scene.add(MAPROOT);
 let CUR_MAP = null, MAPFX = null, skyRT = null;
 // everything a map builder adds to the scene goes into MAPROOT so a whole map can be torn down and replaced
+// static map pieces: three recomposes every object's matrix every frame whether it moved or not (~1000 objects in a match).
+// A map object whose position / rotation / scale and parent did not change, that nobody flagged and whose parent did not move keeps
+// last frame's matrices (they would come out identical) and only walks its children. Anything that moves still updates.
+const _UMW = THREE.Object3D.prototype.updateMatrixWorld;
+function updateMatrixWorldIfMoved(force) {
+  const p = this.position, q = this.quaternion, s = this.scale, c = this._mwc;
+  if (!force && !this.matrixWorldNeedsUpdate && this.matrixAutoUpdate && this._mwp === this.parent && c[0] === p.x && c[1] === p.y && c[2] === p.z && c[3] === q._x && c[4] === q._y && c[5] === q._z && c[6] === q._w && c[7] === s.x && c[8] === s.y && c[9] === s.z) {
+    const ch = this.children; for (let i = 0; i < ch.length; i++) ch[i].updateMatrixWorld(false); return;
+  }
+  c[0] = p.x; c[1] = p.y; c[2] = p.z; c[3] = q._x; c[4] = q._y; c[5] = q._z; c[6] = q._w; c[7] = s.x; c[8] = s.y; c[9] = s.z; this._mwp = this.parent;
+  _UMW.call(this, force);
+}
+// (run about once a second from the frame loop: picks up pieces that maps and add-ons add later; only plain Object3D/Mesh
+// matrix code is replaced, never a class with its own updateMatrixWorld such as cameras or skinned meshes)
+function markStaticMap() { MAPROOT.traverse(o => { if (o.updateMatrixWorld === _UMW && !Object.prototype.hasOwnProperty.call(o, 'updateMatrixWorld')) { o._mwc = new Float64Array(10).fill(NaN); o.updateMatrixWorld = updateMatrixWorldIfMoved; } }); }
 function intoMap(fn) { const add = scene.add; scene.add = function (...o) { return MAPROOT.add(...o); }; try { return fn(); } finally { scene.add = add; } }
 function clearMap() {
   // free GPU memory of the old map (three.js re-uploads anything that gets used again)
@@ -1752,7 +1769,8 @@ function mLaser(x, z, len, speed, col = [5, .4, .3]) {
 }
 function inRect(z, x, zz) { return x > z.x0 && x < z.x1 && zz > z.z0 && zz < z.z1; }
 // per-entity map effects: gravity scale, ground friction, triggers
-function mapMods(x, z) { let g = 1, fric = 1, slow = 1; if (MAPFX) for (const zn of MAPFX.zones) { if (zn.type === 'lowg' ? Math.hypot(x - zn.cx, z - zn.cz) < zn.r : inRect(zn, x, z)) { if (zn.type === 'lowg') g = .32; if (zn.type === 'ice') fric = .12; if (zn.type === 'water') slow = .62; } } return { g, fric, slow }; }
+function mapMods(x, z, out) { let g = 1, fric = 1, slow = 1; if (MAPFX) for (const zn of MAPFX.zones) { if (zn.type === 'lowg' ? Math.hypot(x - zn.cx, z - zn.cz) < zn.r : inRect(zn, x, z)) { if (zn.type === 'lowg') g = .32; if (zn.type === 'ice') fric = .12; if (zn.type === 'water') slow = .62; } } if (out) { out.g = g; out.fric = fric; out.slow = slow; return out; } return { g, fric, slow }; }
+const _mmB = { g: 1, fric: 1, slow: 1 };   // bots' per-frame map-mods result (read at once, never kept)
 function mapTriggers(e, dt) {
   if (!MAPFX) return;
   const pos = entPos(e), player = e.isPlayer, onGround = player ? P.onGround : e.onGround;
@@ -1767,7 +1785,7 @@ function mapTriggers(e, dt) {
   }
   for (const tp of MAPFX.tele) {
     const cd = tp.cd.get(e) || 0; if (cd > G.time) continue;
-    for (const [from, to] of [[tp.a, tp.b], [tp.b, tp.a]]) {
+    for (const [from, to] of tp.pairs || (tp.pairs = [[tp.a, tp.b], [tp.b, tp.a]])) {
       if (Math.hypot(pos.x - from.x, pos.z - from.z) < 1.1 && pos.y < 2) {
         tp.cd.set(e, G.time + 1.2); const dx = -to.x, dz = -to.z, L = Math.hypot(dx, dz) || 1;
         pos.set(to.x + dx / L * 1.6, pos.y, to.z + dz / L * 1.6);
@@ -2711,18 +2729,24 @@ function makeParticles(max, additive) {
       : 'varying float vA; varying vec3 vC; void main(){ float d = length(gl_PointCoord-.5); float a = smoothstep(.5,.05,d); gl_FragColor = vec4(vC, a*a*vA); }'
   });
   const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.renderOrder = additive ? 3 : 2; scene.add(pts);
-  let head = 0, any = false;
+  // only the slots that are alive (or died this frame) are re-uploaded, and an empty pool is not drawn at all (a dead slot has
+  // alpha 0 = point size 0, so both give the same pixels); flush: a cleared pool is drawn once more so its zeros reach the GPU
+  let head = 0, any = false, flush = false, lo = max, hi = -1;
+  const range = () => { if (hi < lo) return; for (const [a, k] of [[aPos, 3], [aCol, 3], [aSize, 1], [aAlpha, 1]]) { a.updateRange.offset = lo * k; a.updateRange.count = (hi - lo + 1) * k; a.needsUpdate = true; } };
   return {
-    mat,
+    mat, pts,
     spawn(p, vx, vy, vz, r, g, b, s, l, gr = 0, dr = 0, gw = 0, a = 1) {
       const i = head; head = (head + 1) % max; const j = i * 3;
       pos[j] = p.x; pos[j + 1] = p.y; pos[j + 2] = p.z; vel[j] = vx; vel[j + 1] = vy; vel[j + 2] = vz;
       col[j] = r; col[j + 1] = g; col[j + 2] = b; size[i] = s; life[i] = maxL[i] = l; grav[i] = gr; drag[i] = dr; grow[i] = gw; alpha[i] = a0[i] = a; any = true;
+      pts.visible = true; if (i < lo) lo = i; if (i > hi) hi = i; range();
     },
     update(dt) {
-      if (!any) return; let alive = false;
+      if (!any) { if (flush) flush = false; else pts.visible = false; return; }
+      let alive = false; lo = max; hi = -1;
       for (let i = 0; i < max; i++) {
         if (life[i] <= 0) continue;
+        if (i < lo) lo = i; hi = i;
         life[i] -= dt; const j = i * 3;
         if (life[i] <= 0) { alpha[i] = 0; continue; }
         alive = true;
@@ -2733,10 +2757,10 @@ function makeParticles(max, additive) {
         size[i] += grow[i] * dt;
         const t = life[i] / maxL[i]; alpha[i] = a0[i] * (additive ? t : t * Math.min(1, (1 - t) * 6));
       }
-      aPos.needsUpdate = aCol.needsUpdate = aSize.needsUpdate = aAlpha.needsUpdate = true;
+      range();
       any = alive;
     },
-    clear() { life.fill(0); alpha.fill(0); aAlpha.needsUpdate = true; }
+    clear() { life.fill(0); alpha.fill(0); any = false; lo = 0; hi = max - 1; range(); pts.visible = true; flush = true; }
   };
 }
 let FX, SMOKE, DUST;
@@ -2969,7 +2993,7 @@ const sfx = {
     if (!AU.hitBuf) AU.hitBuf = { body: hitSample('body'), head: hitSample('head'), shield: hitSample('shield') };
     const src = c.createBufferSource(); src.buffer = AU.hitBuf[shield ? 'shield' : crit ? 'head' : 'body']; src.playbackRate.value = 1 + H.chain * .03;
     const g = c.createGain(); g.gain.value = crit ? 1.15 : .95; src.connect(g); g.connect(AU.master); src.start(now + .008);
-    const dg = AU.dry.gain; dg.cancelScheduledValues(now); dg.setValueAtTime(dg.value, now); dg.linearRampToValueAtTime(.45, now + .012); dg.linearRampToValueAtTime(1, now + .16); },
+    const dg = AU.dry.gain; dg.cancelScheduledValues(now); dg.setValueAtTime(dg.value, now); dg.linearRampToValueAtTime(.72, now + .012); dg.linearRampToValueAtTime(1, now + .14); },   // (was .45: on a kill the hit duck + the kill thump below together dipped every other sound)
   kill(pos, crit) { if (!AU.ctx) return; const t = AU.ctx.currentTime;
     osc(AU.dry, t, .28, 'sine', 95, 38, .6); osc(AU.dry, t + .02, .12, 'triangle', 1318, 1318, .14); osc(AU.dry, t + .09, .22, 'triangle', crit ? 1976 : 1760, crit ? 1976 : 1760, .13);
     const d = bus({ pos, verb: .5, echo: .3, ref: 6 }); nz(d, t, .9, 'lowpass', 900, .7, 1.1, .004, 120); osc(d, t, .6, 'sine', 80, 28, .9); osc(d, t, .5, 'sawtooth', 600, 50, .12); },
@@ -3024,7 +3048,7 @@ const sfx = {
   pistol() { if (!AU.ctx) return; const t = AU.ctx.currentTime, p = rand(.96, 1.05), d = bus({ verb: .4, echo: .3, vol: .85 }); nz(d, t, .025, 'highpass', 3600, .7, .55); nz(d, t, .14, 'bandpass', 1300 * p, .9, .9, .001, 500); osc(d, t, .1, 'sine', 180 * p, 50, .9); osc(d, t, .04, 'triangle', 2400, 1800, .08); },
   launch(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos: pos || null, verb: .5, echo: .35, ref: 5, vol: 1.1 }); nz(d, t, .5, 'bandpass', 600, .8, .9, .02, 2400); osc(d, t, .3, 'sine', 140, 50, 1.1); nz(d, t, .9, 'lowpass', 900, .7, .4, .05, 200); },
   killConfirm(crit, multi) { if (!AU.ctx) return; const t = AU.ctx.currentTime;
-    osc(AU.dry, t, .22, 'sine', 120, 40, .9); nz(AU.dry, t, .12, 'lowpass', 600, 1, .5, .002);
+    osc(AU.dry, t, .22, 'sine', 120, 40, .6); nz(AU.dry, t, .12, 'lowpass', 600, 1, .4, .002);   // softer sub thump: at .9 it drove the compressor (-9 dB, 0.3 s release) and pumped every other sound down
     const base = crit ? 1568 : 1318; osc(AU.dry, t + .01, .35, 'triangle', base, base, .16); osc(AU.dry, t + .07, .45, 'triangle', base * 1.5, base * 1.5, .13); osc(AU.dry, t + .07, .6, 'sine', base * 3, base * 3, .05);
     if (crit) { nz(AU.dry, t, .06, 'highpass', 6000, 1, .35); osc(AU.dry, t, .9, 'sine', 3136, 3120, .08); }
     const d = bus({ verb: .8 }); osc(d, t + .05, .8, 'sine', base * 2, base * 2.02, .05, .1); },
@@ -3135,7 +3159,12 @@ function updateListener() {
 }
 
 /* ================= springs ================= */
-class Spring { constructor(k, d) { this.k = k; this.d = d; this.x = 0; this.v = 0; } step(dt, target = 0) { const a = -this.k * (this.x - target) - this.d * this.v; this.v += a * dt; this.x += this.v * dt; return this.x; } reset() { this.x = this.v = 0; } }
+// springs integrate in fixed 1/240 s slices (the remainder carried to the next call), so a kick or sway moves the same way
+// at 30, 60, 144 or 240 fps; the returned value is blended inside the current slice, so it is smooth at any frame rate
+class Spring { constructor(k, d) { this.k = k; this.d = d; this.x = 0; this.v = 0; this.acc = 0; this.px = 0; }
+  step(dt, target = 0) { const h = 1 / 240; this.acc += Math.min(dt, .1); while (this.acc >= h) { this.px = this.x; const a = -this.k * (this.x - target) - this.d * this.v; this.v += a * h; this.x += this.v * h; this.acc -= h; }
+    return this.px + (this.x - this.px) * (this.acc / h); }
+  reset() { this.x = this.v = this.acc = this.px = 0; } }
 
 /* ================= viewmodel ================= */
 let gun, gunMag, gunMagPos, leftArm, muzzleFlash, muzzleCore, reticle, gunVisible = false;
@@ -3384,7 +3413,11 @@ function buildBot(profile) {
     ammo: w.mag, mag: w.mag, reload: 0, fireCd: rand(.5, 1), burstLeft: 0, shotKick: 0, flashT: 0, firedT: 0, scopeT: 0,
     target: null, targetVis: false, seesPlayer: false, reactT: 0, trackT: 0, aimErr0: .08, lastSeen: V3(), lastSeenT: -99, hunt: null, aggro: null, aggroT: -99, heard: V3(), heardT: -99,
     mode: 'roam', goal: V3(), hasGoal: false, path: null, pathI: 0, repathT: 0, thinkT: rand(0, .4), percT: rand(0, .2), stuckT: 0, lastHurt: -99, shield: 0,
-    strafeDir: 1, strafeT: 0, dashT: 0, dashCd: 0, jumpCd: rand(1, 3), nadeCd: rand(6, 14), coverCd: 0, hitT: 0, rollT: 0, flinch: 0 };
+    strafeDir: 1, strafeT: 0, dashT: 0, dashCd: 0, jumpCd: rand(1, 3), nadeCd: rand(6, 14), coverCd: 0, hitT: 0, rollT: 0, flinch: 0,
+    // fields the AI / animation / footsteps write every frame, declared up front with the value they start from (0 / false / null =
+    // what the code already treats an unset field as) so every bot object keeps one shape: fast field access, no boxed numbers
+    legYaw: 0, backK: 0, ads: 0, targetVisNow: false, targetT: 0, stagger: 0, chillT: 0, burnT: 0, plant: false, wantDouble: false, headAim: false,
+    stuckN: 0, camp: null, campCd: 0, campUntil: 0, shots: 0, hits: 0, headHits: 0, fsAcc: 0, fsAir: false, fsVy: 0, preQ: null, dq: null };
   for (const m of meshes) m.userData.robot = r;
   robots.push(r); targetsDirty = true;
   return r;
@@ -3425,22 +3458,26 @@ const PF = { n: 0, ms: 0, max: 0, fail: 0 };   // path-search stats (tests read 
 function findPath(sx, sz, gx, gz) { const t0 = performance.now(), r = findPath0(sx, sz, gx, gz), d = performance.now() - t0; PF.n++; PF.ms += d; PF.max = Math.max(PF.max, d); if (!r) PF.fail++; return r; }
 function findPath0(sx, sz, gx, gz) {
   const N = NAV.N, s = nearestOk(cellOf(sx, sz)), t = nearestOk(cellOf(gx, gz)); if (s < 0 || t < 0) return null;
-  const run = ++NAV.run, heap = [s], tx = t % N, tz = Math.floor(t / N);
+  // (same search as before, step for step: the grid arrays are read through locals and the heap / heuristic are inlined)
+  const run = ++NAV.run, heap = NAV.heap || (NAV.heap = []), tx = t % N, tz = Math.floor(t / N);
+  const F = NAV.f, Gs = NAV.g, OK = NAV.ok, Hh = NAV.h, ST = NAV.stamp, CL = NAV.closed, FR = NAV.from;
   const H = c => { const dx = Math.abs(c % N - tx), dz = Math.abs(Math.floor(c / N) - tz); return (dx + dz + (1.414 - 2) * Math.min(dx, dz)); };
-  NAV.g[s] = 0; NAV.f[s] = H(s); NAV.stamp[s] = run; NAV.from[s] = -1;
-  const push = c => { heap.push(c); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (NAV.f[heap[p]] <= NAV.f[heap[i]]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
-  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = i * 2 + 1, r = l + 1; let m = i; if (l < heap.length && NAV.f[heap[l]] < NAV.f[heap[m]]) m = l; if (r < heap.length && NAV.f[heap[r]] < NAV.f[heap[m]]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+  heap.length = 0; heap.push(s); Gs[s] = 0; F[s] = H(s); ST[s] = run; FR[s] = -1;
   let found = false, guard = 0;
   while (heap.length && guard++ < N * N) {
-    const c = pop(); if (NAV.closed[c] === run) continue; NAV.closed[c] = run;
+    // pop the lowest f
+    const c = heap[0], last = heap.pop(); let hl = heap.length;
+    if (hl) { heap[0] = last; let i = 0; for (;;) { const l = i * 2 + 1, r = l + 1; let m = i; if (l < hl && F[heap[l]] < F[heap[m]]) m = l; if (r < hl && F[heap[r]] < F[heap[m]]) m = r; if (m === i) break; const sw = heap[m]; heap[m] = heap[i]; heap[i] = sw; i = m; } }
+    if (CL[c] === run) continue; CL[c] = run;
     if (c === t) { found = true; break; }
-    const ci = c % N, cj = Math.floor(c / N);
+    const ci = c % N, cj = Math.floor(c / N), hc = Hh[c], gc = Gs[c];
     for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
       if (!di && !dj) continue; const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= N || j >= N) continue;
-      const k = j * N + i; if (!NAV.ok[k] || NAV.closed[k] === run || !canStep(c, k)) continue;
-      if (di && dj && (!NAV.ok[cj * N + i] || !NAV.ok[j * N + ci])) continue; // no corner cutting
-      const ng = NAV.g[c] + (di && dj ? 1.414 : 1);
-      if (NAV.stamp[k] !== run || ng < NAV.g[k]) { NAV.stamp[k] = run; NAV.g[k] = ng; NAV.f[k] = ng + H(k); NAV.from[k] = c; push(k); }
+      const k = j * N + i; if (!OK[k] || CL[k] === run || !(Hh[k] - hc <= .62)) continue;   // canStep(c, k)
+      if (di && dj && (!OK[cj * N + i] || !OK[j * N + ci])) continue; // no corner cutting
+      const ng = gc + (di && dj ? 1.414 : 1);
+      if (ST[k] !== run || ng < Gs[k]) { ST[k] = run; Gs[k] = ng; F[k] = ng + H(k); FR[k] = c;
+        heap.push(k); let q = heap.length - 1; while (q > 0) { const pq = (q - 1) >> 1; if (F[heap[pq]] <= F[heap[q]]) break; const sw = heap[pq]; heap[pq] = heap[q]; heap[q] = sw; q = pq; } }
     }
   }
   if (!found) return null;
@@ -3472,17 +3509,20 @@ function groundAt(px, pz, feet, r) {
   return g;
 }
 const ray = new THREE.Raycaster();
-const _v1 = V3(), _v2 = V3(), _v3 = V3();
+const _v1 = V3(), _v2 = V3(), _v3 = V3(), _losHits = [];
 function lineOfSight(from, to) {
   _v1.subVectors(to, from); const dist = _v1.length(); _v1.divideScalar(dist);
   ray.set(from, _v1); ray.far = dist - .3;
-  const hit = ray.intersectObjects(world.meshes, false).length === 0; ray.far = Infinity; return hit;
+  // same answer as intersectObjects(world.meshes).length === 0, but stops at the first mesh that blocks (no hit list, no sort)
+  const M = world.meshes, H = _losHits; let clear = true;
+  for (let i = 0; i < M.length && clear; i++) { const m = M[i]; if (!m.layers.test(ray.layers)) continue; H.length = 0; m.raycast(ray, H); if (H.length) clear = false; }
+  H.length = 0; ray.far = Infinity; return clear;
 }
 
 /* ================= game state ================= */
 const P = { chillT: 0, burnT: 0 }, G = {};
 let state = 'loading', noLock = false, mouseDown = false, adsHeld = false, lookDrag = false, timeScale = 1, hitstop = 0;
-const keys = {};
+const keys = {}, HELD = {};   // HELD = physical keys down right now (keys only counts while playing: a key held through death must move you the moment you respawn)
 let best = { score: 0, wave: 0 };
 try { const s = JSON.parse(localStorage.getItem('sector9-best') || 'null'); if (s) best = s; } catch (e) {}
 const showBest = () => { $('bestLine').textContent = best.score ? `Best match: ${best.score} kills` : 'No matches yet'; };
@@ -3553,7 +3593,7 @@ for (let d = -360; d <= 720; d += 15) {
 const epips = []; for (let i = 0; i < 12; i++) { const e = document.createElement('div'); e.className = 'epip'; $('compass').appendChild(e); epips.push(e); }
 function updateCompass() {
   const heading = ((-P.yaw * 180 / Math.PI) % 360 + 360) % 360;
-  cstrip.style.transform = `translateX(${-heading * PXDEG}px)`;
+  setStyle(cstrip, 'transform', `translateX(${(-heading * PXDEG).toFixed(1)}px)`);
   const w = compassW;
   for (let i = 0; i < epips.length; i++) {
     const r = robots[i], e = epips[i];
@@ -3562,7 +3602,7 @@ function updateCompass() {
     let rel = b - heading; rel = ((rel + 540) % 360) - 180;
     const x = w / 2 + rel * PXDEG;
     if (x < 10 || x > w - 10) { e.style.display = 'none'; continue; }
-    e.style.display = 'block'; e.style.left = x + 'px'; e.style.opacity = 1;
+    if (e.style.display !== 'block') e.style.display = 'block'; setStyle(e, 'left', x.toFixed(1) + 'px'); if (e.style.opacity !== '1') e.style.opacity = 1;
   }
 }
 let bannerT = 0, hmT = 0, hmKill = false, calloutT = 0, dirT = 0;
@@ -3627,11 +3667,12 @@ function buildPads() {
   add(-22, 0, 'hp'); add(22, 0, 'hp'); add(0, -21, 'hp'); add(0, 21, 'hp'); add(-1.2, 2.2, 'od');
 }
 function updatePads(dt) {
+  let ents = null;   // built once a frame, only when a pad is ready
   for (const p of PADS) {
     if (!p.ready) { p.t -= dt; if (p.t <= 0) { p.ready = true; p.item.visible = true; } }
     p.item.rotation.y += dt * 1.6; p.item.position.y = 1 + Math.sin(G.time * 2.4 + p.x) * .1; p.rm.material.opacity = p.ready ? .8 : .15;
     if (!p.ready) continue;
-    for (const e of entities()) {
+    for (const e of ents || (ents = entities())) {
       if (!entAlive(e)) continue; const q = entPos(e);
       if (Math.hypot(q.x - p.x, q.z - p.z) > 1.1 || Math.abs(q.y - p.y) > 1) continue;
       if (p.kind === 'hp') {
@@ -3673,7 +3714,8 @@ function warmShaders() {
     scene.add(g);
     // bodies: the normal look and the see-through look used when they dissolve
     const r0 = robots.find(r => r.body && r.visor), keep = r0 ? [r0.body, r0.visor].map(m => [m, m.transparent, m.depthWrite, m.opacity]) : [];
-    renderer.compile(scene, camera);
+    const pools = [FX, SMOKE].filter(f => f && f.pts).map(f => [f.pts, f.pts.visible]); for (const [p] of pools) p.visible = true;   // empty pools are hidden: compile them too
+    renderer.compile(scene, camera); for (const [p, v] of pools) p.visible = v;
     if (r0) { for (const [m] of keep) { m.transparent = true; m.depthWrite = false; m.needsUpdate = true; } const v = r0.root.visible; r0.root.visible = true; renderer.compile(scene, camera); r0.root.visible = v; for (const [m, tr, dw, op] of keep) { m.transparent = tr; m.depthWrite = dw; m.opacity = op; m.needsUpdate = true; } renderer.compile(scene, camera); }
     scene.remove(g);
     // first-person: every gun's viewmodel
@@ -4873,7 +4915,7 @@ function hurtPlayer(dmg, from, attacker, crit, weapon) {
   if (state !== 'play' || P.dead || window.__god) return; // __god: automated test switch only
   if (P.shield > 0) return;
   if (P.odT > 0) dmg *= .7;
-  P.hp -= dmg; P.lastHurt = G.time; P.hitFx = Math.min(1, P.hitFx + .6); P.trauma = Math.min(1, P.trauma + (weapon === 'sniper' ? .6 : .14)); sfx.hurt();
+  P.hp -= dmg; P.lastHurt = G.time; hitFlinch(dmg, from); P.hitFx = Math.min(1, P.hitFx + .6); P.trauma = Math.min(1, P.trauma + (weapon === 'sniper' ? .6 : .14)); sfx.hurt();
   if (from) { const ang = Math.atan2(from.x - P.pos.x, from.z - P.pos.z), rel = -(ang - (P.yaw + Math.PI)); $('dmgdir').style.transform = `rotate(${rel}rad)`; dirT = 1.2; }
   if (attacker) P.lastAttacker = attacker;
   if (P.hp <= 0) { P.hp = 0; killEntity(PLAYER_ENT, attacker, weapon || 'carbine', crit, null); }
@@ -4892,6 +4934,7 @@ function respawnPlayer() {
   resetPlayer(); P.spawnAt = G.time; P.pos.copy(pickSpawn(PLAYER_ENT)); P.yaw = Math.atan2(P.pos.x, P.pos.z); P.shield = 2.5; P.od = od;
   setModel(P.weapon); $('death').hidden = true; grade.uniforms.uDying.value = 0; stopKillcam(); stopDeathcam();
   state = 'play'; gunVisible = true; sfx.spawnMe(); updateHud(true);
+  for (const k in HELD) if (HELD[k] && /^(Key[WASD]|Arrow|Shift|Control)/.test(k)) keys[k] = true;   // held through the death: moving again at once (was: frozen until you re-pressed)
 }
 
 /* bot gunfire: hitscan with human-like aim error, visible tracers, real sound */
@@ -4968,7 +5011,7 @@ function throwNade(owner, from, vel) {
 }
 function updateNades(dt) {
   for (let i = NADES.length - 1; i >= 0; i--) {
-    const n = NADES[i]; n.t -= dt; n.v.y -= 18 * mapMods(n.m.position.x, n.m.position.z).g * dt;
+    const n = NADES[i]; n.t -= dt; n.v.y -= 18 * mapMods(n.m.position.x, n.m.position.z, _mmB).g * dt;
     const p = n.m.position, prev = _b4.copy(p); p.addScaledVector(n.v, dt);
     // swept check so a fast throw can't skip through a thin wall
     let boom = p.y < .1;
@@ -4986,6 +5029,7 @@ function explode(p, owner, weapon = 'nade') {
   for (let i = 0; i < 18; i++) SMOKE.spawn(p, rand(-2, 2), rand(.5, 3), rand(-2, 2), .14, .16, .2, rand(.6, 1.1), rand(1.5, 3), -.4, 1.5, 1.4, .7);
   lightFlash(p, 0x66ccff, 12, 18); decal(new THREE.Vector3(p.x, groundAt(p.x, p.z, p.y + .5, .1) + .01, p.z), new THREE.Vector3(0, 1, 0), 4.5, 'scorch', [3, 1.2, .3]); sfx.explode(p.clone());
   const near = camera.position.distanceTo(p); P.trauma = Math.min(1, P.trauma + clamp(1 - near / 22, 0, 1) * .8);
+  let hitAny = false;
   for (const e of entities()) {
     if (!entAlive(e) || e.remote) continue; // the other player's own machine applies blast damage to them
     const c = entChest(e, _b1), d = c.distanceTo(p); if (d > R) continue;
@@ -4994,7 +5038,9 @@ function explode(p, owner, weapon = 'nade') {
     const dir = _b3.subVectors(c, p).normalize();
     if (e.isPlayer) { P.vel.addScaledVector(dir, 9 * (1 - d / R)); P.vel.y += 4 * (1 - d / R); }
     damageEntity(e, dmg, false, c.clone(), dir.clone(), 'body', owner, weapon);
+    if (owner === PLAYER_ENT && e !== owner && (weapon === 'nade' || weapon === 'nova')) hitAny = true;
   }
+  if (hitAny) G.hits++;   // accuracy: a plasma launcher / grenade shot that hurt someone is one hit (however many it caught)
   noise(p, 50, owner);
 }
 
@@ -5570,12 +5616,16 @@ function knifeAttack(heavy) {
   for (const r of robots) { if (r.dead) continue; const q = r.root.position, d = Math.hypot(q.x - P.pos.x, q.z - P.pos.z); if (d > bd) continue; const dx = (q.x - P.pos.x) / d, dz = (q.z - P.pos.z) / d; if (dx * _v2.x + dz * _v2.z < .8) continue; best = r; bd = d; }
   if (best && bd > 1.2) { const q = best.root.position, d = bd; P.vel.x = (q.x - P.pos.x) / d * (heavy ? 11 : 8); P.vel.z = (q.z - P.pos.z) / d * (heavy ? 11 : 8); P.dashT = .1; }
 }
+const KNIFE_IMPACT = h => h ? .42 : .3, KNIFE_WINDOW = .3;   // impact frame of the swing; the blade stays "live" for this much more of it
+function knifeTick(dt) {   // every frame: the swing's blade tests for a hit from the impact frame until the window closes (frame-rate independent: a target strafing/jumping through the arc is caught on any frame it is inside it)
+  if (P.swingT > 0) { P.swingT -= dt; if (!P.swingHit && 1 - P.swingT / P.swingDur > KNIFE_IMPACT(P.swingHeavy)) knifeHitCheck(); }
+}
 function knifeHitCheck() {
   P.swingHit = true;
   if (targetsDirty) rebuildTargets();
   camera.getWorldDirection(shotDir); camRight.set(1, 0, 0).applyQuaternion(camera.quaternion); camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
   // a fan of short rays: forgiving like a real swing arc
-  for (const [ox, oy] of [[0, 0], [-.12, 0], [.12, 0], [0, -.1], [-.22, -.05], [.22, -.05], [0, -.2]]) {
+  for (const [ox, oy] of [[0, 0], [-.12, 0], [.12, 0], [0, -.1], [-.22, -.05], [.22, -.05], [0, -.2], [0, .1], [-.2, .06], [.2, .06]]) {
     const d = _v3.copy(shotDir).addScaledVector(camRight, ox).addScaledVector(camUp, oy).normalize();
     ray.set(camera.position, d); ray.far = 2.6;
     const hits = shotHits(targets, false); ray.far = Infinity;
@@ -5588,11 +5638,13 @@ function knifeHitCheck() {
     const boomP = P.weapon === 'boomerang', dmg = boomP ? 150 : P.swingHeavy || back ? 200 : crit ? 100 : 55;
     G.hits++; G.fired++;
     damageBot(r, dmg, crit || back, h.point, d.clone(), h.object.userData.zone, PLAYER_ENT, boomP ? 'boomerang' : 'knife');
-    sfx.knifeHit(); P.trauma = Math.min(1, P.trauma + .25); hitstop = .05;
+    sfx.knifeHit(); P.trauma = Math.min(1, P.trauma + .25); hitstop = .05;   // melee feel: 50 ms freeze-frame, attacker camera kick, victim shoved back + flinch (damage unchanged; blood/spark burst + stagger come from hitfx)
+    springs.kickZ.v += 2.4; springs.kickRot.v += 2.2; r.flinch = Math.max(r.flinch || 0, 1.6); if (!r.remote && r.vel) { r.vel.x += d.x * 6; r.vel.z += d.z * 6; }
     if (back && !r.remote) callout('BACKSTAB', 'crit');
     for (let i = 0; i < 16; i++) FX.spawn(h.point, rand(-3, 3), rand(0, 3), rand(-3, 3), .6, 2.6, 3.6, rand(.02, .05), rand(.2, .4), 8, 1);
     return;
   }
+  if (1 - P.swingT / P.swingDur <= KNIFE_IMPACT(P.swingHeavy) + KNIFE_WINDOW) P.swingHit = false;   // nothing in the arc yet: test again next frame
 }
 
 /* ================= weapon drops: a fallen fighter's gun hovers where they died for a few seconds; X swaps it into your hands ================= */
@@ -5884,7 +5936,8 @@ function updatePlayer(dt, rdt) {
   const hs = Math.hypot(P.vel.x, P.vel.z);
   if (P.onGround && hs > 1 && P.slideT <= 0) { P.stepAcc += hs * dt; const stride = sprint ? 2.5 : 1.9; if (P.stepAcc > stride) { P.stepAcc = 0; sfx.step(sprint, false, P.crouch > .5); } }
   // regen + heartbeat
-  if (G.time - P.lastHurt > MOVE.regenDelay && P.hp < 100) { P.hp = Math.min(100, P.hp + MOVE.regenRate * dt); updateHud(); }
+  // (the HUD redraw - standings sort, DOM, online a localStorage write - only when the shown whole number changes, not every step)
+  if (G.time - P.lastHurt > MOVE.regenDelay && P.hp < 100) { const h0 = Math.ceil(P.hp); P.hp = Math.min(100, P.hp + MOVE.regenRate * dt); if (Math.ceil(P.hp) !== h0) updateHud(); }
   if (P.hp < 30) { G.heartT -= dt; if (G.heartT <= 0) { sfx.heart(); G.heartT = .85; } }
   // ADS
   const adsT = adsHeld && P.reload <= 0 && !sprint && P.switchT <= 0 && P.weapon !== 'knife' && P.weapon !== 'boomerang' ? 1 : 0;
@@ -5893,7 +5946,7 @@ function updatePlayer(dt, rdt) {
   updateStation(dt);
   // weapon state
   P.fireCd -= dt; P.heat = Math.max(0, P.heat - dt * 1.8);
-  if (P.swingT > 0) { P.swingT -= dt; if (!P.swingHit && 1 - P.swingT / P.swingDur > (P.swingHeavy ? .42 : .3)) knifeHitCheck(); }
+  knifeTick(dt);
   {
     const w = W();
     // minigun spin-up
@@ -5918,7 +5971,8 @@ function updatePlayer(dt, rdt) {
     if (P.reload <= 0) { const take = Math.min(P.mag - P.ammo, P.reserve); P.ammo += take; P.reserve -= take; P.reload = 0; updateHud(); }
   }
   // recoil recovery when not firing
-  if (G.time - P.lastShot > .14 && P.recoilAcc > 0) { const r = P.recoilAcc * Math.min(1, dt * 7) * .7; P.pitch -= r; P.recoilAcc -= r / .7; if (P.recoilAcc < 1e-4) P.recoilAcc = 0; }
+  // (the share recovered per step is the 60 fps tuning, 7/60 per 1/60 s, converted to this step's length: same curve at every rate)
+  if (G.time - P.lastShot > .14 && P.recoilAcc > 0) { const r = P.recoilAcc * (1 - Math.pow(1 - 7 / 60, Math.min(dt, .1) * 60)) * .7; P.pitch -= r; P.recoilAcc -= r / .7; if (P.recoilAcc < 1e-4) P.recoilAcc = 0; }
   P.pitch = clamp(P.pitch, -1.5, 1.5);
   // pickups
   for (let i = pickups.length - 1; i >= 0; i--) {
@@ -5947,7 +6001,7 @@ function tryDash() {
 }
 function throwPlayerNade(charge = 0) {
   if (P.nades <= 0 || state !== 'play') return;
-  P.shield = 0;
+  P.shield = 0; G.fired++;   // a grenade throw is a shot for the accuracy stat
   camera.getWorldDirection(_v2); const from = _v1.copy(camera.position).addScaledVector(_v2, .6); from.y -= .15;
   const k = clamp(charge / .7, 0, 1), v = _v2.clone().multiplyScalar(lerp(13, 36, k)); v.y += lerp(3.5, 5.5, k); v.addScaledVector(P.vel, .5);
   throwNade(PLAYER_ENT, from.clone(), v); netNade(from, v); if (P.nades === 2) P.nadeT = 9; P.nades--; springs.kickRot.v += 3;
@@ -5959,7 +6013,7 @@ function overdrive() {
 function updateCamera(dt, rdt) {
   const hs = Math.hypot(P.vel.x, P.vel.z), moving = P.onGround && hs > .5;
   if (moving) P.bob += dt * hs * (P.sprint ? 1.25 : 1.45);
-  const bobAmt = reduceMotion ? 0 : clamp(hs / 6, 0, 1.3) * (1 - P.ads * .85);
+  const bobAmt = reduceMotion ? 0 : clamp(hs / 6, 0, 1.3) * (1 - P.ads * .85) * FEEL.bob;   // (Settings: view bob full / subtle / off)
   const eyeT = lerp(1.65, 1.05, P.crouch);
   P.camY = damp(P.camY, eyeT, 14, dt);
   const land = springs.land.step(dt);
@@ -5969,7 +6023,7 @@ function updateCamera(dt, rdt) {
   const kick = springs.camKick.step(dt);
   P.trauma = Math.max(0, P.trauma - dt * 1.6);
   const sh = reduceMotion ? 0 : P.trauma * P.trauma, t = performance.now() / 1000;
-  camera.position.set(P.pos.x, P.smoothY + Math.sin(P.bob * 2) * .04 * bobAmt + land * .12, P.pos.z);
+  camera.position.set(P.pos.x, P.smoothY + Math.sin(P.bob * 2) * .04 * bobAmt + land * .12 * FEEL.land, P.pos.z);
   camera.rotation.set(P.pitch + kick * .05 + sh * .03 * Math.sin(t * 37), P.yaw + sh * .03 * Math.sin(t * 29 + 1.3), Math.sin(P.bob) * .008 * bobAmt + sh * .04 * Math.sin(t * 23 + 2.1) - P.crouch * .02);
   const scopedK = W().scope ? clamp((P.ads - .75) / .25, 0, 1) : 0;
   if (scopedK > 0) { const sw = (1 - P.crouch * .6) * .0022 * scopedK; camera.rotation.x += Math.sin(t * .9) * sw; camera.rotation.y += Math.sin(t * .63 + 1) * sw * 1.3; }
@@ -5980,7 +6034,11 @@ function updateCamera(dt, rdt) {
 }
 function updateViewmodel(dt) {
   const ads = P.ads, hs = Math.hypot(P.vel.x, P.vel.z), bobAmt = reduceMotion ? 0 : clamp(hs / 6, 0, 1.3) * (1 - ads * .9);
-  const kz = springs.kickZ.step(dt), kr = springs.kickRot.step(dt), sx = springs.swayX.step(dt), sy = springs.swayY.step(dt), land = springs.land.x;
+  // turn inertia: the gun trails the view (springs fed by the mouse in look()), soft-limited so a fast flick swings it a
+  // little further instead of throwing it off screen; strafing leans it slightly into the move (Settings: gun sway)
+  const kz = springs.kickZ.step(dt), kr = springs.kickRot.step(dt), sl = .045, sx = sl * Math.tanh(springs.swayX.step(dt) / sl), sy = sl * Math.tanh(springs.swayY.step(dt) / sl), land = springs.land.x * FEEL.land;
+  { const lat = (P.vel.x * Math.cos(P.yaw) - P.vel.z * Math.sin(P.yaw)) / 6;   // + = moving right
+    P.vmLean = damp(P.vmLean || 0, reduceMotion ? 0 : clamp(lat, -1.2, 1.2) * FEEL.sway * (1 - ads * .8), 10, dt); }
   const sp = damp(P.spPose || 0, P.sprint ? 1 : 0, 9, dt); P.spPose = sp;
   let rl = 0, magDrop = 0, tilt = 0;
   const sw = P.switchT > 0 ? Math.sin(Math.PI * (P.switchT / .45)) : 0, bolt = P.boltT > 0 ? Math.sin(Math.PI * clamp((.3 - P.boltT) / .3, 0, 1)) : 0;
@@ -5997,7 +6055,7 @@ function updateViewmodel(dt) {
     base.x + Math.sin(P.bob) * .014 * bobAmt + sx * (1 - ads * .7) - sp * .06,
     base.y + Math.abs(Math.cos(P.bob)) * .012 * bobAmt + sy * (1 - ads * .7) - rl * .05 - sp * .05 + land * .05 - sw * .25 - bolt * .03,
     base.z + kz * .045);
-  gun.rotation.set(kr * .06 * (1 - ads * .5) + rl * .35 - sp * .2 + sy * 1.5 - sw * .6, sp * .55 + sx * 2 + (1 - ads) * .1, sp * .35 + rl * .55 + bolt * .35);
+  gun.rotation.set(kr * .06 * (1 - ads * .5) + rl * .35 - sp * .2 + sy * 1.5 - sw * .6, sp * .55 + sx * 2 + (1 - ads) * .1, sp * .35 + rl * .55 + bolt * .35 - P.vmLean * .045);
   if (P.weapon === 'knife') {
     const k = P.swingT > 0 ? 1 - P.swingT / P.swingDur : 0, ez = x => x * x * (3 - 2 * x);
     if (k > 0 && !P.swingHeavy) {
@@ -6133,12 +6191,13 @@ function botNade(r, at) {
   const v = new THREE.Vector3(dx / t, ((at.y + .2) - from.y) / t + 9 * t, dz / t);
   throwNade(r, from.clone(), v); r.nadeCd = rand(12, 20);
 }
+const BOT_PREF = { sniper: 26, wasp: 9, breacher: 5, carbine: 13, triad: 18, judge: 11, titan: 12 };
 function moveBot(r, dt) {
   const p = r.root.position; let wx = 0, wz = 0, speed = 0;
   r.strafeT -= dt; r.dashCd -= dt; r.jumpCd -= dt; r.nadeCd -= dt; r.coverCd -= dt;
   if (r.mode === 'fight' && r.target) {
     const tp = entPos(r.target), dx = tp.x - p.x, dz = tp.z - p.z, dist = Math.hypot(dx, dz) || 1, fx = dx / dist, fz = dz / dist;
-    const pref = { sniper: 26, wasp: 9, breacher: 5, carbine: 13, triad: 18, judge: 11, titan: 12 }[r.weapon] || 13;
+    const pref = BOT_PREF[r.weapon] || 13;
     if (r.strafeT <= 0) {
       // like a person: strafe one way for a while, sometimes plant your feet to aim
       r.strafeT = rand(.3, 1); if (Math.random() < .65) r.strafeDir *= -1;   // players tap A-D in short bursts
@@ -6176,7 +6235,7 @@ function moveBot(r, dt) {
   if (r.dashT > 0) {
     r.dashT -= dt; const tp = r.target ? entPos(r.target) : null;
     if (tp) { const dx = tp.x - p.x, dz = tp.z - p.z, d = Math.hypot(dx, dz) || 1; r.vel.x = -dz / d * r.strafeDir * 6.5; r.vel.z = dx / d * r.strafeDir * 6.5; }
-  } else { const MMb = mapMods(p.x, p.z); speed *= MMb.slow; const acc = (r.onGround ? (r.mode === 'fight' ? 11 : 9) : 2) * (r.onGround ? MMb.fric : 1); r.vel.x = damp(r.vel.x, wx * speed, acc, dt); r.vel.z = damp(r.vel.z, wz * speed, acc, dt); }
+  } else { const MMb = mapMods(p.x, p.z, _mmB); speed *= MMb.slow; const acc = (r.onGround ? (r.mode === 'fight' ? 11 : 9) : 2) * (r.onGround ? MMb.fric : 1); r.vel.x = damp(r.vel.x, wx * speed, acc, dt); r.vel.z = damp(r.vel.z, wz * speed, acc, dt); }
   r.crouch = damp(r.crouch, r.crouchWant && r.onGround && r.dashT <= 0 ? 1 : 0, 8, dt);
   const h = lerp(1.8, 1.25, r.crouch), nx = p.x + r.vel.x * dt, nz = p.z + r.vel.z * dt;
   let moved = 0;
@@ -6184,7 +6243,7 @@ function moveBot(r, dt) {
   if (!blocked(p.x, nz, p.y, .4, h)) { moved += Math.abs(nz - p.z); p.z = nz; } else r.vel.z = 0;
   p.x = clamp(p.x, -HALF + .6, HALF - .6); p.z = clamp(p.z, -HALF + .6, HALF - .6);
   // gravity, jumps and the air double-jump
-  r.vy -= 20 * mapMods(p.x, p.z).g * dt;
+  r.vy -= 20 * mapMods(p.x, p.z, _mmB).g * dt;
   if (!r.onGround && r.wantDouble && r.vy < 1.5 && r.airJumps === 0) { r.vy = 6.4; r.airJumps = 1; r.wantDouble = false; thrusterFx(_a3.set(p.x, p.y + .2, p.z), r.color); }
   { const y0 = p.y; p.y += r.vy * dt; if (r.vy > 0 && blocked(p.x, p.z, p.y, .35, 1.8) && !blocked(p.x, p.z, y0, .35, 1.8)) { p.y = y0; r.vy = 0; } }
   const g = groundAt(p.x, p.z, p.y, .4);
@@ -6217,13 +6276,14 @@ function combatBot(r, dt) {
   if (sniper) {
     r.scopeT += dt; const need = 1.1 / r.skill;
     if (t.isPlayer && r.seesPlayer) { const dd = r.root.position.distanceTo(P.pos); if (dd > 14) { r.glint.visible = true; const k = clamp(r.scopeT / need, 0, 1); r.glint.scale.setScalar((.12 + k * .35) * dd / 25); r.glint.material.opacity = .5 + k * .5; } }
-    if (r.scopeT >= need && r.fireCd <= 0) { r.headAim = Math.random() < .25 * r.skill; botShoot(r, aimP); r.fireCd = rand(...w.pause); r.scopeT = need * .45; }
+    if (r.scopeT >= need && r.fireCd <= 0) { r.headAim = Math.random() < .25 * r.skill; botShoot(r, aimP); r.fireCd = rand(w.pause[0], w.pause[1]); r.scopeT = need * .45; }
     return;
   }
   if (r.fireCd > 0) return;
-  if (r.burstLeft <= 0) { r.burstLeft = Math.round(rand(...w.burst)); r.headAim = Math.random() < .14 * r.skill; }
-  botShoot(r, aimP); r.burstLeft--; r.fireCd = r.burstLeft > 0 ? w.gap + rand(0, .02) : rand(...w.pause);
+  if (r.burstLeft <= 0) { r.burstLeft = Math.round(rand(w.burst[0], w.burst[1])); r.headAim = Math.random() < .14 * r.skill; }
+  botShoot(r, aimP); r.burstLeft--; r.fireCd = r.burstLeft > 0 ? w.gap + rand(0, .02) : rand(w.pause[0], w.pause[1]);
 }
+const _ABL = { idle: 0, walk: 0, jog: 0, sprint: 0, cidle: 0, cwalk: 0, air: 0 }, _ABU = { aim: 0, relax: 0, run: 0, reload: 0 }, _ABP = [null, null, null, null, null];
 function animateBot(r, dt) {
   const A = r.act, hs = Math.hypot(r.vel.x, r.vel.z);
   // the body always faces where the bot is aiming (turning at a human rate); the hips swing toward the walking direction
@@ -6236,23 +6296,23 @@ function animateBot(r, dt) {
   r.backK = damp(r.backK || 0, back ? 1 : 0, 4, dt); back = r.backK > .5;
   r.legYaw = damp(r.legYaw || 0, legT, 9, dt);
   // lower body
-  const crouch = r.crouch > .5, L = { idle: 0, walk: 0, jog: 0, sprint: 0, cidle: 0, cwalk: 0, air: 0 };
+  const crouch = r.crouch > .5, L = _ABL; L.idle = L.walk = L.jog = L.sprint = L.cidle = L.cwalk = L.air = 0;
   if (!r.onGround) L.air = 1; else if (crouch) L[hs > .4 ? 'cwalk' : 'cidle'] = 1; else if (hs < .4) L.idle = 1; else if (hs < 2.6) L.walk = 1; else if (hs < 5.2) L.jog = 1; else L.sprint = 1;
   const sg = back ? -1 : 1;
   A.walk.timeScale = sg * Math.max(.4, hs / 1.5); A.jog.timeScale = sg * Math.max(.5, hs / 3.9); A.sprint.timeScale = sg * hs / 6.1; A.cwalk.timeScale = sg * Math.max(.4, hs / 1.4);
   for (const k in L) { const a = A[k]; a.w = damp(a.w, L[k], 12, dt); a.setEffectiveWeight(a.w < .01 ? 0 : a.w); }
   // upper body
   const reloading = r.reload > 0, alert = r.targetVis || G.time - r.lastSeenT < 4 || G.time - r.lastHurt < 4 || r.mode === 'fight';
-  const U = { aim: 0, relax: 0, run: 0, reload: 0 };
+  const U = _ABU; U.aim = U.relax = U.run = U.reload = 0;
   if (reloading) U.reload = 1; else if (!alert && L.sprint > .5) U.run = 1; else if (alert || hs > 2.6) U.aim = 1; else U.relax = 1;
   r.hitT = Math.max(0, r.hitT - dt); const hk = clamp(r.hitT / .35, 0, 1) * .35;
   for (const k in U) { const a = A[k]; a.w = damp(a.w, U[k], 14, dt); a.setEffectiveWeight(a.w * (1 - hk) < .01 ? 0 : a.w * (1 - hk)); }
   A.hit.setEffectiveWeight(hk);
   // three.js skips writing a bone whose animated value didn't change, so undo last frame's aim twist first or it piles up every frame
-  const PB = [r.B.hips, r.B.spine, r.B.spine1, r.B.spine2, r.B.neck];
-  if (r.preQ) PB.forEach((b, i) => b && b.quaternion.copy(r.preQ[i])); else r.preQ = PB.map(() => new THREE.Quaternion());
+  const PB = _ABP; PB[0] = r.B.hips; PB[1] = r.B.spine; PB[2] = r.B.spine1; PB[3] = r.B.spine2; PB[4] = r.B.neck;
+  if (r.preQ) { for (let i = 0; i < 5; i++) if (PB[i]) PB[i].quaternion.copy(r.preQ[i]); } else r.preQ = PB.map(() => new THREE.Quaternion());
   r.mixer.update(dt);
-  PB.forEach((b, i) => b && r.preQ[i].copy(b.quaternion));
+  for (let i = 0; i < 5; i++) if (PB[i]) r.preQ[i].copy(PB[i].quaternion);
   // procedural aim: twist the spine toward the aim yaw, bend it for pitch
   const twist = clamp(wrapPi(r.aimYaw - r.bodyYaw), -.7, .7) - r.legYaw * .82;
   rotateBoneWorld(r.B.hips, UPV, r.legYaw);
@@ -6288,7 +6348,7 @@ function fallDead(p, o, dt) {
 }
 function updateDeadBot(r, dt) {
   fallDead(r.root.position, r, dt);
-  if (r.preQ) [r.B.hips, r.B.spine, r.B.spine1, r.B.spine2, r.B.neck].forEach((b, i) => b && b.quaternion.copy(r.preQ[i]));
+  if (r.preQ) { const B = r.B, q = r.preQ; if (B.hips) B.hips.quaternion.copy(q[0]); if (B.spine) B.spine.quaternion.copy(q[1]); if (B.spine1) B.spine1.quaternion.copy(q[2]); if (B.spine2) B.spine2.quaternion.copy(q[3]); if (B.neck) B.neck.quaternion.copy(q[4]); }
   if (r.dq) { for (const [b, q] of r.dq) b.quaternion.copy(q); r.dq = null; }
   if (kcLive()) { r.preQ = null; r.deadT += dt; if (r.deadT > r.respawnT) respawnBot(r); return; }   // the replay is posing this body
   r.deadT += dt; r.mixer.update(dt); r.preQ = null;
@@ -6302,15 +6362,16 @@ function updateDeadBot(r, dt) {
 function updateRobots(dt, menu) {
   const ents = entities();
   for (const r of robots) {
-    if (r.remote) { updateRemote(r, dt); continue; }
+    if (r.remote) { if (!SIM.inStep) updateRemote(r, dt); continue; }   // (in play their playback clock runs once per drawn frame: simPresent)
     if (r.dead) { r.chillT = r.burnT = 0; updateDeadBot(r, dt); continue; }
     statusTick(r, dt);
     if (G.time - r.lastHurt > 5 && r.hp < 100) r.hp = Math.min(100, r.hp + 9 * dt);
     r.percT -= dt; if (r.percT <= 0) { r.percT = rand(.15, .24); perceive(r, ents); }
     r.thinkT -= dt; if (r.thinkT <= 0) { r.thinkT = rand(.3, .55); think(r, ents); }
-    moveBot(r, dt); combatBot(r, dt); if (!kcLive()) animateBot(r, dt);
+    moveBot(r, dt); combatBot(r, dt);
+    if (SIM.inStep) r.animDt = (r.animDt || 0) + dt; else if (!kcLive()) animateBot(r, dt);   // posed once per drawn frame (simPresent)
   }
-  if (!menu && !kcLive()) for (const r of robots) foeSteps(r, dt);
+  if (!menu && !kcLive()) for (const r of robots) if (!(SIM.inStep && r.remote)) foeSteps(r, dt);
 }
 // enemy footsteps: one step per stride while they move on the ground, a heavier thump when they land from a jump
 function foeSteps(r, dt) {
@@ -6529,7 +6590,7 @@ function syncSettings() { for (const p of ['m', 'p']) { $(p + 'sens').value = CF
 function look(dx, dy) {
   const s = .0021 * CFG.sens * lerp(1, W().adsFov / 78, P.ads);
   P.yaw -= dx * s; P.pitch = clamp(P.pitch - dy * s, -1.5, 1.5);
-  springs.swayX.v -= dx * .0016; springs.swayY.v += dy * .0016;
+  springs.swayX.v -= dx * .0016 * FEEL.sway; springs.swayY.v += dy * .0016 * FEEL.sway;
 }
 document.addEventListener('mousemove', e => {
   if (state !== 'play') return;
@@ -6547,6 +6608,7 @@ addEventListener('mouseup', e => { if (e.button === 0) { mouseDown = false; look
 // and swallow every other Ctrl shortcut while playing (Ctrl+W/R/T can't be blocked by a page, the leave prompt catches those)
 addEventListener('beforeunload', e => { if (navigator.webdriver) return; if (state === 'play' || state === 'dead' || state === 'paused') { e.preventDefault(); e.returnValue = ''; return ''; } });
 addEventListener('keydown', e => {
+  HELD[e.code] = true;
   if ((e.ctrlKey || e.metaKey) && (state === 'play' || state === 'dead')) e.preventDefault();
   if (e.code === 'Tab' && (state === 'play' || state === 'dead')) { e.preventDefault(); $('board').innerHTML = boardHTML(); $('board').hidden = false; }
   if (e.code === 'Escape' && state === 'dead') P.pauseOnRespawn = true;
@@ -6568,8 +6630,8 @@ addEventListener('keydown', e => {
   if (e.code === 'Escape' && (noLock || !document.pointerLockElement)) { if (state === 'play') setState('paused'); else if (state === 'dead') P.pauseOnRespawn = true; }
 });
 addEventListener('wheel', e => { if (state !== 'play') return; const cyc = [SLOTS()[0], SLOTS()[1], 'knife'], i = cyc.indexOf(P.weapon); switchWeapon(cyc[(i + (e.deltaY > 0 ? 1 : 2)) % 3]); }, { passive: true });
-addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'KeyG' && P.nadeHold) { const c = (performance.now() - P.nadeHold) / 1000; P.nadeHold = 0; throwPlayerNade(c); } if (e.code === 'Tab') $('board').hidden = true; });
-addEventListener('blur', () => { if (state === 'play') { for (const k in keys) keys[k] = false; mouseDown = false; adsHeld = false; if (noLock) setState('paused'); } });
+addEventListener('keyup', e => { keys[e.code] = false; HELD[e.code] = false; if (e.code === 'KeyG' && P.nadeHold) { const c = (performance.now() - P.nadeHold) / 1000; P.nadeHold = 0; throwPlayerNade(c); } if (e.code === 'Tab') $('board').hidden = true; });
+addEventListener('blur', () => { for (const k in HELD) HELD[k] = false; if (state === 'play') { for (const k in keys) keys[k] = false; mouseDown = false; adsHeld = false; if (noLock) setState('paused'); } });
 addEventListener('contextmenu', e => { if (state === 'play' || e.target === renderer.domElement) e.preventDefault(); });
 
 /* ================= main loop ================= */
@@ -6592,6 +6654,63 @@ function fpsHud(fps) {
   } else h = `${Math.round(fps)} FPS`;
   if (h !== HUDFPS.last) { HUDFPS.last = h; if (HUDFPS.mode === 'detailed') $('fps').innerHTML = h; else $('fps').textContent = h; }
 }
+/* ---------- fixed-step simulation + render interpolation (docs/agents/FEEL.md) ---------- */
+// SIM.dt = one simulation step. Before each step simKeep() remembers where the player (position + a few smoothed values the
+// camera/gun read) and every bot stood; after the steps simPresent() puts them, for drawing only, at SIM.alpha of the way
+// from the previous step to the newest one, and simRestore() puts the simulation values back right after the frame is drawn
+// (hit tests, AI, the net and the killcam only ever see simulation values). A jump of more than 2 m (spawn, teleport pad) is
+// drawn at once, never slid. Remote players are not stepped: their playback clock (updateRemote) runs once per drawn frame.
+const SIM = { hz: 120, dt: 1 / 120, acc: 0, alpha: 1, inStep: false, p0: new THREE.Vector3(), pc: new THREE.Vector3(), pOk: false, pOn: false,
+  keys: ['ads', 'crouch', 'reload', 'switchT', 'boltT', 'swingT'], prev: {}, cur: {}, bots: [], ay: null, ap: 0, camF: -9 };
+// cosmetic feel switches (Settings > Video > Comfort, modules/settings.js); none of them changes aim, speed or hit boxes
+const FEEL = { bob: 1, land: 1, sway: 1, hitKick: 1 };
+function simKeep() {
+  SIM.p0.copy(P.pos); SIM.pOk = true; for (const k of SIM.keys) SIM.prev[k] = P[k] || 0;
+  for (const r of robots) { if (r.remote) continue; const q = r.root.position; (r._ip || (r._ip = new THREE.Vector3())).copy(q); r._ipOk = true; }
+}
+function simPresent(dt, rdt) {
+  const a = SIM.alpha; SIM.bots.length = 0; SIM.pOn = false;
+  if (a < 1 && SIM.pOk && SIM.p0.distanceToSquared(P.pos) < 4) {
+    SIM.pc.copy(P.pos); P.pos.lerpVectors(SIM.p0, SIM.pc, a); SIM.pOn = true;
+    for (const k of SIM.keys) { const c = P[k] || 0, b = SIM.prev[k];
+      // ads / crouch blend; count-down timers (reload, weapon switch, bolt, knife swing) only while one keeps running
+      if (k === 'ads' || k === 'crouch' ? c !== b : c > 0 && b > 0 && c <= b) { SIM.cur[k] = P[k]; P[k] = b + (c - b) * a; } }
+  }
+  for (const r of robots) {
+    // (real time, not the hit-stop slow motion: slowing their playback clock made them lag and then hurry to catch up)
+    if (r.remote) { updateRemote(r, rdt); if (!kcLive()) foeSteps(r, rdt); continue; }
+    if (a < 1 && r._ipOk && r._ip.distanceToSquared(r.root.position) < 4) {
+      const q = r.root.position; (r._ic || (r._ic = new THREE.Vector3())).copy(q); q.lerpVectors(r._ip, r._ic, a); SIM.bots.push(r);
+    }
+    if (!r.dead) { const d = r.animDt || 0; r.animDt = 0; if (!kcLive()) animateBot(r, d); }   // every drawn frame (also 0-step ones): the gun stays in the hand
+  }
+}
+function simUnP() {   // the player's simulation values come back as soon as the camera and the gun are placed
+  if (!SIM.pOn) return; SIM.pOn = false; P.pos.copy(SIM.pc); for (const k of SIM.keys) if (k in SIM.cur) P[k] = SIM.cur[k];
+  for (const k in SIM.cur) delete SIM.cur[k];
+}
+function simRestore() { simUnP(); for (const r of SIM.bots) if (r._ic) r.root.position.copy(r._ic); SIM.bots.length = 0; }
+function simReset() { SIM.acc = 0; SIM.pOk = false; for (const r of robots) r._ipOk = false; }
+// aim follows the mouse before this frame's steps run: a shot fired in this frame goes where this frame's crosshair points
+// (the mouse events of the frame arrive before the frame starts; before, shots used the previous frame's camera)
+function simAim() {
+  if (SIM.ay !== null && SIM.camF === frameNo - 1) { camera.rotation.x += P.pitch - SIM.ap; camera.rotation.y += P.yaw - SIM.ay; camera.updateMatrixWorld(); SIM.ap = P.pitch; SIM.ay = P.yaw; }
+}
+function simCamDone() { SIM.ap = P.pitch; SIM.ay = P.yaw; SIM.camF = frameNo; }   // (the aim the camera was just placed with)
+// hit flinch: a short camera roll + nod away from the shooter, drawn only (taken off again right after the frame is drawn)
+const hitKick = { p: new Spring(170, 15), r: new Spring(170, 15) };
+function viewKick(rdt) {
+  if (state !== 'play' && state !== 'dead') { hitKick.p.reset(); hitKick.r.reset(); return null; }
+  const kp = hitKick.p.step(rdt), kr = hitKick.r.step(rdt);
+  if (state !== 'play' || (Math.abs(kp) < 1e-5 && Math.abs(kr) < 1e-5)) return null;
+  camera.rotation.x += kp; camera.rotation.z += kr; return [kp, kr];
+}
+function hitFlinch(dmg, from) {
+  if (!FEEL.hitKick || reduceMotion) return;
+  const k = clamp(dmg / 30, .25, 1.2) * FEEL.hitKick;
+  let side = 0; if (from) { const ang = Math.atan2(from.x - P.pos.x, from.z - P.pos.z); side = Math.sin(wrapPi(ang - P.yaw)); }   // + = shooter on the right
+  hitKick.p.v += .25 * k; hitKick.r.v += side * .45 * k;   // nod up ~0.7 deg, head tipped away from the shooter ~1.3 deg
+}
 function frame(now) {
   syncAudio();
   requestAnimationFrame(frame);
@@ -6609,15 +6728,29 @@ function frame(now) {
     else if (benchDone && prTimer > 4) { prTimer = 0; if (frameAvg > 24 && PR > .6) { PR = Math.max(.6, PR - .1); resize(); } }
   }
   if (hitstop > 0) { hitstop -= rdt; timeScale = .15; } else timeScale = damp(timeScale, 1, 20, rdt);
-  sdt = lerp(sdt, rdt, .3); // smoothed step removes micro-stutter from uneven frame times
-  const dt = sdt * timeScale;
-  frameNo++; // the world's shadows are static: drawn once on load/quality change, robots use blob shadows
+  // the real time since the last frame (rAF times are vsync-aligned): a smoothed step made motion lag behind the clock and
+  // then catch up after every uneven frame (judder); the fixed-step simulation below is what keeps motion even
+  sdt = rdt; const dt = rdt * timeScale;
+  frameNo++; if (frameNo % 60 === 0) markStaticMap(); // the world's shadows are static: drawn once on load/quality change, robots use blob shadows
   const t = now / 1000;
   if (state === 'play') {
-    G.time += dt; G.matchT -= dt; if (G.matchT <= 0 && !G.ended) endMatch(standings()[0]);
-    updatePlayer(dt, sdt); updateCamera(dt, sdt); updateViewmodel(sdt); recFrame();
-    const tb = performance.now(); updateRobots(dt, false); perf.bots = lerp(perf.bots || 0, performance.now() - tb, .05); updatePads(dt); updateNades(dt); updateRockets(dt); updateProj(dt); updateDecals(); updateDrops(dt); updateBoom(dt); updateRemoteBooms(dt);
-    G.comboT -= dt; if (G.comboT <= 0) G.combo = 0; G.multiT -= dt; if (G.multiT <= 0) G.multi = 0;
+    // FIXED-STEP SIMULATION (docs/agents/FEEL.md): the player, the bots and the match clock advance in exact 1/120 s steps
+    // (0-6 per frame), so movement, jumps, fire rate and recoil recovery are the same at 30, 60, 144 or 240 Hz; the picture
+    // is then drawn between the last two steps (SIM.alpha), so motion is even at any refresh rate
+    simAim();
+    SIM.acc += dt; let botMs = 0;
+    const ts = Math.max(timeScale, .01);
+    while (SIM.acc >= SIM.dt && state === 'play') {
+      SIM.acc -= SIM.dt; simKeep();
+      G.time += SIM.dt; G.matchT -= SIM.dt; if (G.matchT <= 0 && !G.ended) endMatch(standings()[0]);
+      updatePlayer(SIM.dt, SIM.dt / ts);
+      const tb = performance.now(); SIM.inStep = true; try { updateRobots(SIM.dt, false); } finally { SIM.inStep = false; } botMs += performance.now() - tb;
+      G.comboT -= SIM.dt; if (G.comboT <= 0) G.combo = 0; G.multiT -= SIM.dt; if (G.multiT <= 0) G.multi = 0;
+    }
+    perf.bots = lerp(perf.bots || 0, botMs, .05);
+    SIM.alpha = state === 'play' ? SIM.acc / SIM.dt : 1;
+    simPresent(dt, rdt); if (state === 'play') { updateCamera(dt, rdt); simCamDone(); updateViewmodel(rdt); } simUnP(); recFrame();
+    updatePads(dt); updateNades(dt); updateRockets(dt); updateProj(dt); updateDecals(); updateDrops(dt); updateBoom(dt); updateRemoteBooms(dt);
   } else if (state === 'dead') {
     G.time += dt; G.matchT -= dt; P.dieT += rdt;
     fallDead(P.pos, P, dt);   // died in mid air: your body drops to the floor (others see it fall too)
@@ -6676,8 +6809,11 @@ function frame(now) {
   const tR = performance.now(); perf.upd = lerp(perf.upd, tR - now, .05);
   if (window.MODE_preRender) MODE_preRender(rdt);   // game modes: plant/defuse input, beeps, HUD, spectating
   const replaying = state === 'dead' && REC.on && P.dieT > DC.T && applyReplay();
+  const kicked = viewKick(rdt);   // render-only camera offsets (hit flinch): never moves the aim
   composer.render(rdt);
+  if (kicked) { camera.rotation.x -= kicked[0]; camera.rotation.z -= kicked[1]; camera.updateMatrixWorld(); }
   if (replaying) restoreReplay();
+  simRestore();
   if (window.MODE_postRender) MODE_postRender();
   perf.render = lerp(perf.render, performance.now() - tR, .05); perf.hist.push(rdt * 1000); if (perf.hist.length > 600) perf.hist.shift();
 }
@@ -6715,7 +6851,7 @@ async function boot() {
   $('loading').remove();
   requestAnimationFrame(t => { last = t; frame(t); });
   window.__snd = { GUN_VOICE, gsBuild, hitSample };
-  window.__s9 = { HUDFPS, get world() { return world; }, menuScene, get scene() { return scene; }, get SPAWNS() { return SPAWNS; }, cellOf, cellX, cellZ, nearestOk, groundAt, PF, sfx, MKIT, MKMETA, MKLOG, MOVE, get WEAPONS() { return WEAPONS; }, get BOTW() { return BOTW; }, get MAPS() { return MAPS; }, SLOTS, get CAMPS() { return CAMPS; }, get HALF() { return HALF; }, gunCam, P, G, robots, hurtPlayer, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS, AU, initAudio, loadMap, MAPS, REC, GUN_IDS, get CUR_MAP() { return CUR_MAP; }, get SPAWNS() { return SPAWNS; }, get MAPFX() { return MAPFX; }, get MAPROOT() { return MAPROOT; }, killBot(r, crit) { damageBot(r, 999, !!crit, r.root.position.clone().setY(r.root.position.y + 1.2), new THREE.Vector3(0, 0, 1), 'body', PLAYER_ENT, P.weapon); }, DROPS, pickNearDrop, BOOM, RBOOMS, NET, openRoom, leaveOnline, boomRoute, lineOfSight, explode, damageEntity, scene, world };
+  window.__s9 = { HUDFPS, SIM, FEEL, get world() { return world; }, menuScene, get scene() { return scene; }, get SPAWNS() { return SPAWNS; }, cellOf, cellX, cellZ, nearestOk, groundAt, PF, sfx, MKIT, MKMETA, MKLOG, MOVE, get WEAPONS() { return WEAPONS; }, get BOTW() { return BOTW; }, get MAPS() { return MAPS; }, SLOTS, get CAMPS() { return CAMPS; }, get HALF() { return HALF; }, gunCam, P, G, robots, hurtPlayer, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS, AU, initAudio, loadMap, MAPS, REC, GUN_IDS, get CUR_MAP() { return CUR_MAP; }, get SPAWNS() { return SPAWNS; }, get MAPFX() { return MAPFX; }, get MAPROOT() { return MAPROOT; }, killBot(r, crit) { damageBot(r, 999, !!crit, r.root.position.clone().setY(r.root.position.y + 1.2), new THREE.Vector3(0, 0, 1), 'body', PLAYER_ENT, P.weapon); }, DROPS, pickNearDrop, BOOM, RBOOMS, NET, openRoom, leaveOnline, boomRoute, lineOfSight, explode, damageEntity, scene, world };
 }
 requestAnimationFrame(() => setTimeout(boot, 30));
 </script>

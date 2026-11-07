@@ -391,16 +391,41 @@
   }
   const FLY_SCALE = 3.3;   // the head grows a little in flight so it reads at range (the bite's hit radius matches the jaws: data jawRadius)
 
-  // pick the first body along the bite path between two distances (head sphere first, then the torso capsule)
-  function sweep(o, dir, d0, d1, owner) {
-    const jr = C.bite.jawRadius, n = Math.max(1, Math.ceil((d1 - d0) / .1));
+  // Frame-rate independence: the head covers 110 m/s, so one frame at 30 fps is 3.7 m of flight. Every body is tracked as
+  // (previous frame -> this frame) and the sweep reads it at the exact moment the head passes each sample, so the hit
+  // does not depend on how many frames the flight is cut into (a strafing target slipped through at low fps before).
+  const TRK = new Map();   // entity -> { pe, pc, pb, ce, cc, cb, f }
+  let trkFrame = 0;
+  function trackFrame() {   // once per game frame, before the bites move
+    trkFrame++;
+    for (const e of entities()) {
+      if (!entAlive(e)) { TRK.delete(e); continue; }
+      let t = TRK.get(e); if (!t) { t = { pe: V(), pc: V(), pb: 0, ce: V(), cc: V(), cb: 0, f: 0 }; TRK.set(e, t); }
+      t.pe.copy(t.ce); t.pc.copy(t.cc); t.pb = t.cb;
+      entEye(e, t.ce); entChest(e, t.cc); t.cb = entPos(e).y;
+      if (t.f === 0 || t.f < trkFrame - 1 || t.ce.distanceTo(t.pe) > 4) { t.pe.copy(t.ce); t.pc.copy(t.cc); t.pb = t.cb; }   // new / respawned / teleported: no smear
+      t.f = trkFrame;
+    }
+    if (TRK.size > 64) for (const e of TRK.keys()) if (TRK.get(e).f !== trkFrame) TRK.delete(e);
+  }
+  const LIVE = {
+    list: () => entities(),
+    at(e, f, eye, ch) {   // eye, chest, ground height of e, f (0..1) of the way through the current frame
+      const t = TRK.get(e); if (!t || t.f !== trkFrame) { entEye(e, eye); entChest(e, ch); return entPos(e).y; }
+      eye.lerpVectors(t.pe, t.ce, f); ch.lerpVectors(t.pc, t.cc, f); return t.pb + (t.cb - t.pb) * f;
+    },
+  };
+  // pick the first body along the bite path between two distances (head sphere first, then the torso capsule).
+  // dFull = where the head would be at the end of the frame without the range clamp (maps distance -> moment in the frame)
+  function sweep(o, dir, d0, d1, owner, src = LIVE, dFull = d1) {
+    const jr = C.bite.jawRadius, n = Math.max(1, Math.ceil((d1 - d0) / .1)), span = Math.max(1e-6, dFull - d0);
     for (let s = 1; s <= n; s++) {
-      const d = d0 + (d1 - d0) * s / n; _q.copy(o).addScaledVector(dir, d);
+      const d = d0 + (d1 - d0) * s / n, f = clamp((d - d0) / span, 0, 1); _q.copy(o).addScaledVector(dir, d);
       let best = null, head = false;
-      for (const e of entities()) {
+      for (const e of src.list()) {
         if (e === owner || !entAlive(e)) continue;
-        const eye = entEye(e, _a); if (_q.distanceTo(eye) < .26 + jr) { best = e; head = true; break; }
-        const ch = entChest(e, _b), base = entPos(e).y; if (Math.hypot(_q.x - ch.x, _q.z - ch.z) < .42 + jr && _q.y > base + .1 && _q.y < eye.y + .12) {
+        const base = src.at(e, f, _a, _b), eye = _a, ch = _b; if (_q.distanceTo(eye) < .26 + jr) { best = e; head = true; break; }
+        if (Math.hypot(_q.x - ch.x, _q.z - ch.z) < .42 + jr && _q.y > base + .1 && _q.y < eye.y + .12) {
           // the jaws reach the torso first, but if the bite line runs through the head, it's a head bite (you aimed there)
           const t = _c.subVectors(eye, o).dot(dir); head = t > 0 && _d.copy(o).addScaledVector(dir, t).distanceTo(eye) < .2; best = e; break; }
       }
@@ -408,6 +433,15 @@
     }
     return null;
   }
+  // test hook: fly one bite at a simulated frame rate against a synthetic target (pos(t) -> {x,y,z} ground point); same code path as the live bite
+  FT.simBite = function (o, dir, target, fps, opt = {}) {
+    const B = C.bite, dt = 1 / fps, ent = {}, T = { pe: V(), pc: V(), ce: V(), cc: V() }; let t = 0, D = 0;
+    const pose = (tt, eye, ch) => { const g = target(tt); eye.set(g.x, g.y + 1.55, g.z); ch.set(g.x, g.y + 1.1, g.z); return g.y; };
+    const src = { list: () => [ent], at(e, f, eye, ch) { const a = V(), b = V(), c = V(), d = V(); const y0 = pose(t - dt, a, c), y1 = pose(t, b, d); eye.lerpVectors(a, b, f); ch.lerpVectors(c, d, f); return y0 + (y1 - y0) * f; } };
+    const stop = opt.stop != null ? opt.stop : B.range, lat = opt.latency || 0; t = lat;
+    for (let i = 0; i < 4000 && D < stop; i++) { t += dt; const d0 = D, dFull = D + B.speed * dt; D = Math.min(stop, dFull); const h = sweep(o, dir, Math.max(.3, d0), Math.max(.3, D), null, src, dFull); if (h) return { hit: true, head: h.head, d: +h.d.toFixed(2) }; }
+    return { hit: false };
+  };
   function wallDist(o, dir, far) {
     ray.set(o, dir); ray.far = far; const h = shotHits(world.meshes, false)[0]; ray.far = Infinity;
     return h ? { d: h.distance, n: h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : dir.clone().negate(), p: h.point.clone() } : null;
@@ -447,7 +481,7 @@
       if (this.phase === 'out') {
         const d0 = this.D; this.D = Math.min(this.stop, this.D + B.speed * dt);
         if (this.kind === 'me') {
-          const hit = sweep(this.o, this.dir, Math.max(.3, d0), Math.max(.3, this.D), PLAYER_ENT);
+          const hit = sweep(this.o, this.dir, Math.max(.3, d0), Math.max(.3, this.D), PLAYER_ENT, LIVE, d0 + B.speed * dt);
           if (hit) { this.D = hit.d; biteHit(this, hit); }
           else if (this.D >= this.stop) { this.snap(this.front(_c), this.wall); biteResult(this, null); }
         } else if (this.result) {
@@ -624,11 +658,11 @@
       if (direct || n.y < .7) { const gy = groundAt(p.x, p.z, p.y + .1, .1); if (p.y - gy < 2.2 && (direct || n.y < .7)) puddle(new THREE.Vector3(p.x, gy + .01, p.z), UPV.clone(), this.live ? this.owner : null); if (!direct) puddle(p, n, null); }
       else puddle(p, n, this.live ? this.owner : null);
       if (this.live) {
-        const hitSet = new Set();
-        if (direct) { hitSet.add(direct); if (this.owner === PLAYER_ENT) biteConfirm(Sp.directDamage, head, false, true); damageEntity(direct, Sp.directDamage * (head ? 1.25 : 1) * (P.odT > 0 ? 1.25 : 1), false, p.clone(), this.v.clone().normalize(), head ? 'head' : 'body', this.owner, 'ftspit'); poison(direct, this.owner); FT.stats.spitHits++; G.hits++; }
+        const hitSet = new Set(); let counted = false;   // accuracy: one spit = one hit, direct or splash
+        if (direct) { hitSet.add(direct); if (this.owner === PLAYER_ENT) { biteConfirm(Sp.directDamage, head, false, true); G.hits++; counted = true; } damageEntity(direct, Sp.directDamage * (head ? 1.25 : 1) * (P.odT > 0 ? 1.25 : 1), false, p.clone(), this.v.clone().normalize(), head ? 'head' : 'body', this.owner, 'ftspit'); poison(direct, this.owner); FT.stats.spitHits++; G.hits++; }
         for (const e of entities()) { if (e === this.owner || hitSet.has(e) || !entAlive(e)) continue; const c = entChest(e, _a), d = Math.min(c.distanceTo(p), entPos(e).distanceTo(p));
           if (d > Sp.splashRadius || !lineOfSight(_b.copy(p).addScaledVector(n, .2), c)) continue;
-          damageEntity(e, Sp.splashDamage * (1 - d / Sp.splashRadius * .6), false, c.clone(), _b.subVectors(c, p).normalize(), 'body', this.owner, 'ftspit'); poison(e, this.owner); if (!direct) { FT.stats.spitHits++; G.hits++; } }
+          damageEntity(e, Sp.splashDamage * (1 - d / Sp.splashRadius * .6), false, c.clone(), _b.subVectors(c, p).normalize(), 'body', this.owner, 'ftspit'); poison(e, this.owner); if (!direct) { FT.stats.spitHits++; if (!counted && this.owner === PLAYER_ENT) { G.hits++; counted = true; } } }
       } else {   // someone else's spit: just show who it's eating
         for (const e of entities()) { if (e === this.owner || !entAlive(e) || e === PLAYER_ENT) continue; const c = entChest(e, _a); if (c.distanceTo(p) <= Sp.splashRadius) poisonVisual(e); }
       }
@@ -907,6 +941,7 @@
       if (mine && alive && (S.spitHeld || S.spitQ > 0)) { if (startSpit()) S.spitQ = 0; } S.spitQ = Math.max(0, (S.spitQ || 0) - dt);
       if (!mine) S.spitHeld = false;
       S.preyT -= dt; if (S.preyT <= 0) { S.preyT = .08; senseprey(); }
+      trackFrame();
       { const a0 = performance.now(); for (const b of BITES) if (b.phase !== 'done' && b.kind !== 'kc') b.update(dt); const q = (FT.perf.parts || (FT.perf.parts = {})).bites || (FT.perf.parts.bites = { total: 0, max: 0 }); const d = performance.now() - a0; q.total += d; q.max = Math.max(q.max, d); }
       if (S.bite && (S.bite.phase === 'done' || P.dead)) { if (S.bite.phase !== 'done') S.bite.finish(); S.bite = null; updateHud(); }
       for (let i = BITES.length - 1; i >= 0; i--) if (BITES[i].phase === 'done') BITES.splice(i, 1);

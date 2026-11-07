@@ -307,7 +307,10 @@ body.s9spec #board{pointer-events:auto}body.s9spec #board tr[data-spec]{cursor:p
   }
   document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-watch]'); if (!b) return; e.preventDefault(); e.stopPropagation(); watch(b.dataset.watch); }, true);
   // the list is re-rendered by the game / menu module: add the buttons again after every change
-  let scanQ = 0; const mo = new MutationObserver(() => { if (scanQ) return; scanQ = requestAnimationFrame(() => { scanQ = 0; try { decorateRooms(); } catch (e) {} }); });
+  // (only when an added element is or holds a room button: the HUD swaps text nodes every frame, and a whole-page scan per
+  // frame for that was a measurable main-thread cost in a match; the room cards are built with their data-room inline)
+  const roomAdded = recs => { for (const m of recs) for (const n of m.addedNodes) if (n.nodeType === 1 && (n.hasAttribute('data-room') || n.querySelector('[data-room]'))) return true; return false; };
+  let scanQ = 0; const mo = new MutationObserver(recs => { if (scanQ || !roomAdded(recs)) return; scanQ = requestAnimationFrame(() => { scanQ = 0; try { decorateRooms(); } catch (e) {} }); });
   mo.observe(document.body, { childList: true, subtree: true });
 
   /* ================= room options (create + settings) and the lobby block ================= */

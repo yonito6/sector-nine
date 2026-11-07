@@ -1,0 +1,52 @@
+{
+  "v": 1,
+  "about": "Minimap / radar config (modules/radar.js). Engine-neutral so the Unity port reads the same file. Distances in metres, times in ms, sizes in CSS px.",
+  "layout": {
+    "desktop": { "sizes": { "small": 160, "medium": 200, "large": 250 }, "top": 18, "left": 22 },
+    "phone": { "sizes": { "small": 84, "medium": 100, "large": 120 }, "top": 54, "left": 10, "maxWidth": 700, "maxHeight": 460 },
+    "hudGap": 12,
+    "rimPx": 2
+  },
+  "view": { "range": 30, "zoomMin": 0.6, "zoomMax": 1.8, "zoomDefault": 1, "coneLen": 0.42, "coneDeg": 0, "edgeClampAllies": true },
+  "reveal": {
+    "fireMs": 2000,
+    "fireFadeMs": 600,
+    "fireRange": 50,
+    "silentWeapons": ["knife"],
+    "spotHz": 10,
+    "spotRange": 70,
+    "spotFovDeg": 100,
+    "spotHoldMs": 260,
+    "lastSeenMs": 1500,
+    "maxRaysPerTick": 4,
+    "deadAllyMs": 4000
+  },
+  "bomb": { "droppedVisibleTo": "atk", "carriedVisibleTo": "atk", "plantedVisibleTo": "all", "defusedMs": 3000 },
+  "colors": {
+    "panel": "rgba(11,13,16,.74)",
+    "rim": "rgba(236,230,216,.32)",
+    "north": "#ff9a3c",
+    "me": "#ece6d8",
+    "meOutline": "#0b0d10",
+    "cone": "rgba(236,230,216,.16)",
+    "ffaAlly": "#7fe7ff",
+    "teams": { "atk": "#ff8a3d", "def": "#3dc8ff" },
+    "enemy": "#ff2e4d",
+    "enemyOutline": "#ffffff",
+    "bomb": "#ffb347",
+    "bombPlanted": "#ff4a3d",
+    "bombDefused": "#5dff9a",
+    "site": "#ff9a3c",
+    "pad": "#7fe7ff",
+    "teleport": ["#c38bff", "#5dff9a", "#ffd23f", "#ff7ad9"]
+  },
+  "art": {
+    "ppmMin": 6, "ppmMax": 16, "maxPx": 4096, "radarOversample": 1.4,
+    "overheadMinY": 2.3, "wallMinY": 1.75, "coverMinY": 0.45,
+    "ground": "#4b5560", "levels": ["#4b5560", "#617080", "#7b8998", "#97a4b2"], "levelStep": 2.2, "floorEdge": "rgba(6,7,10,.55)",
+    "cover": "#aaa395", "wall": "#e6dfcf", "wallEdge": "#06070a", "edgePx": 1.6,
+    "hazards": { "lava": "rgba(255,110,40,.75)", "acid": "rgba(110,255,90,.6)", "ice": "rgba(120,200,255,.55)", "water": "rgba(80,160,255,.55)" }
+  },
+  "bigMap": { "key": "KeyM", "fill": 0.86, "keyChoices": ["KeyM", "KeyN", "KeyB", "KeyK", "KeyL", "KeyJ", "KeyH", "KeyU", "KeyI", "KeyO", "KeyP", "KeyZ", "KeyT", "KeyY", "CapsLock", "Backquote", "Comma", "Period"] },
+  "budgets": { "tickMsAvg": 0.35, "tickMsP99": 1.5, "drawOpsBase": 24, "drawOpsPerEntity": 4, "raysPerSecond": 40, "cacheBuildsPerMap": 1 }
+}

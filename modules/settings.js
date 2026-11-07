@@ -24,7 +24,7 @@ const DEFAULTS = {
   },
   mouse: { sens: 1, adsMult: 1, invertY: false },
   crosshair: { style: 'crossdot', color: '#ece6d8', length: 9, thickness: 2, gap: 5, outline: true, outlineThickness: 1, outlineOpacity: .5, dot: 2, opacity: 1, dynamic: true, adsShow: false },
-  video: { fov: 78, quality: 'medium', fps: true, fpsMode: 'simple', fpsCap: 'off', shake: 1, brightness: 1, gamma: 1 },
+  video: { fov: 78, quality: 'medium', autoRes: 'auto', fps: true, fpsMode: 'simple', fpsCap: 'off', shake: 1, brightness: 1, gamma: 1, viewBob: 'full', gunSway: true, hitFlinch: true },
   audio: { master: .8, effects: 1, ambience: 1, footsteps: 1, voice: 1, muteUnfocused: false }
 };
 // number limits and allowed values (used to clean anything loaded from storage, the server or a share code)
@@ -38,7 +38,7 @@ const NUM = {
 const ENUM = {
   'gameplay.killFeedSize': ['small', 'normal', 'large'], 'gameplay.colorblind': ['off', 'deuteranopia', 'protanopia', 'tritanopia'],
   'controls.adsMode': ['hold', 'toggle'], 'crosshair.style': ['cross', 'dot', 'circle', 'tshape', 'crossdot', 'chevron'],
-  'video.quality': ['low', 'medium', 'high', 'ultra', 'auto'], 'video.fpsMode': ['off', 'simple', 'detailed'], 'video.fpsCap': ['off', '30', '60', '120', '144', '240']
+  'video.quality': ['low', 'medium', 'high', 'ultra', 'auto'], 'video.autoRes': ['auto', 'always', 'off'], 'video.fpsMode': ['off', 'simple', 'detailed'], 'video.fpsCap': ['off', '30', '60', '120', '144', '240'], 'video.viewBob': ['full', 'subtle', 'off']
 };
 const LS_KEY = 'sector9-settings';
 // frame rate limit: the game's whole frame (and every wrapper around it) runs only when its slot is due. vs = the screen's
@@ -415,6 +415,10 @@ function applyVideo() {
   document.documentElement.classList.toggle('s9-nofps', !S.video.fps);
   if (s && s.HUDFPS && s.HUDFPS.mode !== S.video.fpsMode) { s.HUDFPS.mode = S.video.fpsMode; s.HUDFPS.last = ''; const e = $('fps'); if (e) e.textContent = ''; }
   CAP.ms = S.video.fpsCap === 'off' ? 0 : 1000 / +S.video.fpsCap;
+  if (window.S9GFX && S9GFX.setAutoRes) S9GFX.setAutoRes(S.video.autoRes);   // graphics.js loads after us and also reads it at start
+  // cosmetic feel (index.html FEEL): view bob + landing dip, gun sway/lean, hit flinch; aim and movement never change
+  if (s && s.FEEL) { const vb = { full: [1, 1], subtle: [.4, .6], off: [0, 0] }[S.video.viewBob] || [1, 1];
+    s.FEEL.bob = vb[0]; s.FEEL.land = vb[1]; s.FEEL.sway = S.video.gunSway ? 1 : 0; s.FEEL.hitKick = S.video.hitFlinch ? 1 : 0; }
   applyGrade();
 }
 
@@ -495,8 +499,13 @@ function updateGameXH() {
   const P = s.P, c = S.crosshair, W = s.WEAPONS && s.WEAPONS[P.weapon];
   let g = c.gap;
   if (c.dynamic) g = (c.gap + Math.hypot(P.vel ? P.vel.x : 0, P.vel ? P.vel.z : 0) * 1.6 + (P.onGround ? 0 : 14) + (P.heat || 0) * 14) * (1 - (P.crouch || 0) * .3);
-  const k = devicePixelRatio || 1, size = xhSize(c, c.dynamic), key = JSON.stringify(c) + k;
-  if (key !== XH.key) { XH.key = key; XH.el.width = Math.ceil(size * k); XH.el.height = Math.ceil(size * k); XH.el.style.width = (XH.el.width / k) + 'px'; XH.el.style.height = (XH.el.height / k) + 'px'; XH.el.style.marginLeft = XH.el.style.marginTop = (-XH.el.width / k / 2) + 'px'; XH.gap = -1; }
+  const k = devicePixelRatio || 1;
+  // the JSON key is only rebuilt when a crosshair field (flat object) or the pixel ratio changed: no string per frame
+  let same = XH.key !== '' && XH.c === c && XH.k === k, nk = 0; if (same) for (const f in c) { nk++; if (c[f] !== XH.snap[f]) { same = false; break; } }
+  if (same && nk !== XH.nk) same = false;
+  const key = same ? XH.key : JSON.stringify(c) + k;
+  if (!same) { XH.c = c; XH.k = k; XH.snap = Object.assign({}, c); XH.nk = Object.keys(c).length; }
+  if (key !== XH.key) { const size = xhSize(c, c.dynamic); XH.key = key; XH.el.width = Math.ceil(size * k); XH.el.height = Math.ceil(size * k); XH.el.style.width = (XH.el.width / k) + 'px'; XH.el.style.height = (XH.el.height / k) + 'px'; XH.el.style.marginLeft = XH.el.style.marginTop = (-XH.el.width / k / 2) + 'px'; XH.gap = -1; }
   if (Math.abs(g - XH.gap) > .2) { XH.gap = g; drawXH(XH.ctx, c, g, k); }
   const scoped = W && W.scope && (P.ads || 0) > .6;
   const vis = P.sprint || scoped || ((P.ads || 0) > .4 && !c.adsShow) ? 0 : c.opacity;
@@ -763,10 +772,15 @@ function tabHTML(t) {
         [['off', 'Off'], ['simple', 'Simple'], ['detailed', 'Detailed']]) +
       rSeg('video.fpsCap', 'Frame rate limit', 'Caps frames per second. Lower = cooler, quieter computer and longer battery. Off = as fast as your screen refreshes.',
         [['off', 'Off'], ['30', '30'], ['60', '60'], ['120', '120'], ['144', '144'], ['240', '240']])) +
-    sec('Quality', rSeg('video.quality', 'Graphics quality', 'Low = no shadows, lower resolution, no glow (smoothest). Auto picks for your computer. The game may still lower quality by itself if frames drop.',
-      [['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['auto', 'Auto']])) +
+    sec('Quality', rSeg('video.quality', 'Graphics quality', 'Low = no shadows, lower resolution, no glow (smoothest). Auto picks for your computer.',
+      [['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['auto', 'Auto']]) +
+      rSeg('video.autoRes', 'Auto resolution', 'Lowers the 3D picture resolution a little while frames are slow, and raises it back when they are smooth again. The HUD and menus stay sharp. Auto = on Low and Medium only. Always = also on High and Ultra. Off = fixed resolution.',
+        [['auto', 'Auto'], ['always', 'Always'], ['off', 'Off']])) +
     sec('Image', rRange('video.brightness', 'Brightness', '', { step: .01, k: 100, dp: 0, unit: '%' }) + rRange('video.gamma', 'Gamma', 'Brightens dark corners without washing out bright areas.', { step: .01, dp: 2 })) +
     sec('Comfort', rRange('video.shake', 'Camera shake', 'Screen shake from explosions, hits and landing. 0% = steady camera.', { step: .01, k: 100, dp: 0, unit: '%' }) +
+      rSeg('video.viewBob', 'View bob', 'How much the view rocks while you run and dips when you land. Off = level camera (only the look changes, never your aim).', [['full', 'Full'], ['subtle', 'Subtle'], ['off', 'Off']]) +
+      rToggle('video.gunSway', 'Gun sway', 'The gun trails a little behind fast turns and leans into strafes. Off = gun fixed on screen.') +
+      rToggle('video.hitFlinch', 'Hit flinch', 'The view nods away from the shooter when you are hit. Drawn only: your aim does not move.') +
       `<div class="s9s-row"><div class="s9s-lab"><b>Motion blur</b><span>Sector Nine never uses motion blur, nothing to turn off.</span></div><div class="s9s-ctl"><span class="s9s-swl">Always off</span></div></div>`);
   if (t === 'audio') return NOTE() + sec('Volume',
       rRange('audio.master', 'Master volume', '', { step: .01, k: 100, dp: 0, unit: '%' }) +
@@ -846,6 +860,7 @@ function refreshControls(path) {
 function set(path, v, opts = {}) {
   const d = getP(DEFAULTS, path);
   if (typeof d === 'number') v = clamp(+v, ...NUM[path]); if (typeof d === 'number' && !isFinite(v)) return;
+  if (ENUM[path] && !ENUM[path].includes(String(v))) return;   // unknown choice (old save, typo): keep the current one
   if (path === 'video.quality') QPICK.user = true;
   setP(S, path, v); save(); applySection(path.split('.')[0]);
   if (opts.rerender) renderTab(); else refreshControls(path);

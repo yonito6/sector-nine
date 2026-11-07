@@ -1,0 +1,1975 @@
+{
+  "version": 1,
+  "about": "Hit reactions + impact effects (modules/hitfx.js). Engine-neutral numbers: colours are LINEAR rgb 0-1 (values above 1 = glow), sizes in metres, times in seconds, angles in radians. A Unity port reads the same file: 'materials' = what a body is made of (picked per soldier skin in 'skins'), 'layers' = particle bursts per material, 'react' = additive bone offsets per hit zone, 'weapons' = how hard each gun knocks. Tiers: low = the game's Performance setting (only the same small burst the game always drew, recoloured; no mist, no decals), mid = Balanced, high = High/Ultra.",
+  "tiers": {
+    "performance": "low",
+    "balanced": "mid",
+    "high": "high",
+    "ultra": "high"
+  },
+  "lowViolence": "sparks",
+  "skins": {
+    "default": "flesh",
+    "std": "flesh",
+    "nomad": "flesh",
+    "arctic": "flesh",
+    "banana": "flesh",
+    "jugg": "flesh",
+    "ninja": "flesh",
+    "pirate": "flesh",
+    "dino": "flesh",
+    "mecha": "flesh",
+    "butler": "metal",
+    "mushroom": "spore",
+    "skeleton": "bone",
+    "glitch": "glitch",
+    "xeno": "goo"
+  },
+  "materials": {
+    "flesh": {
+      "label": "Human: dark maroon mist + droplets (CS2/Valorant style), gone in ~0.3 s, never hides the body",
+      "sound": "flesh",
+      "decal": {
+        "tint": [
+          0.22,
+          0.05,
+          0.05
+        ],
+        "strength": 0.85
+      },
+      "hit": [
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            2,
+            3
+          ],
+          "col": [
+            0.16,
+            0.028,
+            0.03
+          ],
+          "size": [
+            0.07,
+            0.11
+          ],
+          "life": [
+            0.12,
+            0.18
+          ],
+          "speed": [
+            0.3,
+            0.8
+          ],
+          "spread": 0.5,
+          "up": 0.1,
+          "grav": 0.3,
+          "drag": 6,
+          "grow": 0.25,
+          "alpha": 0.45,
+          "back": true
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            3,
+            4
+          ],
+          "col": [
+            0.12,
+            0.03,
+            0.032
+          ],
+          "size": [
+            0.1,
+            0.17
+          ],
+          "life": [
+            0.18,
+            0.28
+          ],
+          "speed": [
+            0.5,
+            1.3
+          ],
+          "spread": 0.75,
+          "up": 0.2,
+          "grav": 0.4,
+          "drag": 5,
+          "grow": 0.45,
+          "alpha": 0.42,
+          "back": true
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            7,
+            8,
+            11
+          ],
+          "col": [
+            0.09,
+            0.016,
+            0.018
+          ],
+          "size": [
+            0.018,
+            0.034
+          ],
+          "life": [
+            0.2,
+            0.3
+          ],
+          "speed": [
+            2.2,
+            4.6
+          ],
+          "spread": 0.4,
+          "up": 0.5,
+          "grav": 9.5,
+          "drag": 0.8,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            3,
+            5
+          ],
+          "col": [
+            0.09,
+            0.016,
+            0.018
+          ],
+          "size": [
+            0.016,
+            0.03
+          ],
+          "life": [
+            0.16,
+            0.26
+          ],
+          "speed": [
+            1.6,
+            3.4
+          ],
+          "spread": 0.55,
+          "up": 0.4,
+          "grav": 9.5,
+          "drag": 0.9,
+          "grow": 0,
+          "alpha": 1,
+          "back": true
+        }
+      ],
+      "head": [
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            3,
+            4
+          ],
+          "col": [
+            0.16,
+            0.028,
+            0.03
+          ],
+          "size": [
+            0.091,
+            0.143
+          ],
+          "life": [
+            0.12,
+            0.18
+          ],
+          "speed": [
+            0.3,
+            0.8
+          ],
+          "spread": 0.5,
+          "up": 0.1,
+          "grav": 0.3,
+          "drag": 6,
+          "grow": 0.25,
+          "alpha": 0.45,
+          "back": true
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            4,
+            5
+          ],
+          "col": [
+            0.12,
+            0.03,
+            0.032
+          ],
+          "size": [
+            0.13,
+            0.221
+          ],
+          "life": [
+            0.18,
+            0.28
+          ],
+          "speed": [
+            0.5,
+            1.3
+          ],
+          "spread": 0.75,
+          "up": 0.2,
+          "grav": 0.4,
+          "drag": 5,
+          "grow": 0.45,
+          "alpha": 0.42,
+          "back": true
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            7,
+            10,
+            14
+          ],
+          "col": [
+            0.09,
+            0.016,
+            0.018
+          ],
+          "size": [
+            0.018,
+            0.034
+          ],
+          "life": [
+            0.2,
+            0.3
+          ],
+          "speed": [
+            2.2,
+            4.6
+          ],
+          "spread": 0.4,
+          "up": 0.5,
+          "grav": 9.5,
+          "drag": 0.8,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            4,
+            6
+          ],
+          "col": [
+            0.09,
+            0.016,
+            0.018
+          ],
+          "size": [
+            0.016,
+            0.03
+          ],
+          "life": [
+            0.16,
+            0.26
+          ],
+          "speed": [
+            1.6,
+            3.4
+          ],
+          "spread": 0.55,
+          "up": 0.4,
+          "grav": 9.5,
+          "drag": 0.9,
+          "grow": 0,
+          "alpha": 1,
+          "back": true
+        }
+      ],
+      "kill": [
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            3,
+            5
+          ],
+          "col": [
+            0.16,
+            0.028,
+            0.03
+          ],
+          "size": [
+            0.109,
+            0.171
+          ],
+          "life": [
+            0.12,
+            0.18
+          ],
+          "speed": [
+            0.3,
+            0.8
+          ],
+          "spread": 0.5,
+          "up": 0.1,
+          "grav": 0.3,
+          "drag": 6,
+          "grow": 0.25,
+          "alpha": 0.45,
+          "back": true
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            5,
+            6
+          ],
+          "col": [
+            0.12,
+            0.03,
+            0.032
+          ],
+          "size": [
+            0.155,
+            0.264
+          ],
+          "life": [
+            0.18,
+            0.28
+          ],
+          "speed": [
+            0.5,
+            1.3
+          ],
+          "spread": 0.75,
+          "up": 0.2,
+          "grav": 0.4,
+          "drag": 5,
+          "grow": 0.45,
+          "alpha": 0.42,
+          "back": true
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            7,
+            12,
+            17
+          ],
+          "col": [
+            0.09,
+            0.016,
+            0.018
+          ],
+          "size": [
+            0.018,
+            0.034
+          ],
+          "life": [
+            0.2,
+            0.3
+          ],
+          "speed": [
+            2.2,
+            4.6
+          ],
+          "spread": 0.4,
+          "up": 0.5,
+          "grav": 9.5,
+          "drag": 0.8,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            5,
+            8
+          ],
+          "col": [
+            0.09,
+            0.016,
+            0.018
+          ],
+          "size": [
+            0.016,
+            0.03
+          ],
+          "life": [
+            0.16,
+            0.26
+          ],
+          "speed": [
+            1.6,
+            3.4
+          ],
+          "spread": 0.55,
+          "up": 0.4,
+          "grav": 9.5,
+          "drag": 0.9,
+          "grow": 0,
+          "alpha": 1,
+          "back": true
+        }
+      ]
+    },
+    "goo": {
+      "label": "Alien: dark muted teal goo, no glow, gone in ~0.3 s",
+      "sound": "goo",
+      "decal": {
+        "tint": [
+          0.1,
+          0.55,
+          0.4
+        ],
+        "strength": 0.8
+      },
+      "hit": [
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            2,
+            3
+          ],
+          "col": [
+            0.03,
+            0.14,
+            0.11
+          ],
+          "size": [
+            0.07,
+            0.11
+          ],
+          "life": [
+            0.12,
+            0.18
+          ],
+          "speed": [
+            0.3,
+            0.8
+          ],
+          "spread": 0.5,
+          "up": 0.1,
+          "grav": 0.3,
+          "drag": 6,
+          "grow": 0.25,
+          "alpha": 0.45,
+          "back": true
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            3,
+            4
+          ],
+          "col": [
+            0.03,
+            0.11,
+            0.09
+          ],
+          "size": [
+            0.1,
+            0.17
+          ],
+          "life": [
+            0.18,
+            0.28
+          ],
+          "speed": [
+            0.5,
+            1.3
+          ],
+          "spread": 0.75,
+          "up": 0.2,
+          "grav": 0.4,
+          "drag": 5,
+          "grow": 0.45,
+          "alpha": 0.42,
+          "back": true
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            7,
+            8,
+            11
+          ],
+          "col": [
+            0.02,
+            0.09,
+            0.07
+          ],
+          "size": [
+            0.018,
+            0.034
+          ],
+          "life": [
+            0.2,
+            0.3
+          ],
+          "speed": [
+            2.2,
+            4.6
+          ],
+          "spread": 0.4,
+          "up": 0.5,
+          "grav": 9.5,
+          "drag": 0.8,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            3,
+            5
+          ],
+          "col": [
+            0.02,
+            0.09,
+            0.07
+          ],
+          "size": [
+            0.016,
+            0.03
+          ],
+          "life": [
+            0.16,
+            0.26
+          ],
+          "speed": [
+            1.6,
+            3.4
+          ],
+          "spread": 0.55,
+          "up": 0.4,
+          "grav": 9.5,
+          "drag": 0.9,
+          "grow": 0,
+          "alpha": 1,
+          "back": true
+        }
+      ],
+      "head": [
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            3,
+            4
+          ],
+          "col": [
+            0.03,
+            0.14,
+            0.11
+          ],
+          "size": [
+            0.091,
+            0.143
+          ],
+          "life": [
+            0.12,
+            0.18
+          ],
+          "speed": [
+            0.3,
+            0.8
+          ],
+          "spread": 0.5,
+          "up": 0.1,
+          "grav": 0.3,
+          "drag": 6,
+          "grow": 0.25,
+          "alpha": 0.45,
+          "back": true
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            4,
+            5
+          ],
+          "col": [
+            0.03,
+            0.11,
+            0.09
+          ],
+          "size": [
+            0.13,
+            0.221
+          ],
+          "life": [
+            0.18,
+            0.28
+          ],
+          "speed": [
+            0.5,
+            1.3
+          ],
+          "spread": 0.75,
+          "up": 0.2,
+          "grav": 0.4,
+          "drag": 5,
+          "grow": 0.45,
+          "alpha": 0.42,
+          "back": true
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            7,
+            10,
+            14
+          ],
+          "col": [
+            0.02,
+            0.09,
+            0.07
+          ],
+          "size": [
+            0.018,
+            0.034
+          ],
+          "life": [
+            0.2,
+            0.3
+          ],
+          "speed": [
+            2.2,
+            4.6
+          ],
+          "spread": 0.4,
+          "up": 0.5,
+          "grav": 9.5,
+          "drag": 0.8,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            4,
+            6
+          ],
+          "col": [
+            0.02,
+            0.09,
+            0.07
+          ],
+          "size": [
+            0.016,
+            0.03
+          ],
+          "life": [
+            0.16,
+            0.26
+          ],
+          "speed": [
+            1.6,
+            3.4
+          ],
+          "spread": 0.55,
+          "up": 0.4,
+          "grav": 9.5,
+          "drag": 0.9,
+          "grow": 0,
+          "alpha": 1,
+          "back": true
+        }
+      ],
+      "kill": [
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            3,
+            5
+          ],
+          "col": [
+            0.03,
+            0.14,
+            0.11
+          ],
+          "size": [
+            0.109,
+            0.171
+          ],
+          "life": [
+            0.12,
+            0.18
+          ],
+          "speed": [
+            0.3,
+            0.8
+          ],
+          "spread": 0.5,
+          "up": 0.1,
+          "grav": 0.3,
+          "drag": 6,
+          "grow": 0.25,
+          "alpha": 0.45,
+          "back": true
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            5,
+            6
+          ],
+          "col": [
+            0.03,
+            0.11,
+            0.09
+          ],
+          "size": [
+            0.155,
+            0.264
+          ],
+          "life": [
+            0.18,
+            0.28
+          ],
+          "speed": [
+            0.5,
+            1.3
+          ],
+          "spread": 0.75,
+          "up": 0.2,
+          "grav": 0.4,
+          "drag": 5,
+          "grow": 0.45,
+          "alpha": 0.42,
+          "back": true
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            7,
+            12,
+            17
+          ],
+          "col": [
+            0.02,
+            0.09,
+            0.07
+          ],
+          "size": [
+            0.018,
+            0.034
+          ],
+          "life": [
+            0.2,
+            0.3
+          ],
+          "speed": [
+            2.2,
+            4.6
+          ],
+          "spread": 0.4,
+          "up": 0.5,
+          "grav": 9.5,
+          "drag": 0.8,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            5,
+            8
+          ],
+          "col": [
+            0.02,
+            0.09,
+            0.07
+          ],
+          "size": [
+            0.016,
+            0.03
+          ],
+          "life": [
+            0.16,
+            0.26
+          ],
+          "speed": [
+            1.6,
+            3.4
+          ],
+          "spread": 0.55,
+          "up": 0.4,
+          "grav": 9.5,
+          "drag": 0.9,
+          "grow": 0,
+          "alpha": 1,
+          "back": true
+        }
+      ]
+    },
+    "spore": {
+      "label": "Mushroom Man: puff of glowing spores",
+      "sound": "goo",
+      "decal": {
+        "tint": [
+          0.42,
+          0.5,
+          0.18
+        ],
+        "strength": 0.6
+      },
+      "hit": [
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            6,
+            8
+          ],
+          "col": [
+            0.3,
+            0.34,
+            0.16
+          ],
+          "size": [
+            0.192,
+            0.32
+          ],
+          "life": [
+            0.45,
+            0.7
+          ],
+          "speed": [
+            0.5,
+            1.5
+          ],
+          "spread": 0.8,
+          "up": 0.5,
+          "grav": -0.3,
+          "drag": 2.5,
+          "grow": 0.6,
+          "alpha": 0.7,
+          "back": true
+        },
+        {
+          "pool": "fx",
+          "n": [
+            6,
+            6,
+            8
+          ],
+          "col": [
+            1.6,
+            2.2,
+            0.6
+          ],
+          "size": [
+            0.02,
+            0.035
+          ],
+          "life": [
+            0.4,
+            0.8
+          ],
+          "speed": [
+            0.8,
+            2.2
+          ],
+          "spread": 0.8,
+          "up": 0.6,
+          "grav": -0.5,
+          "drag": 1.5,
+          "grow": 0,
+          "alpha": 1
+        }
+      ],
+      "head": [
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            9,
+            12
+          ],
+          "col": [
+            0.32,
+            0.36,
+            0.17
+          ],
+          "size": [
+            0.224,
+            0.384
+          ],
+          "life": [
+            0.5,
+            0.8
+          ],
+          "speed": [
+            0.6,
+            2
+          ],
+          "spread": 0.9,
+          "up": 0.6,
+          "grav": -0.3,
+          "drag": 2.5,
+          "grow": 0.7,
+          "alpha": 0.75,
+          "back": true
+        },
+        {
+          "pool": "fx",
+          "n": [
+            9,
+            10,
+            14
+          ],
+          "col": [
+            1.8,
+            2.4,
+            0.7
+          ],
+          "size": [
+            0.02,
+            0.04
+          ],
+          "life": [
+            0.5,
+            0.9
+          ],
+          "speed": [
+            1,
+            3
+          ],
+          "spread": 0.9,
+          "up": 0.8,
+          "grav": -0.5,
+          "drag": 1.5,
+          "grow": 0,
+          "alpha": 1
+        }
+      ],
+      "kill": [
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            12,
+            18
+          ],
+          "col": [
+            0.3,
+            0.34,
+            0.16
+          ],
+          "size": [
+            0.288,
+            0.512
+          ],
+          "life": [
+            0.7,
+            1.1
+          ],
+          "speed": [
+            0.5,
+            2
+          ],
+          "spread": 1,
+          "up": 0.6,
+          "grav": -0.3,
+          "drag": 2,
+          "grow": 0.7,
+          "alpha": 0.7,
+          "back": true
+        },
+        {
+          "pool": "fx",
+          "n": [
+            12,
+            14,
+            20
+          ],
+          "col": [
+            1.7,
+            2.3,
+            0.65
+          ],
+          "size": [
+            0.025,
+            0.045
+          ],
+          "life": [
+            0.6,
+            1.1
+          ],
+          "speed": [
+            1,
+            3.5
+          ],
+          "spread": 1,
+          "up": 0.8,
+          "grav": -0.5,
+          "drag": 1.2,
+          "grow": 0,
+          "alpha": 1
+        }
+      ]
+    },
+    "metal": {
+      "label": "Robot Butler: sparks + a spit of dark oil",
+      "sound": "metal",
+      "decal": {
+        "tint": [
+          0.1,
+          0.09,
+          0.08
+        ],
+        "strength": 0.7
+      },
+      "hit": [
+        {
+          "pool": "fx",
+          "n": [
+            7,
+            8,
+            10
+          ],
+          "col": [
+            6,
+            3.8,
+            1.5
+          ],
+          "size": [
+            0.025,
+            0.045
+          ],
+          "life": [
+            0.15,
+            0.32
+          ],
+          "speed": [
+            3,
+            6
+          ],
+          "spread": 0.7,
+          "up": 0.6,
+          "grav": 12,
+          "drag": 1,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            4,
+            6
+          ],
+          "col": [
+            0.035,
+            0.03,
+            0.028
+          ],
+          "size": [
+            0.022,
+            0.04
+          ],
+          "life": [
+            0.35,
+            0.55
+          ],
+          "speed": [
+            2,
+            4
+          ],
+          "spread": 0.4,
+          "up": 0.5,
+          "grav": 9.5,
+          "drag": 0.6,
+          "grow": 0,
+          "alpha": 1
+        }
+      ],
+      "head": [
+        {
+          "pool": "fx",
+          "n": [
+            12,
+            14,
+            18
+          ],
+          "col": [
+            6.5,
+            4.2,
+            1.6
+          ],
+          "size": [
+            0.025,
+            0.05
+          ],
+          "life": [
+            0.2,
+            0.4
+          ],
+          "speed": [
+            3.5,
+            7.5
+          ],
+          "spread": 0.8,
+          "up": 0.8,
+          "grav": 12,
+          "drag": 1,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            5,
+            7
+          ],
+          "col": [
+            0.12,
+            0.12,
+            0.13
+          ],
+          "size": [
+            0.12,
+            0.2
+          ],
+          "life": [
+            0.4,
+            0.7
+          ],
+          "speed": [
+            0.5,
+            1.5
+          ],
+          "spread": 0.7,
+          "up": 0.6,
+          "grav": -0.4,
+          "drag": 2.5,
+          "grow": 0.6,
+          "alpha": 0.5
+        }
+      ],
+      "kill": [
+        {
+          "pool": "fx",
+          "n": [
+            18,
+            22,
+            30
+          ],
+          "col": [
+            6,
+            3.8,
+            1.4
+          ],
+          "size": [
+            0.03,
+            0.06
+          ],
+          "life": [
+            0.3,
+            0.7
+          ],
+          "speed": [
+            2,
+            7
+          ],
+          "spread": 1,
+          "up": 0.8,
+          "grav": 10,
+          "drag": 1,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            8,
+            12
+          ],
+          "col": [
+            0.1,
+            0.1,
+            0.11
+          ],
+          "size": [
+            0.2,
+            0.35
+          ],
+          "life": [
+            0.8,
+            1.3
+          ],
+          "speed": [
+            0.4,
+            1.6
+          ],
+          "spread": 1,
+          "up": 0.7,
+          "grav": -0.5,
+          "drag": 1.8,
+          "grow": 0.6,
+          "alpha": 0.55
+        }
+      ]
+    },
+    "bone": {
+      "label": "Skeleton Phantom: bone chips + ghost-green wisps",
+      "sound": "bone",
+      "decal": {
+        "tint": [
+          0.55,
+          0.58,
+          0.5
+        ],
+        "strength": 0.4
+      },
+      "hit": [
+        {
+          "pool": "smoke",
+          "n": [
+            6,
+            6,
+            8
+          ],
+          "col": [
+            0.62,
+            0.6,
+            0.52
+          ],
+          "size": [
+            0.032,
+            0.056
+          ],
+          "life": [
+            0.3,
+            0.5
+          ],
+          "speed": [
+            2.4,
+            4.5
+          ],
+          "spread": 0.5,
+          "up": 0.6,
+          "grav": 9.5,
+          "drag": 0.6,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "fx",
+          "n": [
+            0,
+            4,
+            6
+          ],
+          "col": [
+            0.5,
+            2.6,
+            1.0
+          ],
+          "size": [
+            0.05,
+            0.09
+          ],
+          "life": [
+            0.35,
+            0.6
+          ],
+          "speed": [
+            0.4,
+            1.2
+          ],
+          "spread": 0.8,
+          "up": 0.6,
+          "grav": -0.6,
+          "drag": 2,
+          "grow": 0.2,
+          "alpha": 0.8
+        }
+      ],
+      "head": [
+        {
+          "pool": "smoke",
+          "n": [
+            9,
+            10,
+            14
+          ],
+          "col": [
+            0.66,
+            0.64,
+            0.55
+          ],
+          "size": [
+            0.035,
+            0.064
+          ],
+          "life": [
+            0.35,
+            0.6
+          ],
+          "speed": [
+            3,
+            6
+          ],
+          "spread": 0.6,
+          "up": 0.8,
+          "grav": 9.5,
+          "drag": 0.5,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "fx",
+          "n": [
+            0,
+            7,
+            10
+          ],
+          "col": [
+            0.6,
+            3.0,
+            1.2
+          ],
+          "size": [
+            0.06,
+            0.11
+          ],
+          "life": [
+            0.4,
+            0.7
+          ],
+          "speed": [
+            0.5,
+            1.6
+          ],
+          "spread": 0.9,
+          "up": 0.8,
+          "grav": -0.6,
+          "drag": 2,
+          "grow": 0.25,
+          "alpha": 0.85
+        }
+      ],
+      "kill": [
+        {
+          "pool": "smoke",
+          "n": [
+            12,
+            14,
+            20
+          ],
+          "col": [
+            0.64,
+            0.62,
+            0.54
+          ],
+          "size": [
+            0.04,
+            0.08
+          ],
+          "life": [
+            0.5,
+            0.9
+          ],
+          "speed": [
+            2,
+            6
+          ],
+          "spread": 0.9,
+          "up": 0.9,
+          "grav": 9.5,
+          "drag": 0.5,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "fx",
+          "n": [
+            0,
+            12,
+            16
+          ],
+          "col": [
+            0.55,
+            2.8,
+            1.1
+          ],
+          "size": [
+            0.07,
+            0.13
+          ],
+          "life": [
+            0.6,
+            1.0
+          ],
+          "speed": [
+            0.5,
+            2
+          ],
+          "spread": 1,
+          "up": 0.9,
+          "grav": -0.8,
+          "drag": 1.6,
+          "grow": 0.25,
+          "alpha": 0.85
+        }
+      ]
+    },
+    "glitch": {
+      "label": "Neon Glitch: neon shards",
+      "sound": "metal",
+      "decal": null,
+      "hit": [
+        {
+          "pool": "fx",
+          "n": [
+            6,
+            7,
+            9
+          ],
+          "col": [
+            2.6,
+            0.5,
+            2.2
+          ],
+          "size": [
+            0.03,
+            0.05
+          ],
+          "life": [
+            0.2,
+            0.4
+          ],
+          "speed": [
+            2.5,
+            5
+          ],
+          "spread": 0.7,
+          "up": 0.5,
+          "grav": 4,
+          "drag": 1.5,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "fx",
+          "n": [
+            0,
+            3,
+            5
+          ],
+          "col": [
+            0.5,
+            2.6,
+            2.8
+          ],
+          "size": [
+            0.03,
+            0.05
+          ],
+          "life": [
+            0.2,
+            0.4
+          ],
+          "speed": [
+            2.5,
+            5
+          ],
+          "spread": 0.7,
+          "up": 0.5,
+          "grav": 4,
+          "drag": 1.5,
+          "grow": 0,
+          "alpha": 1
+        }
+      ],
+      "head": [
+        {
+          "pool": "fx",
+          "n": [
+            10,
+            12,
+            16
+          ],
+          "col": [
+            2.8,
+            0.6,
+            2.4
+          ],
+          "size": [
+            0.035,
+            0.06
+          ],
+          "life": [
+            0.25,
+            0.5
+          ],
+          "speed": [
+            3,
+            6.5
+          ],
+          "spread": 0.8,
+          "up": 0.7,
+          "grav": 4,
+          "drag": 1.5,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "fx",
+          "n": [
+            0,
+            6,
+            8
+          ],
+          "col": [
+            0.6,
+            2.8,
+            3.0
+          ],
+          "size": [
+            0.035,
+            0.06
+          ],
+          "life": [
+            0.25,
+            0.5
+          ],
+          "speed": [
+            3,
+            6.5
+          ],
+          "spread": 0.8,
+          "up": 0.7,
+          "grav": 4,
+          "drag": 1.5,
+          "grow": 0,
+          "alpha": 1
+        }
+      ],
+      "kill": [
+        {
+          "pool": "fx",
+          "n": [
+            16,
+            20,
+            28
+          ],
+          "col": [
+            2.6,
+            0.5,
+            2.2
+          ],
+          "size": [
+            0.04,
+            0.07
+          ],
+          "life": [
+            0.4,
+            0.8
+          ],
+          "speed": [
+            2,
+            6
+          ],
+          "spread": 1,
+          "up": 0.8,
+          "grav": 3,
+          "drag": 1.2,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "fx",
+          "n": [
+            0,
+            10,
+            14
+          ],
+          "col": [
+            0.5,
+            2.6,
+            2.8
+          ],
+          "size": [
+            0.04,
+            0.07
+          ],
+          "life": [
+            0.4,
+            0.8
+          ],
+          "speed": [
+            2,
+            6
+          ],
+          "spread": 1,
+          "up": 0.8,
+          "grav": 3,
+          "drag": 1.2,
+          "grow": 0,
+          "alpha": 1
+        }
+      ]
+    },
+    "sparks": {
+      "label": "Low violence: armour sparks only (no blood, no marks)",
+      "sound": "metal",
+      "decal": null,
+      "hit": [
+        {
+          "pool": "fx",
+          "n": [
+            7,
+            8,
+            10
+          ],
+          "col": [
+            7,
+            4.2,
+            1.6
+          ],
+          "size": [
+            0.025,
+            0.05
+          ],
+          "life": [
+            0.15,
+            0.35
+          ],
+          "speed": [
+            2.5,
+            5.5
+          ],
+          "spread": 0.75,
+          "up": 0.6,
+          "grav": 12,
+          "drag": 1,
+          "grow": 0,
+          "alpha": 1
+        }
+      ],
+      "head": [
+        {
+          "pool": "fx",
+          "n": [
+            12,
+            14,
+            18
+          ],
+          "col": [
+            7.5,
+            4.6,
+            1.8
+          ],
+          "size": [
+            0.03,
+            0.055
+          ],
+          "life": [
+            0.2,
+            0.4
+          ],
+          "speed": [
+            3,
+            7
+          ],
+          "spread": 0.85,
+          "up": 0.8,
+          "grav": 12,
+          "drag": 1,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            3,
+            4
+          ],
+          "col": [
+            0.25,
+            0.25,
+            0.27
+          ],
+          "size": [
+            0.15,
+            0.25
+          ],
+          "life": [
+            0.6,
+            1.0
+          ],
+          "speed": [
+            0.4,
+            1.2
+          ],
+          "spread": 0.7,
+          "up": 0.6,
+          "grav": -0.3,
+          "drag": 2,
+          "grow": 0.5,
+          "alpha": 0.5
+        }
+      ],
+      "kill": [
+        {
+          "pool": "fx",
+          "n": [
+            20,
+            24,
+            30
+          ],
+          "col": [
+            7,
+            3.6,
+            1.2
+          ],
+          "size": [
+            0.03,
+            0.07
+          ],
+          "life": [
+            0.3,
+            0.8
+          ],
+          "speed": [
+            2,
+            7
+          ],
+          "spread": 1,
+          "up": 0.7,
+          "grav": 10,
+          "drag": 1.5,
+          "grow": 0,
+          "alpha": 1
+        },
+        {
+          "pool": "smoke",
+          "n": [
+            0,
+            6,
+            10
+          ],
+          "col": [
+            0.16,
+            0.14,
+            0.14
+          ],
+          "size": [
+            0.4,
+            0.7
+          ],
+          "life": [
+            1.2,
+            2.4
+          ],
+          "speed": [
+            0.5,
+            2
+          ],
+          "spread": 1,
+          "up": 0.6,
+          "grav": -0.4,
+          "drag": 1.5,
+          "grow": 1,
+          "alpha": 0.6
+        }
+      ]
+    }
+  },
+  "weapons": {
+    "about": "knock = how hard a hit shoves the body (1 = rifle). heavy = gets the big stagger + a stronger death fall.",
+    "default": {
+      "knock": 1.0
+    },
+    "sniper": {
+      "knock": 2.2,
+      "heavy": true
+    },
+    "helix": {
+      "knock": 1.9,
+      "heavy": true
+    },
+    "void": {
+      "knock": 1.7,
+      "heavy": true
+    },
+    "breacher": {
+      "knock": 1.8,
+      "heavy": true
+    },
+    "judge": {
+      "knock": 1.7,
+      "heavy": true
+    },
+    "poopgun": {
+      "knock": 1.6,
+      "heavy": true
+    },
+    "flytrap": {
+      "knock": 2.4,
+      "heavy": true
+    },
+    "ftspit": {
+      "knock": 0.8
+    },
+    "knife": {
+      "knock": 2.0,
+      "heavy": true
+    },
+    "boomerang": {
+      "knock": 1.3
+    },
+    "nade": {
+      "knock": 2.2,
+      "heavy": true
+    },
+    "nova": {
+      "knock": 2.2,
+      "heavy": true
+    },
+    "seeker": {
+      "knock": 2.2,
+      "heavy": true
+    },
+    "charge": {
+      "knock": 2.4,
+      "heavy": true
+    },
+    "titan": {
+      "knock": 0.75
+    },
+    "wasp": {
+      "knock": 0.8
+    },
+    "stinger": {
+      "knock": 0.85
+    },
+    "pistol": {
+      "knock": 0.9
+    },
+    "arc": {
+      "knock": 0.7
+    }
+  },
+  "noBlood": {
+    "about": "damage-over-time ticks and map hazards: a flinch at most, never blood (they would spray every few frames)",
+    "weapons": [
+      "ftpoison",
+      "lava",
+      "acid",
+      "laser"
+    ],
+    "minDamage": 5
+  },
+  "react": {
+    "about": "additive bone offsets (rad) on top of the animation, shaped by an impulse that rises in 'rise' s and dies out over 'tau' s. Restored right after the frame is drawn, so the hit boxes the game shoots at never move.",
+    "rise": 0.045,
+    "head": {
+      "neck": 0.22,
+      "head": 0.38,
+      "spine": 0.06,
+      "tau": 0.16,
+      "dur": 0.55
+    },
+    "body": {
+      "pitch": 0.2,
+      "twist": 0.34,
+      "tau": 0.15,
+      "dur": 0.5
+    },
+    "low": {
+      "pitch": -0.16,
+      "knee": 0.55,
+      "hip": 0.25,
+      "drop": 0.07,
+      "tau": 0.17,
+      "dur": 0.55
+    },
+    "arm": {
+      "arm": 0.7,
+      "twist": 0.18,
+      "tau": 0.13,
+      "dur": 0.45
+    },
+    "heavy": {
+      "stagger": 0.11,
+      "tau": 0.22,
+      "dur": 0.7
+    },
+    "maxStrength": 2.6
+  },
+  "death": {
+    "about": "Death01 falls backwards: the body is turned to face where the shot came from (+/- jitter) so it falls AWAY from the shooter, with an extra backwards knock for heavy guns",
+    "turn": 0.2,
+    "jitter": 0.35,
+    "knockPitch": 0.32,
+    "knockRise": 0.09,
+    "knockTau": 0.35,
+    "slide": 1.35,
+    "kinds": [
+      "spin",
+      "head",
+      "riddled"
+    ]
+  },
+  "decals": {
+    "about": "flat marks on the wall behind the target and the floor under it; multiplicative (they darken + tint whatever is under them)",
+    "pool": {
+      "low": 0,
+      "mid": 28,
+      "high": 56
+    },
+    "life": 24,
+    "fade": 5,
+    "wallRange": 2.4,
+    "wallChance": 0.75,
+    "floorChance": 0.55,
+    "size": {
+      "hit": [
+        0.22,
+        0.38
+      ],
+      "head": [
+        0.32,
+        0.52
+      ],
+      "kill": [
+        0.42,
+        0.7
+      ]
+    }
+  },
+  "sound": {
+    "volVictim": 0.55,
+    "volMine": 0.3,
+    "ref": 3,
+    "roll": 1.3
+  }
+}

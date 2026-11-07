@@ -1350,10 +1350,10 @@ function refreshAll() {
 }
 // first-person gloves + sleeves follow your own skin (shared viewmodel materials, originals kept)
 let HAND0 = null;
-function applyHands() {
+function applyHands(look) {   // look: another player's look (killcam shows the KILLER's gloves); omitted = what you wear
   const gm = gv('GLOVE_M'), sm = gv('SLEEVE_M'); if (!gm || !sm) return;
   if (!HAND0) HAND0 = { g: [gm.color.clone(), gm.roughness, gm.metalness], s: [sm.color.clone(), sm.roughness, sm.metalness] };
-  const l = wornLook(), d = SKIN[l.skin], [gs, ss] = HANDS[l.skin] || [2, 1];
+  const l = look && look.skin && SKIN[look.skin] ? look : wornLook(), d = SKIN[l.skin], [gs, ss] = HANDS[l.skin] || [2, 1];
   const pick = i => i === 0 ? '#' + l.p : i === 1 ? '#' + l.s : d.pal[i];
   if (l.skin === 'std') { gm.color.copy(HAND0.g[0]); sm.color.copy(HAND0.s[0]); return; }
   gm.color.set(pick(gs)).convertSRGBToLinear().multiplyScalar(.75); sm.color.set(pick(ss)).convertSRGBToLinear().multiplyScalar(.7);
@@ -1975,7 +1975,7 @@ window.S9Skins = {
   list, apply: (t, id, c) => apply(t, id, c), restore, applyGunSkin,
   preview: (el, look, opts) => preview(el, look, opts),
   open: tab => openUI(tab), close: () => closeUI(), get isOpen() { return isOpen(); },
-  get look() { return Object.assign({}, state.look); }, setLook,
+  get look() { return Object.assign({}, state.look); }, setLook, handsFor: l => applyHands(l || null),
   lookCode: l => lookCode(l || state.look), parseLook: parseCode, readRemoteLook: pr => parseCode(pr && typeof pr === 'object' ? pr.lk : pr),
   toAccount, fromAccount, emblems: () => EMBLEMS.map(e => Object.assign({ unlocked: unlocked(e), unlockAt: levelName(e.level) }, e)),
   get botMode() { return state.botMode; }, set botMode(v) { state.botMode = v === 'standard' ? 'standard' : 'random'; saveState(false); refreshAll(); },
