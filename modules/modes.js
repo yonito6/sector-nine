@@ -12,10 +12,16 @@
   let LAYOUTS = null;
   fetch('data/demo_layouts.json').then(r => r.json()).then(j => { LAYOUTS = j; }).catch(() => {});
 
-  const room = () => NET && NET.on && NET.room;
+  // the match source: the online server room, or a LOCAL room (offline vs-bots Team deathmatch / Demolition, run in this
+  // browser by modules/botmodes.js with the same rules code as the server). With no local room every line below behaves
+  // exactly as before (online only).
+  const LOCAL = { room: null };
+  const room = () => LOCAL.room || (NET && NET.on && NET.room);
+  const inMatch = () => LOCAL.room ? !!LOCAL.room.inMatch : NET.inMatch;
+  const member = r => !!(r && (r.remote || r.mxBot));   // another player in the match: online player or local bot
   const mode = () => (room() && room().meta && room().meta.mode) || 'ffa';
   const teamMode = () => !!room() && mode() !== 'ffa';
-  const demo = () => !!room() && mode() === 'demo' && NET.inMatch;
+  const demo = () => !!room() && mode() === 'demo' && inMatch();
   const myId = () => room() ? room().myId : null;
   const myTeam = () => MX.teams.get(myId()) || null;
   const sNow = () => Date.now() - MX.off;          // the server's clock, as well as we know it
@@ -28,6 +34,20 @@
   window.MODE.layouts = () => LAYOUTS;
   // movement is locked during freeze time and while planting/defusing
   window.MODE_frozen = () => demo() && (sNow() < MX.freezeEnd || !!MX.holdAct);
+  // offline (vs bots) team matches: modules/botmodes.js plugs a local room in here. room = { local:true, server:true,
+  // myId, meta:{mode,map,kills}, inMatch, send(o) } and calls room.onMatch({v, e}) exactly like the server's 'mx' messages
+  window.MODE.local = {
+    set(r) { LOCAL.room = r || null; if (!r) { MX.v = null; MX.teams.clear(); MX.kits.clear(); MX.bomb = null; MX.act = null; MX.myAct = null; MX.holdAct = null; MX.spec = null; clearBomb(); buildSites(); hud(); } },
+    get: () => LOCAL.room,
+    begin() { MX.over = false; MX.lastRound = 0; MX.off = 0; clearBomb(); buildSites(); if (mode() === 'demo') { demoArt(); slotBuild(); } },   // what startOnlineMatch does first
+    placeMe() { if (teamMode()) { P.pos.copy(pickSpawn(PLAYER_ENT)); faceForward(); } recolorAll(); hud(true); },
+    onMatch: d => onMatch(d), myId: () => myId(), inMatch: () => inMatch(),
+  };
+  window.MODE.localRoom = () => LOCAL.room;
+  window.MODE.isLocal = () => !!LOCAL.room;
+  window.MODE.spec = step => { MX.specStep = step; };
+  addEventListener('keydown', e => { if (LOCAL.room && demo() && state === 'dead' && MX.spec && (e.code === 'ArrowRight' || e.code === 'ArrowLeft')) MX.specStep = e.code === 'ArrowRight' ? 1 : -1; });
+  addEventListener('mousedown', e => { if (LOCAL.room && demo() && state === 'dead' && MX.spec && e.button === 0) MX.specStep = 1; });
 
   /* ---------- hooks into the game ---------- */
   // team spawns
@@ -35,7 +55,7 @@
   pickSpawn = function (forEnt) {
     const L = layout(), t = myTeam();
     if (forEnt === PLAYER_ENT && teamMode() && L && t) {
-      const pts = L[t], used = new Set([...robots].filter(r => r.remote && !r.dead).map(r => Math.round(r.root.position.x) + ',' + Math.round(r.root.position.z)));
+      const pts = L[t], used = new Set([...robots].filter(r => member(r) && !r.dead).map(r => Math.round(r.root.position.x) + ',' + Math.round(r.root.position.z)));
       const free = pts.filter(q => !used.has(Math.round(q[0]) + ',' + Math.round(q[1])));
       const q = (free.length ? free : pts)[Math.floor(Math.random() * (free.length || pts.length))];
       const c = nearestOk(cellOf(q[0], q[1]), 6); return new THREE.Vector3(cellX(c), NAV.h[c], cellZ(c));
@@ -51,12 +71,12 @@
   const _die = playerDie;
   playerDie = function (killer, weapon, crit) {
     const r = _die.apply(this, arguments);
-    if (room() && NET.inMatch) send({ k: 'die', by: killer && killer.netId ? killer.netId : null, w: weapon || '', h: !!crit });
+    if (room() && inMatch()) send({ k: 'die', by: killer && killer.netId ? killer.netId : null, w: weapon || '', h: !!crit });
     if (MX.holdAct) stopAct();
     return r;
   };
   // no friendly fire in team modes (both on the shooter's side and the victim's side)
-  const sameTeam = r => teamMode() && r && r.remote && myTeam() && MX.teams.get(r.netId) === myTeam();
+  const sameTeam = r => teamMode() && member(r) && myTeam() && MX.teams.get(r.netId) === myTeam();
   const _dmg = damageBot;
   damageBot = function (r, dmg, crit, point, dir, zone, attacker) { if (attacker === PLAYER_ENT && sameTeam(r)) return; return _dmg.apply(this, arguments); };
   const _hurt = hurtPlayer;
@@ -64,7 +84,7 @@
   // after the online match is set up, put me at my team's spawn
   const _start = startOnlineMatch;
   startOnlineMatch = function () {
-    MX.over = false; MX.lastRound = 0; clearBomb(); buildSites(); if (mode() === 'demo') demoArt();
+    MX.over = false; MX.lastRound = 0; clearBomb(); buildSites(); if (mode() === 'demo') { demoArt(); slotBuild(); }
     const r = _start.apply(this, arguments);
     if (teamMode()) { P.pos.copy(pickSpawn(PLAYER_ENT)); faceForward(); }
     recolorAll(); hud(true); return r;
@@ -88,19 +108,19 @@
     switch (e.k) {
       case 'round':
         MX.freezeEnd = e.freezeEnd; MX.roundEnd = e.roundEnd; MX.carrier = e.carrier; MX.lastRound = e.round; clearBomb();
-        if (NET.inMatch) roundRespawn();
+        if (inMatch()) roundRespawn();
         { const t = myTeam(), goal = t === 'atk' ? (MX.carrier === myId() ? 'You carry the charge: plant it at site A or B (hold E)' : 'Escort the charge to site A or B') : 'Defend sites A and B'; banner(`ROUND ${e.round}`, `${t ? TEAM[t].name + ' · ' : ''}${goal}`); }
-        sfx.wave(); break;
+        sfx.wave(); if (MX.carrier === myId() && myTeam() === 'atk') setTimeout(() => callout('YOU HAVE THE BOMB', ''), 900); break;
       case 'live': callout('GO', 'multi'); tone('go'); break;
       case 'roundEnd': { const mine = e.winner === myTeam(); banner(`${TEAM[e.winner].name.toUpperCase()} WIN`, `${REASON[e.reason] || ''} · ${e.score.atk} : ${e.score.def}`); tone(mine ? 'win' : 'lose'); stopAct(); break; }
       case 'halftime': banner('HALFTIME', 'Switching sides'); break;
       case 'matchEnd': { MX.over = true; const t = myTeam(), w = e.winner, mine = w === t || w === myId(); banner(mine ? 'VICTORY' : w === 'draw' ? 'DRAW' : 'DEFEAT', TEAM[w] ? `${TEAM[w].name} win the match` : 'Match over'); tone(mine ? 'win' : 'lose'); break; }
-      case 'toLobby': if (NET.inMatch && typeof toRoomLobby === 'function') toRoomLobby('Match over. The host can change the map or mode and start again.'); clearBomb(); break;
+      case 'toLobby': if (!LOCAL.room && NET.inMatch && typeof toRoomLobby === 'function') toRoomLobby('Match over. The host can change the map or mode and start again.'); clearBomb(); break;
       case 'planted': MX.bomb = { s: 'planted', p: e.pos, site: e.site, ex: e.explodeAt }; MX.beepT = 0; syncBomb(); callout(`CHARGE PLANTED · SITE ${e.site}`, 'multi'); kfeedText(`Charge planted at site ${e.site}`); tone('planted'); if (e.id === myId()) stopAct(true); break;
       case 'defused': callout('CHARGE DEFUSED', 'multi'); kfeedText('Charge defused'); tone('defused'); MX.bomb && (MX.bomb.s = 'defused'); syncBomb(); if (e.id === myId()) stopAct(true); break;
       case 'exploded': detonate(e.pos); break;
       case 'bombDrop': kfeedText('The charge was dropped'); break;
-      case 'bombPick': if (e.id === myId()) callout('YOU PICKED UP THE CHARGE', ''); break;
+      case 'bombPick': if (e.id === myId()) { callout('YOU HAVE THE BOMB', ''); try { sfx.pickup(); } catch (x) {} } break;
       case 'actStart': if (e.id === myId()) { MX.myAct = { kind: e.kind, end: e.end, start: sNow(), kit: e.kit }; } else actSound(e); break;
       case 'actCancel': if (e.id === myId()) { MX.myAct = null; } break;
     }
@@ -183,6 +203,70 @@
     const d = Math.hypot(P.pos.x - p[0], P.pos.y - p[1], P.pos.z - p[2]); if (state === 'play' && !P.dead && d < 16) hurtPlayer(d < 7 ? 500 : 500 * (1 - (d - 7) / 9), pos, null, false, 'charge');
   }
 
+  /* ---------- the charge as a weapon slot (Strike Force carrier): 4th slot after the knife, drop key, carrier awareness ---------- */
+  // Like CS2 / Valorant: the carrier switches to the charge with key 4 or the wheel, holds it in first person, and can DROP it
+  // (drop key, bindable in Settings) so a teammate picks it up. Not a gun: P.weapon stays as it was (no server weapon table,
+  // no anti-cheat change); fire / reload are blocked while the charge is out.
+  const BS = MX.slot = { out: false, vm: null, mark: null, toastT: 0, dropped: 0 };
+  const iCarry = () => demo() && myTeam() === 'atk' && !!MX.bomb && MX.bomb.s === 'carried' && MX.bomb.c === myId() && !P.dead;
+  const OFF = -400;
+  function slotBuild() {   // everything is built when the match starts (never a shader compile mid-match)
+    if (BS.vm || typeof gunScene === 'undefined') return;
+    const g = new THREE.Group(); g.name = 's9_bombvm'; g.frustumCulled = false; g.position.set(0, OFF, 0);
+    const ch = DEMO_ART() ? S9Demo.makeCharge('carried') : chargeMesh(false); if (ch.setBlink) ch.setBlink(0);
+    const hold = new THREE.Group(); hold.add(ch); ch.rotation.set(0, 0, 0); ch.scale.setScalar(.8); g.add(hold); g.userData.hold = hold;
+    const gl = gloveMat(); for (const s of [-1, 1]) { const h = new THREE.Mesh(rbox(.075, .06, .12, .02), gl); h.position.set(s * .17, -.02, .04); h.rotation.set(.3, 0, -s * .25); hold.add(h); }
+    g.traverse(o => { o.frustumCulled = false; }); gunScene.add(g); BS.vm = g;
+    if (!BS.mark) {   // dropped-charge marker (attackers see it through walls)
+      const cv = document.createElement('canvas'); cv.width = cv.height = 128; const c = cv.getContext('2d');
+      c.fillStyle = 'rgba(0,0,0,.55)'; c.beginPath(); c.arc(64, 64, 58, 0, 7); c.fill(); c.lineWidth = 6; c.strokeStyle = '#ffb347'; c.stroke();
+      c.fillStyle = '#ffb347'; c.beginPath(); c.arc(60, 72, 26, 0, 7); c.fill(); c.fillRect(58, 30, 8, 14); c.strokeStyle = '#ffb347'; c.lineWidth = 5; c.beginPath(); c.moveTo(66, 32); c.quadraticCurveTo(84, 20, 92, 34); c.stroke();
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, depthWrite: false, transparent: true }));
+      sp.scale.setScalar(.7); sp.renderOrder = 999; sp.frustumCulled = false; sp.position.set(0, OFF, 0); scene.add(sp); BS.mark = sp;
+    }
+  }
+  function slotEquip(on) {
+    if (on && !(iCarry() && state === 'play')) return false;
+    if (on === BS.out) return true; BS.out = on; P.switchT = Math.max(P.switchT || 0, .35); P.ads = 0;
+    if (on) { try { sfx.equip(); } catch (e) {} callout('CHARGE EQUIPPED', ''); } try { updateHud(true); } catch (e) {}
+    const w = $('hWeapon'); if (w) w.textContent = on ? 'Charge' : WEAPONS[P.weapon].label;
+    return true;
+  }
+  function slotDrop() { if (!iCarry() || state !== 'play' || MX.holdAct) return false; send({ k: 'drop' }); return true; }
+  window.MODE.slot = { equip: slotEquip, drop: slotDrop, carrying: iCarry, out: () => BS.out };
+  // switching to any gun puts the charge away
+  { const _sw = switchWeapon; switchWeapon = function (name) { if (BS.out) { BS.out = false; P.switchT = .35; const w = $('hWeapon'); if (w) w.textContent = WEAPONS[P.weapon].label; try { sfx.equip(); } catch (e) {} } return _sw.apply(this, arguments); }; }
+  { const _f = fire; fire = function () { if (BS.out) return; return _f.apply(this, arguments); }; }
+  { const _r = startReload; startReload = function () { if (BS.out) return; return _r.apply(this, arguments); }; }
+  { const _k = knifeAttack; knifeAttack = function () { if (BS.out) return; return _k.apply(this, arguments); }; }
+  addEventListener('keydown', e => {
+    if (e.repeat || !demo()) return;
+    if (e.code === 'Digit4') { if (BS.out) return; slotEquip(true); }
+    else if (e.code === 'KeyB') slotDrop();
+  });
+  addEventListener('wheel', e => {   // the wheel cycles gun 1, gun 2, knife, charge (the charge only for its carrier)
+    if (state !== 'play' || !(iCarry() || BS.out)) return;
+    const S = SLOTS(), cyc = [S[0], S[1], 'knife', 'bomb'], cur = BS.out ? 3 : cyc.indexOf(P.weapon), nx = (cur + (e.deltaY > 0 ? 1 : 3)) % 4;
+    e.stopImmediatePropagation();
+    if (cyc[nx] === 'bomb') slotEquip(true); else switchWeapon(cyc[nx]);
+  }, { capture: true, passive: true });
+  // per frame: keep the slot consistent with the match, show the carrier prompt and the dropped-charge marker
+  function slotTick(dt) {
+    if (BS.out && !(iCarry() && state === 'play')) { BS.out = false; const w = $('hWeapon'); if (w && WEAPONS[P.weapon]) w.textContent = WEAPONS[P.weapon].label; }
+    const B = MX.bomb, el = $('mxCarry'), carry = iCarry() && state === 'play' && MX.v && MX.v.phase !== 'over';
+    if (el) { el.hidden = !carry; if (carry) el.classList.toggle('out', BS.out); }
+    // first-person charge (done here, after every module's own viewmodel code): held in front, bobbing like a gun; steps aside while the plant animation (demoanims) shows the hands
+    const g = BS.vm; if (g) {
+      if (BS.out && state === 'play' && !MX.holdAct && !MX.myAct) { gun.visible = false; { const wg = typeof WM !== 'undefined' && WM[P.weapon] && WM[P.weapon].group; if (wg) { wg.visible = false; BS.hid = wg; } } const sw = Math.max(0, P.switchT || 0) / .35; { const am = $('hAmmo'); if (am && am.dataset.bs !== '1') { am.dataset.bs = '1'; am.innerHTML = '<small>hold E on a site</small>'; } } g.position.set(.02 + Math.sin(P.bob) * .01, -.22 + Math.abs(Math.cos(P.bob)) * .01 - sw * .35, -.55); g.rotation.set(.45, .15, 0); }
+      else { g.position.set(0, OFF, 0); { const am = $('hAmmo'); if (am && am.dataset.bs === '1') { am.dataset.bs = ''; try { updateHud(true); } catch (e) {} } } if (BS.hid) { if (!BS.out) BS.hid.visible = true; BS.hid = null; } }
+    }
+    const m = BS.mark; if (m) {
+      const show = demo() && myTeam() === 'atk' && B && B.s === 'dropped' && B.p;
+      if (show) { m.position.set(B.p[0], B.p[1] + 1.6 + Math.sin(performance.now() / 300) * .08, B.p[2]); const d = Math.hypot(camera.position.x - B.p[0], camera.position.z - B.p[2]); m.scale.setScalar(Math.min(1.6, Math.max(.5, d * .045))); }
+      else m.position.set(0, OFF, 0);
+    }
+  }
+
   /* ---------- sites ---------- */
   function buildSites() {
     for (const o of MX.siteObjs) scene.remove(o); MX.siteObjs = [];
@@ -206,22 +290,23 @@
   let specHidden = null;
   window.MODE_preRender = function (dt) {
     { const r = room(); if (r && r.server && r.onMatch !== onMatch) { r.onMatch = onMatch; r.onNote = r.onNote || (msg => onlineMsg(msg, true)); const q = r.mxQueue || []; r.mxQueue = []; for (const d of q) onMatch(d); } }   // attach to any room, however it was opened
-    updateAct(dt); updateBeep(dt); syncBombLight(); hudTick();
+    updateAct(dt); updateBeep(dt); syncBombLight(); slotTick(dt); hudTick();
     if (!demo() || state !== 'dead' || P.dieT < 6.5) { MX.spec = null; return; }
-    const mates = robots.filter(r => r.remote && !r.dead && MX.teams.get(r.netId) === myTeam());
+    const mates = robots.filter(r => member(r) && !r.dead && MX.teams.get(r.netId) === myTeam());
     if (!mates.length) return;
-    if (!MX.spec || !mates.includes(MX.spec)) MX.spec = mates[0];
+    if (!MX.spec || !mates.includes(MX.spec)) MX.spec = mates[Math.min(mates.length - 1, Math.max(0, MX.specI | 0))] || mates[0];
+    if (MX.specStep) { const i = (mates.indexOf(MX.spec) + MX.specStep + mates.length) % mates.length; MX.spec = mates[i]; MX.specI = i; MX.specStep = 0; }
     const r = MX.spec, e = r.root.position;
     camera.position.set(e.x, e.y + 1.62 - (r.crouch || 0) * .5, e.z); camera.rotation.set(r.aimPitch || 0, (r.aimYaw || 0) - Math.PI, 0, 'YXZ');
     r.root.visible = false; specHidden = r;
-    $('mxSpec').hidden = false; $('mxSpec').textContent = `Spectating ${r.name} · next round brings you back`;
+    $('mxSpec').hidden = false; $('mxSpec').textContent = `Spectating ${r.name}${LOCAL.room && mates.length > 1 ? ' · click / ← → for next' : ''} · next round brings you back`;
   };
   window.MODE_postRender = function () { if (specHidden) { specHidden.root.visible = true; specHidden = null; } if (!MX.spec && $('mxSpec')) $('mxSpec').hidden = true; };
   function syncBombLight() { if (demo() && MX.bomb && MX.bomb.s === 'carried') syncBomb(); }
 
   /* ---------- team colours ---------- */
   function recolorAll() {
-    for (const r of robots) if (r.remote) {
+    for (const r of robots) if (member(r)) {
       const t = teamMode() ? MX.teams.get(r.netId) : null;
       if (t && r.visor && r.visor.emissive) { const c = TEAM[t].col; r.visor.emissive.setRGB(c[0] * 1.6, c[1] * 1.6, c[2] * 1.6); }
       r.mxTeam = t;
@@ -254,16 +339,17 @@
 #mxBar[hidden]{display:none}#mxBar .tr{height:8px;border-radius:4px;background:rgba(0,0,0,.6);margin-top:6px;overflow:hidden}#mxBar .fl{height:100%;width:0;background:linear-gradient(90deg,#ffb347,#ff6a2a)}
 #mxTip{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);font:600 13px system-ui;color:#fff;background:rgba(0,0,0,.55);padding:6px 12px;border-radius:6px;z-index:30;pointer-events:none}#mxTip[hidden]{display:none}
 #mxSpec{position:fixed;left:50%;bottom:40px;transform:translateX(-50%);font:600 14px system-ui;color:#fff;background:rgba(0,0,0,.6);padding:8px 14px;border-radius:8px;z-index:31}#mxSpec[hidden]{display:none}
+#mxCarry{position:fixed;left:24px;bottom:150px;display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:rgba(0,0,0,.6);border:1px solid #ffb347;color:#fff;font:700 13px system-ui;z-index:30;pointer-events:none;text-shadow:0 1px 3px #000}#mxCarry[hidden]{display:none}#mxCarry svg{width:30px;height:30px;fill:#ffb347;flex:none}#mxCarry b{color:#ffb347}#mxCarry small{display:block;font-weight:600;font-size:11px;opacity:.85}#mxCarry.out{background:rgba(255,179,71,.28)}
 #mxFreeze{position:fixed;left:50%;top:38%;transform:translateX(-50%);font:800 44px system-ui;color:#fff;text-shadow:0 2px 10px #000;z-index:30;pointer-events:none}#mxFreeze[hidden]{display:none}`;
   document.head.appendChild(css);
   const root = document.createElement('div');
   root.innerHTML = `<div id="mxHud" hidden><div class="sc atk" id="mxSa">0</div><div class="alive" id="mxAa" style="color:${TEAM.atk.css}"></div><div class="mid"><div class="clk" id="mxClk">0:00</div><div class="rd" id="mxRd"></div><div class="bomb" id="mxBomb" hidden></div></div><div class="alive" id="mxAd" style="color:${TEAM.def.css}"></div><div class="sc def" id="mxSd">0</div></div>
-<div id="mxBar" hidden><span id="mxBarT"></span><div class="tr"><div class="fl" id="mxBarF"></div></div></div><div id="mxTip" hidden></div><div id="mxSpec" hidden></div><div id="mxFreeze" hidden></div>`;
+<div id="mxBar" hidden><span id="mxBarT"></span><div class="tr"><div class="fl" id="mxBarF"></div></div></div><div id="mxTip" hidden></div><div id="mxSpec" hidden></div><div id="mxFreeze" hidden></div><div id="mxCarry" hidden><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="14" cy="19" r="10"/><rect x="12" y="4" width="5" height="6" rx="1"/><path d="M17 6q6-4 9 1" stroke="#ffb347" stroke-width="2.4" fill="none"/><circle cx="28" cy="8" r="2"/></svg><div><b>YOU HAVE THE BOMB</b><small>Press 4 to hold it &middot; B to drop it &middot; hold E on a site to plant</small></div></div>`;
   document.body.appendChild(root);
   const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   let hudT = 0;
   function hud() {
-    const on = teamMode() && NET.inMatch && MX.v; $('mxHud').hidden = !on; if (!on) { $('mxBar').hidden = $('mxTip').hidden = $('mxFreeze').hidden = true; return; }
+    const on = teamMode() && inMatch() && MX.v; $('mxHud').hidden = !on; if (!on) { $('mxBar').hidden = $('mxTip').hidden = $('mxFreeze').hidden = true; return; }
     const v = MX.v, mine = myTeam(), flip = mine === 'def';   // my team always on the left
     const L = flip ? 'def' : 'atk', R = flip ? 'atk' : 'def';
     $('mxSa').className = 'sc ' + L; $('mxSd').className = 'sc ' + R; $('mxAa').style.color = TEAM[L].css; $('mxAd').style.color = TEAM[R].css;
@@ -275,7 +361,7 @@
   }
   function hudTick() {
     if ((hudT += 1) % 6) return;   // ~10x a second is plenty
-    if (!teamMode() || !NET.inMatch || !MX.v) return; const v = MX.v, B = MX.bomb, me = myId();
+    if (!teamMode() || !inMatch() || !MX.v) return; const v = MX.v, B = MX.bomb, me = myId();
     let clock = v.mode === 'demo' ? (v.phase === 'freeze' ? left(MX.freezeEnd) : B && B.s === 'planted' ? null : left(MX.roundEnd)) : v.end ? left(v.end) : null;   // no time limit unless the host set one
     $('mxClk').textContent = clock === null ? (v.mode === 'demo' ? '💣' : '') : fmt(clock);
     const fr = demo() && sNow() < MX.freezeEnd; $('mxFreeze').hidden = !fr; if (fr) $('mxFreeze').textContent = Math.ceil(left(MX.freezeEnd));

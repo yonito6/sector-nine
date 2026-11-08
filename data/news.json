@@ -2,6 +2,76 @@
   "about": "What's New feed shown in the game (modules/news.js). Newest first is not required: the game sorts by date + version. Fields: id (unique), date YYYY-MM-DD, version, title, items[], big (highlighted card), image (optional, relative path like assets/ui/news/x.jpg). Written by the release manager (qa/release) when a big feature goes live.",
   "entries": [
     {
+      "id": "mod-shop",
+      "date": "2026-11-08",
+      "version": "2026.11.08-r10",
+      "title": "The Shop and Nine Shards",
+      "big": true,
+      "items": [
+        "Earn Nine Shards by playing matches and daily missions",
+        "Spend them on soldier skins and gun skins in the new Shop"
+      ]
+    },
+    {
+      "id": "mod-gunskins",
+      "date": "2026-11-08",
+      "version": "2026.11.08-r10",
+      "title": "Gun skins",
+      "big": true,
+      "items": [
+        "New finishes for your weapons",
+        "Pick a skin for each gun"
+      ]
+    },
+    {
+      "id": "mod-firingfx",
+      "date": "2026-11-08",
+      "version": "2026.11.08-r10",
+      "title": "Guns that look like they fire",
+      "big": false,
+      "items": [
+        "Muzzle flashes now differ by gun type: energy, ballistic and alien",
+        "Shells and energy cells fly out of the gun, bounce and fade",
+        "Smoke wisps and a hot-barrel glow when you keep firing",
+        "Sparks and dust that match the surface you hit"
+      ]
+    },
+    {
+      "id": "mod-gfxlook",
+      "date": "2026-11-08",
+      "version": "2026.11.08-r10",
+      "title": "Sector Nine Yard, relit",
+      "big": true,
+      "items": [
+        "Real baked lighting: sky light, bounce light and soft shadows in every corner",
+        "Sharper concrete and metal with real material detail",
+        "Grime, oil stains and rust streaks where they belong",
+        "A cinematic colour grade (Balanced, High and Ultra; Performance stays as fast as before)"
+      ]
+    },
+    {
+      "id": "mod-gfxkit",
+      "date": "2026-11-08",
+      "version": "2026.11.08-r10",
+      "title": "New modelled cover in Sector Nine Yard",
+      "big": false,
+      "items": [
+        "Detailed futuristic walls, barricades, crates and cargo pods"
+      ]
+    },
+    {
+      "id": "mod-yardcover",
+      "date": "2026-11-08",
+      "version": "2026.11.08-r10",
+      "title": "New cover in Sector Nine Yard",
+      "big": false,
+      "items": [
+        "An impounded hover car in the west sniper lane",
+        "A NEXUS security checkpoint north of the fortress",
+        "An anti-grav forklift west of the fortress"
+      ]
+    },
+    {
       "id": "mod-hands",
       "date": "2026-11-07",
       "version": "2026.11.07-r8",

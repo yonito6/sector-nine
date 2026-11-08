@@ -1,0 +1,26 @@
+{
+ "grid": [
+  4,
+  4
+ ],
+ "cell": 512,
+ "cells": [
+  "grime_blob",
+  "oil_stain",
+  "leak_streaks",
+  "base_band",
+  "cracks",
+  "tyre_marks",
+  "sand_drift",
+  "water_marks",
+  "rust_drips",
+  "scuffs",
+  "soot_plume",
+  "corner_grime",
+  "scorch",
+  "impact_scars",
+  "rust_bleed",
+  "slab_crack"
+ ],
+ "blend": "multiply: out = dst * mix(1, rgb, a)"
+}

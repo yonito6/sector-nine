@@ -16,6 +16,7 @@
     exploded: { t: 'Charge detonated', i: 'blast' }, time: { t: 'Time ran out', i: 'clock' }
   };
   const MODE_NAME = { ffa: 'Free for all', tdm: 'Team deathmatch', demo: 'Demolition' };
+  const BOTNOTE = `<div class="cel-note"><i><svg viewBox="0 0 20 20"><path d="M10 1.5L18 6v8l-8 4.5L2 14V6z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 6v5.2M10 13.2v1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></i><span>Bot matches don't earn XP or Shards - play online to rank up.</span></div>`;
   const ST = {
     stats: { osc: 0, buf: 0, moments: {}, skips: 0, errors: 0, events: 0 },
     round: 0, kills: new Map(), lastSec: -1, goRound: -1, busyUntil: 0, clutch: null, planted: false, lastEdge: '',
@@ -25,7 +26,9 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const NETg = () => (typeof NET !== 'undefined' ? NET : null);
   const MX = () => (window.MODE && window.MODE.MX) || null;
-  const myId = () => { const n = NETg(); return n && n.room ? n.room.myId : null; };
+  // offline vs-bots team matches run on a local room (modules/botmodes.js via MODE.local): same events, same moments
+  const LR = () => { try { return (window.MODE && MODE.localRoom && MODE.localRoom()) || null; } catch (e) { return null; } };
+  const myId = () => { const l = LR(); if (l) return l.myId; const n = NETg(); return n && n.room ? n.room.myId : null; };
   const myTeam = () => { try { return window.MODE ? window.MODE.myTeam() : null; } catch (e) { return null; } };
   const sNow = () => Date.now() - ((MX() && MX().off) || 0);
   const gameState = () => { try { return typeof state !== 'undefined' ? state : 'play'; } catch (e) { return 'play'; } };
@@ -675,7 +678,7 @@ html.rfx-cel #hud,html.rfx-cel #mxHud,html.rfx-cel #mxTip,html.rfx-cel #mxBar,ht
       const strip = rest.length ? `<div class="rfx-tbl cel-rest"><div class="rfx-col" style="--c:#ffd27a"><div class="hd">STANDINGS<small>${list.length} PLAYERS</small></div>${head}${rest.map((p, i) => row(p, i + 4)).join('')}</div></div>` : '';
       cls += win ? ' win' : place && place <= 3 ? ' podium' : ' lose soft';
       vars = { '--tc': win ? '#ffd27a' : M ? M.b : '#ece6d8', '--glow': win ? 'rgba(255,196,90,.30)' : 'rgba(150,170,200,.16)' };
-      html = `<div class="cel-k">MATCH COMPLETE · ${modeName}</div><div class="cel-head">${hero}<div class="cel-tt"><h2>${letters(title)}</h2><div class="sub">${sub}</div></div></div><div class="cel-pod">${pod}</div>${o.offline ? `<div class="cel-note"><i><svg viewBox="0 0 20 20"><path d="M10 1.5L18 6v8l-8 4.5L2 14V6z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 6v5.2M10 13.2v1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></i><span>Bot matches don't earn XP or Shards - play online to rank up.</span></div>` : ''}${strip}`;
+      html = `<div class="cel-k">MATCH COMPLETE · ${modeName}</div><div class="cel-head">${hero}<div class="cel-tt"><h2>${letters(title)}</h2><div class="sub">${sub}</div></div></div><div class="cel-pod">${pod}</div>${o.offline ? BOTNOTE : ''}${strip}`;
       // timeline: podium rises 3rd -> 2nd -> 1st, winner fanfare + crowd + confetti, then my medal
       SND.celIntro();
       at(450, () => SND.podium(3)); at(850, () => SND.podium(2));
@@ -696,7 +699,7 @@ html.rfx-cel #hud,html.rfx-cel #mxHud,html.rfx-cel #mxTip,html.rfx-cel #mxBar,ht
       const word = draw ? 'DRAW' : win ? 'VICTORY' : 'DEFEAT';
       cls += draw ? ' soft' : win ? ' win' : ' lose';
       vars = { '--tc': draw ? '#ece6d8' : win ? (wt || {}).css || '#ffd27a' : '#ff5a4a', '--glow': win ? 'rgba(255,190,90,.26)' : draw ? 'rgba(200,200,200,.12)' : 'rgba(150,25,20,.26)', '--wc': (wt || {}).css || '#ffd27a' };
-      html = `<div class="cel-k">MATCH COMPLETE · ${modeName}</div><h2>${letters(word)}</h2>${wt && !draw ? `<div class="cel-band"><b>${wt.name.toUpperCase()} WIN</b></div>` : ''}${sc}${cards ? `<div class="cel-line">${cards}</div>` : ''}${you}<div class="rfx-tbl cel-board">${cols}</div>`;
+      html = `<div class="cel-k">MATCH COMPLETE · ${modeName}</div><h2>${letters(word)}</h2>${wt && !draw ? `<div class="cel-band"><b>${wt.name.toUpperCase()} WIN</b></div>` : ''}${sc}${cards ? `<div class="cel-line">${cards}</div>` : ''}${you}<div class="rfx-tbl cel-board">${cols}</div>${o.offline ? BOTNOTE : ''}`;
       SND.celIntro();
       if (win) { at(380, () => SND.victory()); at(520, () => { SND.cheer(3.2); startConfetti(CEL && CEL.el.querySelector('.rfx-conf'), o.winner, 1); }); }
       else if (draw) at(380, () => SND.win()); else at(320, () => SND.defeat());
@@ -826,7 +829,7 @@ html.rfx-cel #hud,html.rfx-cel #mxHud,html.rfx-cel #mxTip,html.rfx-cel #mxBar,ht
         pendingCel();
         later(delay, () => {
           clear('stage'); ST.busyUntil = 0;
-          const run = () => { try { final({ result: res, winner: w, score: e.score, table: e.table, mode, me: myId(), myTeam: t }); } finally { if (!CEL) dropPending(); } };
+          const run = () => { try { final({ result: res, winner: w, score: LR() && mode === 'tdm' && v && v.tk ? v.tk : e.score /* bot TDM: team kills */, table: e.table, mode, me: myId(), myTeam: t, offline: !!LR() }); } finally { if (!CEL) dropPending(); } };
           const K = window.S9KC;   // the final killcam plays full screen first: hold the podium until it ends (killcam.js endFinal calls K.afterFinal)
           if (K && K.fin) { K.afterFinal = () => { K.afterFinal = null; ST.kcHold = null; run(); }; ST.kcHold = K; } else run();
         });
@@ -843,9 +846,10 @@ html.rfx-cel #hud,html.rfx-cel #mxHud,html.rfx-cel #mxTip,html.rfx-cel #mxBar,ht
     const n = NETg(), M = MX(), v = M && M.v, st = gameState();
     root.classList.toggle('off', !(st === 'play' || st === 'dead' || st === 'matchend' || ST.preview));
     if (n && n.room && !n.room.__rfxH) attach(n.room);
+    { const l = LR(); if (l && !l.__rfxH) attach(l); }
     if (ST.frame % 60 === 1) hookSummaries();
     if (!M || ST.preview) return;
-    const online = n && n.on && n.inMatch && v;
+    const online = (n && n.on && n.inMatch && v) || (LR() && LR().inMatch && v);
     if (!online) { if (ST.clutch) clutchShow(null); if (ST.planted) stopEdge(); return; }
     if (v.mode === 'demo') {
       // freeze countdown (server clock)

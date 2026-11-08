@@ -129,9 +129,9 @@
    "maxReserve": 54,
    "rpm": 80,
    "auto": false,
-   "dmg": 13,
-   "pellets": 10,
-   "spreadP": 0.062,
+   "dmg": 36,
+   "pellets": 8,
+   "spreadP": 0.07,
    "head": 1.5,
    "hip": 0,
    "ads": 0,
@@ -140,9 +140,9 @@
    "reload": 2.4,
    "reloadEmpty": 2.4,
    "falloff": [
-    7,
-    24,
-    0.2
+    10,
+    16,
+    0.07
    ],
    "kick": 2.8,
    "move": 1.02,

@@ -1,0 +1,53 @@
+{
+ "panels": {
+  "grid": [
+   4,
+   2
+  ],
+  "cell_px": [
+   512,
+   1024
+  ],
+  "size_m": [
+   1.5,
+   3.0
+  ],
+  "cells": [
+   "composite_clean",
+   "composite_vent",
+   "composite_coolant",
+   "composite_hatch",
+   "alloy",
+   "hex_armour",
+   "nexus_panel",
+   "crew_graffiti"
+  ],
+  "normal": "surf/skins_n.png",
+  "arm": "surf/skins_arm.png"
+ },
+ "logos": {
+  "image": "surf/logos.png",
+  "grid": [
+   2,
+   4
+  ],
+  "cell_px": [
+   512,
+   256
+  ],
+  "size_m": [
+   2.4,
+   1.2
+  ],
+  "cells": [
+   "nexus",
+   "kaito9",
+   "orbital",
+   "helix",
+   "vanta",
+   "arc",
+   "maglock",
+   "impound"
+  ]
+ }
+}

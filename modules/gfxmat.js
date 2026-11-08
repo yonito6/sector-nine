@@ -301,6 +301,9 @@ void main(){
     return rimProto;
   }
   const RIMS = new Set(), _rv = new T.Vector3(), _rf = new T.Vector3();
+  // rim base colour: cool sky blue by default; a map look can set its own (yard: port glow) via S9GFXM.setRimBase([r,g,b] | null)
+  const RIM0 = new T.Color(.55, .72, 1), RIMB = RIM0.clone();
+  const rimCol = (r, out) => out.copy(RIMB).lerp(r.color || new T.Color(1, 1, 1), .5).multiplyScalar(1.15);
   // The overlay lives at the scene root (NOT inside the bot's model): other modules (skins, killcam, spectate) walk the model looking for
   // "the" skinned mesh, and must never find ours. It copies the body's world matrix right before it is drawn, so it never lags a frame.
   function attachRim(r) {
@@ -309,7 +312,7 @@ void main(){
       let body = null; r.model.traverse(o => { if (o.isSkinnedMesh && !/visor/i.test(o.name) && !body) body = o; });
       if (!body) return;
       const mat = rimMaterial().clone(); mat.name = 'gmRim';
-      mat.uniforms.uCol.value.copy(new T.Color(.55, .72, 1)).lerp(r.color || new T.Color(1, 1, 1), .5).multiplyScalar(1.15);
+      rimCol(r, mat.uniforms.uCol.value);
       const ov = new T.SkinnedMesh(body.geometry, mat); ov.bind(body.skeleton, body.bindMatrix); ov.frustumCulled = false; ov.renderOrder = 3; ov.castShadow = ov.receiveShadow = false; ov.name = 'gmRimMesh'; ov.visible = false;
       ov.matrixAutoUpdate = false; ov.matrixWorldNeedsUpdate = false;
       ov.onBeforeRender = () => { ov.matrixWorld.copy(body.matrixWorld); ov.bindMatrixInverse.copy(ov.matrixWorld).invert(); };
@@ -647,6 +650,7 @@ void main(){
       contact: !!(CS.im && CS.im.visible) };
   };
   M.CS = CS; M.D = D; M.UG = UG; M.KP = KP; M.get = () => ({ smaa, cas, TEX, RIMS });
+  M.setRimBase = c => { if (c) RIMB.setRGB(c[0], c[1], c[2]); else RIMB.copy(RIM0); for (const r of RIMS) if (r.gmRim) rimCol(r, r.gmRim.mat.uniforms.uCol.value); };
   window.S9GFXM = M;
   // graphics.js counts materials it upgraded; ours are upgraded too (its hook runs first inside ours), so count them for its status
   if (window.S9GFX && S9GFX.status) { const _st = S9GFX.status; S9GFX.status = function () { const s = _st.apply(this, arguments); try { s.patched = Math.max(s.patched, M.flagged); } catch (e) {} return s; }; }

@@ -1,0 +1,25 @@
+{
+ "grid": [
+  4,
+  4
+ ],
+ "cell": 512,
+ "cells": [
+  "dash_white",
+  "dash_amber",
+  "hatching",
+  "arrow",
+  "bay_07",
+  "bay_12",
+  "bay_21",
+  "chevrons",
+  "zone_A",
+  "zone_B",
+  "zone_C",
+  "zone_D",
+  "keep_clear",
+  "manifest_slips",
+  "cable_ties",
+  "crossing"
+ ]
+}

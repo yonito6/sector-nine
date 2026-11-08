@@ -1,0 +1,14 @@
+{
+  "note": "Sector Nine game-mode rules. ONE source of truth for the online server (match.js) and the offline vs-bots matches in the browser (the site ships an identical copy as data/modes.json + data/shared/match.js; qa/gate.d/botmodes.js checks they match). Times in seconds. Portable to the Unity/C# port as-is.",
+  "rules": {
+    "ffa": { "label": "Free for all", "teams": false, "minPlayers": 2, "matchTime": 0 },
+    "tdm": { "label": "Team deathmatch", "teams": true, "minPlayers": 2, "matchTime": 0, "respawn": 3 },
+    "demo": {
+      "label": "Demolition", "teams": true, "minPlayers": 4,
+      "roundsToWin": 7, "halftimeAfter": 6,
+      "freeze": 5, "roundTime": 105, "endPause": 6,
+      "bombTime": 40, "plantTime": 3.2, "defuseTime": 7, "defuseKitTime": 4,
+      "siteRadius": 3.2, "useRadius": 1.6, "moveTolerance": 0.6
+    }
+  }
+}

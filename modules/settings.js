@@ -18,7 +18,7 @@ const DEFAULTS = {
       forward: ['KeyW', ''], back: ['KeyS', ''], left: ['KeyA', ''], right: ['KeyD', ''],
       jump: ['Space', ''], crouch: ['KeyC', ''], crouchHold: ['ControlLeft', 'ControlRight'], sprint: ['ShiftLeft', 'ShiftRight'], dash: ['KeyE', ''],
       fire: ['Mouse0', ''], ads: ['Mouse2', ''], reload: ['KeyR', ''], grenade: ['KeyG', ''], overdrive: ['KeyF', ''],
-      primary: ['Digit1', ''], secondary: ['Digit2', ''], knife: ['Digit3', ''], weapon4: ['Digit4', ''], swap: ['KeyQ', ''],
+      primary: ['Digit1', ''], secondary: ['Digit2', ''], knife: ['Digit3', ''], weapon4: ['Digit4', ''], swap: ['KeyQ', ''], dropBomb: ['KeyB', ''],
       interact: ['KeyX', ''], scoreboard: ['Tab', ''], pause: ['Escape', ''], ptt: ['KeyV', '']
     }
   },
@@ -58,13 +58,13 @@ const ACTIONS = [
   ['Movement', 'crouchHold', 'Crouch (hold)', 'ControlLeft'], ['Movement', 'dash', 'Dash · Use / Plant / Defuse', 'KeyE'],
   ['Combat', 'fire', 'Fire', 'Mouse0'], ['Combat', 'ads', 'Aim down sights', 'Mouse2'], ['Combat', 'reload', 'Reload', 'KeyR'], ['Combat', 'grenade', 'Plasma grenade (hold = throw far)', 'KeyG'], ['Combat', 'overdrive', 'Overdrive', 'KeyF'],
   ['Weapons', 'primary', 'Weapon 1 (primary)', 'Digit1'], ['Weapons', 'secondary', 'Weapon 2 (secondary)', 'Digit2'], ['Weapons', 'knife', 'Weapon 3 (knife)', 'Digit3'],
-  ['Weapons', 'weapon4', 'Weapon 4 (reserved, no 4th slot yet)', 'Digit4'], ['Weapons', 'swap', 'Swap to last gun', 'KeyQ'],
+  ['Weapons', 'weapon4', 'Weapon 4 (the charge, Demolition attackers)', 'Digit4'], ['Weapons', 'swap', 'Swap to last gun', 'KeyQ'], ['Weapons', 'dropBomb', 'Drop the charge (Demolition)', 'KeyB'],
   ['Interface', 'interact', 'Pick up weapon', 'KeyX'], ['Interface', 'scoreboard', 'Scoreboard (hold)', 'Tab'],
   ['Interface', 'pause', 'Pause menu (Esc always works)', 'Escape'], ['Interface', 'ptt', 'Push to talk (voice chat coming soon)', 'KeyV']
 ].map(([group, id, label, canon]) => ({ group, id, label, canon }));
 const ACT = Object.fromEntries(ACTIONS.map(a => [a.id, a]));
 // every code index.html reads (so a key that was re-bound AWAY from an action stops doing that action)
-const GAME_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyC', 'ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight', 'KeyE', 'KeyR', 'Digit1', 'Digit2', 'Digit3', 'KeyQ', 'KeyG', 'KeyF', 'KeyX', 'Tab', 'Mouse0', 'Mouse2']);
+const GAME_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyC', 'ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight', 'KeyE', 'KeyR', 'Digit1', 'Digit2', 'Digit3', 'KeyQ', 'KeyG', 'KeyF', 'KeyX', 'Digit4', 'KeyB', 'Tab', 'Mouse0', 'Mouse2']);
 
 /* ============ helpers ============ */
 const clone = o => JSON.parse(JSON.stringify(o));

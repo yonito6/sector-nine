@@ -516,7 +516,8 @@
       // splash: a little damage to anyone standing right next to where it landed (never the shooter)
       if (!pr.visual) { const S = D.splash;
         for (const e of entities()) { if (e === pr.owner || !entAlive(e) || pr.hit.has(e)) continue; const c = entChest(e, _q); const pe = entPos(e); const dd = Math.min(c.distanceTo(p), Math.hypot(pe.x - p.x, Math.max(0, pe.y - p.y), pe.z - p.z)); if (dd > S.r) continue;
-          const dmg = S.dmg * (1 - dd / S.r); queueDamage(e, pr.owner, dmg, false, 'body', c, _dv.copy(c).sub(p).normalize(), .3); PG.stats.splash++; sh.splash = (sh.splash || 0) + dmg; } }
+          const vis = typeof blastVis === 'function' ? blastVis(p, e) : 1; if (vis <= 0) continue;   // goo does not reach round a wall
+          const dmg = S.dmg * (1 - dd / S.r) * vis; queueDamage(e, pr.owner, dmg, false, 'body', c, _dv.copy(c).sub(p).normalize(), .3); PG.stats.splash++; sh.splash = (sh.splash || 0) + dmg; } }
     }
   }
   // one pellet's flight this frame: bodies by their hit boxes (plus the blob's own radius), the world by its collision boxes

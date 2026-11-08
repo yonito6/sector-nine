@@ -110,6 +110,7 @@
       MISSIONS = null;
       if (signedIn()) { const m = await req('GET', '/api/me/missions'); if (m.s === 200 && Array.isArray(m.j.list)) MISSIONS = m.j; }
       updateButtons();
+      try { prewarmThumbs(); } catch (e) {}
       return SHOP;
     })();
     try { return await loading; } finally { loading = null; }
@@ -160,7 +161,7 @@
 .s9sh-grid.big .s9sh-art{aspect-ratio:1/1}
 .s9sh-art svg.sol{height:88%;width:auto;filter:drop-shadow(0 6px 10px rgba(0,0,0,.6))}
 .s9sh-th{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .25s;pointer-events:none}
-.s9sh-th.on{opacity:1}.s9sh-art:has(.s9sh-th.on) > svg.sol,.s9sh-art:has(.s9sh-th.on) > .s9sh-gun{visibility:hidden}
+.s9sh-th.on{opacity:1}.s9sh-art > svg.sol,.s9sh-art > .s9sh-gun{transition:opacity .25s}.s9sh-art:has(.s9sh-th.on) > svg.sol,.s9sh-art:has(.s9sh-th.on) > .s9sh-gun{opacity:0}
 .s9sh-gun{position:relative;width:88%;aspect-ratio:2/1}
 .s9sh-gun img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 6px 8px rgba(0,0,0,.55))}
 .s9sh-gun i{position:absolute;inset:0;-webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
@@ -350,33 +351,53 @@ button.s9sh-open img{width:15px;height:15px;vertical-align:-3px;margin-left:8px}
   function thumbTag(it) {
     if (!canThumb(it)) return '';
     const k = tKey(it), u = THUMB.get(k);
-    return u && u !== 'fail' ? `<img class="s9sh-th on" src="${u}" alt="">` : u === 'fail' ? '' : `<img class="s9sh-th" data-thumb="${esc(k)}" data-iid="${esc(safeId(it.id))}" alt="">`;
+    return u && u !== 'fail' ? `<img class="s9sh-th on" src="${u}" decoding="sync" alt="">` : u === 'fail' ? '' : `<img class="s9sh-th" data-thumb="${esc(k)}" data-iid="${esc(safeId(it.id))}" alt="">`;
   }
-  let tQueue = [], tBusy = false, tObs = null;
+  // the finishes you have equipped are remembered between visits, so their cards paint the finish on the very first frame
+  const TH_LS = 's9-shop-thumbs';
+  try { const m = JSON.parse(localStorage.getItem(TH_LS) || 'null'); if (m && typeof m === 'object') for (const k of Object.keys(m)) if (/^[A-Za-z0-9_:-]{1,80}$/.test(k) && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(m[k])) THUMB.set(k, m[k]); } catch (e) {}
+  function saveThumbs() {
+    try { const m = {}; for (const it of (SHOP && SHOP.items) || []) if (it.equipped && !it.default && canThumb(it)) { const k = tKey(it), u = THUMB.get(k); if (u && u !== 'fail') m[k] = u; }
+      localStorage.setItem(TH_LS, JSON.stringify(m)); } catch (e) {}
+  }
+  let tQueue = [], tBusy = false, tObs = null, tPre = [];
+  // draw every finish thumbnail in the background as soon as the shop list is known (owned + equipped first), so cards open with the finish already drawn
+  function prewarmThumbs() {
+    const its = ((SHOP && SHOP.items) || []).filter(it => canThumb(it) && !THUMB.has(tKey(it)));
+    its.sort((a, b) => (b.equipped ? 2 : 0) + (b.owned ? 1 : 0) - (a.equipped ? 2 : 0) - (a.owned ? 1 : 0));
+    tPre = its.map(it => it.id); setTimeout(pumpThumbs, 300);
+  }
   function watchThumbs(scope) {
     if (!('IntersectionObserver' in window)) return;
     if (!tObs) tObs = new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting) { tObs.unobserve(e.target); tQueue.push(e.target); } pumpThumbs(); }, { rootMargin: '200px' });
     scope.querySelectorAll('img.s9sh-th[data-thumb]').forEach(im => tObs.observe(im));
   }
+  async function drawThumb(k, it) {
+    if (THUMB.has(k)) return;
+    const cv = document.createElement('canvas');
+    try {
+      const job = it.type === 'soldier' ? S9Skins.preview(cv, { skin: it.skinId }, { w: 300, h: 300, yaw: -.45 })
+        : S9GunSkins.preview(cv, it.gun === 'all' ? 'carbine' : it.gun, it.skinId, { w: 400, h: 225, bg: false, view: 'threeQ' });
+      const r = await Promise.race([Promise.resolve(job).catch(() => null), sleep(8000).then(() => null)]);
+      THUMB.set(k, r && cv.width ? cv.toDataURL('image/png') : 'fail');
+    } catch (e) { THUMB.set(k, 'fail'); }
+  }
+  function showThumb(k) {
+    const u = THUMB.get(k);
+    document.querySelectorAll('img.s9sh-th[data-thumb="' + k + '"]').forEach(x => { if (u !== 'fail') { x.src = u; x.classList.add('on'); } x.removeAttribute('data-thumb'); });
+  }
   async function pumpThumbs() {
     if (tBusy) return; tBusy = true;
     try {
-      while (tQueue.length) {
-        const im = tQueue.shift(); if (!im.isConnected) continue;
-        const k = im.dataset.thumb, it = itemById(im.dataset.iid); if (!k || !it) continue;
-        if (!THUMB.has(k)) {
-          const cv = document.createElement('canvas');
-          try {
-            const job = it.type === 'soldier' ? S9Skins.preview(cv, { skin: it.skinId }, { w: 300, h: 300, yaw: -.45 })
-              : S9GunSkins.preview(cv, it.gun === 'all' ? 'carbine' : it.gun, it.skinId, { w: 400, h: 225, bg: false, view: 'threeQ' });
-            const r = await Promise.race([Promise.resolve(job).catch(() => null), sleep(8000).then(() => null)]);
-            THUMB.set(k, r && cv.width ? cv.toDataURL('image/png') : 'fail');
-          } catch (e) { THUMB.set(k, 'fail'); }
-        }
-        const u = THUMB.get(k);
-        document.querySelectorAll('img.s9sh-th[data-thumb="' + k + '"]').forEach(x => { if (u !== 'fail') { x.src = u; x.classList.add('on'); } x.removeAttribute('data-thumb'); });
+      while (tQueue.length || tPre.length) {
+        if (tQueue.length) {   // cards on screen first
+          const im = tQueue.shift(); if (!im.isConnected) continue;
+          const k = im.dataset.thumb, it = itemById(im.dataset.iid); if (!k || !it) continue;
+          await drawThumb(k, it); showThumb(k);
+        } else { if (window.__s9 && window.__s9.state === 'play') break; const it = itemById(tPre.shift()); if (it) { const k = tKey(it); await drawThumb(k, it); showThumb(k); } }
         await sleep(0);
       }
+      saveThumbs();
     } finally { tBusy = false; }
   }
 

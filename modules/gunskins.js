@@ -59,7 +59,7 @@ function pullAccount() {
   try { const A = window.S9Account; const p = A && (typeof A.getProfile === 'function' ? A.getProfile() : A.profile); const g = p && p.look && p.look.gunSkins;
     if (!g || typeof g !== 'object' || typeof g.then === 'function') return;
     let ch = false; for (const [w, id] of Object.entries(g)) if (BYID.has(id) && fits(BYID.get(id), w) && state.eq[w] !== id) { state.eq[w] = id; ch = true; }
-    if (ch) { try { localStorage.setItem(LS_KEY, JSON.stringify({ v: 1, eq: state.eq })); } catch (e) {} refreshViewmodels(); }
+    if (ch) { try { localStorage.setItem(LS_KEY, JSON.stringify({ v: 1, eq: state.eq })); } catch (e) {} refreshViewmodels(); decorateArsenal(); }
   } catch (e) {}
 }
 const get = w => state.eq[w] && skinOf(state.eq[w]) && fits(skinOf(state.eq[w]), w) ? state.eq[w] : 'factory';
@@ -674,6 +674,7 @@ let uiCss = false;
 function css() {
   if (uiCss) return; uiCss = true;
   const st = document.createElement('style'); st.textContent = `
+.wsil img.gsWait{opacity:0}.wsil img{transition:opacity .25s}
 .gsChip{display:flex;align-items:center;gap:6px;font:11px var(--mono,monospace);color:#cfd6df;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);padding:5px 8px;cursor:pointer;text-align:left;width:100%;box-sizing:border-box}
 .gsChip:hover,.gsChip:focus-visible{border-color:rgba(255,154,60,.7);outline:none}.gsChip i{width:8px;height:8px;border-radius:50%;flex:none}.gsChip b{font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.gsChip span{margin-left:auto;opacity:.6;flex:none}
 #gsPick{position:fixed;inset:0;z-index:60;background:rgba(6,7,10,.86);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -688,13 +689,55 @@ function css() {
 @media (max-width:520px){#gsPick{padding:0}#gsPick .gsBox{max-height:100vh;height:100%}#gsPick .gsGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px}}`;
   document.head.appendChild(st);
 }
-function chipHTML(w) { const s = skinOf(get(w)) || FACTORY; return `<i style="background:${RARITY[s.rarity].col}"></i><b>${escH(s.name)}</b><span>Finish &#9656;</span>`; }
+function chipHTML(w) { const s = skinOf(equippedId(w)) || FACTORY; return `<i style="background:${RARITY[s.rarity].col}"></i><b>${escH(s.name)}</b><span>Finish &#9656;</span>`; }
+// the finish that is really on your gun (same rule as the viewmodel and the shop: owned or factory)
+const equippedId = w => owns(skinOf(get(w)), w) ? get(w) : 'factory';
+// Arsenal card pictures: the static assets/ui/w_<gun>.png is the factory look. With another finish equipped the card shows a render of
+// that finish (drawn once per gun+finish by preview(), cached as a data URL). A failed or blank render keeps the factory picture.
+const ARS_TH = new Map();   // 'gun:finish' -> dataURL | 'fail'
+const ARS_LS = 'sector9-arsthumbs';   // the equipped finishes' pictures are kept, so the Arsenal paints them on the very first frame
+try { const m = JSON.parse(localStorage.getItem(ARS_LS) || 'null'); if (m && typeof m === 'object') for (const k of Object.keys(m)) if (/^[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{1,32}$/.test(k) && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(m[k])) ARS_TH.set(k, m[k]); } catch (e) {}
+function saveArs() { try { const m = {}; for (const w of WEAPON_IDS()) { const k = w + ':' + equippedId(w), u = ARS_TH.get(k); if (u && u !== 'fail' && !k.endsWith(':factory')) m[k] = u; } localStorage.setItem(ARS_LS, JSON.stringify(m)); } catch (e) {} }
+let arsQ = [], arsBusy = false;
+function blankShot(cv) {   // true when the render is empty or black (never show a black gun)
+  try { const x = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let n = 0, lum = 0;
+    for (let i = 0; i < x.length; i += 16) if (x[i + 3] > 40) { n++; lum += x[i] + x[i + 1] + x[i + 2]; }
+    return n < 200 || lum / n / 3 < 14; } catch (e) { return true; }
+}
+function cardThumb(card) {
+  const w = card.dataset.id, img = card.querySelector('.wsil img'); if (!img) return;
+  if (!img.dataset.gsFactory) img.dataset.gsFactory = img.getAttribute('src') || '';
+  const id = equippedId(w), k = w + ':' + id;
+  card.dataset.gsSkin = id;
+  if (id === 'factory' || ARS_TH.get(k) === 'fail') { img.classList.remove('gsWait'); if (img.getAttribute('src') !== img.dataset.gsFactory) img.src = img.dataset.gsFactory; img.dataset.gsShown = 'factory'; return; }
+  const u = ARS_TH.get(k);
+  if (u) { if (img.getAttribute('src') !== u) img.src = u; img.dataset.gsShown = id; img.classList.remove('gsWait'); return; }
+  img.dataset.gsShown = 'wait'; img.classList.add('gsWait'); if (!arsQ.includes(k)) arsQ.push(k); pumpArs();   // never flash the default look: hidden until the finish picture is ready
+}
+async function pumpArs() {
+  if (arsBusy) return; arsBusy = true;
+  try {
+    while (arsQ.length) {
+      const k = arsQ.shift(); if (ARS_TH.has(k)) continue; const [w, id] = k.split(':');
+      const cv = document.createElement('canvas');
+      try {
+        await Promise.race([preview(cv, w, id, { view: 'threeQ', w: 512, h: 256, bg: false, t: 1.5 }), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 8000))]);
+        ARS_TH.set(k, blankShot(cv) ? 'fail' : cv.toDataURL('image/png'));
+      } catch (e) { ARS_TH.set(k, 'fail'); }
+      for (const card of document.querySelectorAll('#arsGrid .wcard[data-id="' + w + '"]')) cardThumb(card);
+      saveArs();
+      await new Promise(r => setTimeout(r, 0));
+    }
+  } finally { arsBusy = false; }
+}
 function decorateArsenal() {
   const grid = document.getElementById('arsGrid'); if (!grid || !BYID.size) return; css();
   for (const card of grid.querySelectorAll('.wcard[data-id]')) {
-    const w = card.dataset.id; if (!w || w === 'knife' || card.querySelector('.gsChip')) continue;
-    const c = document.createElement('div'); c.className = 'gsChip'; c.setAttribute('role', 'button'); c.tabIndex = 0; c.dataset.gsw = w; c.innerHTML = chipHTML(w);
-    c.title = 'Change finish'; card.appendChild(c);
+    const w = card.dataset.id; if (!w || w === 'knife') continue;
+    let c = card.querySelector('.gsChip');
+    if (!c) { c = document.createElement('div'); c.className = 'gsChip'; c.setAttribute('role', 'button'); c.tabIndex = 0; c.dataset.gsw = w; c.title = 'Change finish'; card.appendChild(c); }
+    const html = chipHTML(w); if (c.innerHTML !== html) c.innerHTML = html;
+    cardThumb(card);
   }
 }
 document.addEventListener('click', e => { const c = e.target.closest && e.target.closest('.gsChip'); if (c) { e.stopPropagation(); e.preventDefault(); openPicker(c.dataset.gsw); } }, true);
@@ -719,7 +762,7 @@ function openPicker(w) {
     applyToViewmodel(w, b.dataset.sk);
     for (const x of el.querySelectorAll('.gsCard')) { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', on); }
     try { const s = gv('sfx'); if (s && s.equip) s.equip(); } catch (x) {}
-    const chip = document.querySelector(`.gsChip[data-gsw="${w}"]`); if (chip) chip.innerHTML = chipHTML(w);
+    decorateArsenal();
   });
   el.addEventListener('mouseover', e => { const b = e.target.closest && e.target.closest('.gsCard'); if (b) show(b.dataset.sk); });
   el.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); closePicker(); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('gsCard')) { e.preventDefault(); e.target.click(); } }, true);
@@ -729,7 +772,7 @@ function openPicker(w) {
 }
 function closePicker(silent) { if (pickOpen) { const w = pickOpen; pickOpen = null; w.remove(); if (!silent) { const c = document.querySelector('.gsChip'); if (c) c.focus(); } } }
 // the shop equips through the server; mirror it locally right away
-addEventListener('s9:look', e => { const g = e.detail && e.detail.gunSkins; if (!g || typeof g !== 'object') return; for (const [w, id] of Object.entries(g)) if (ID_RE.test(w) && BYID.has(id) && fits(BYID.get(id), w)) { state.eq[w] = id; const vm = vmRoot(w); if (vm) apply(w, id, vm); } try { localStorage.setItem(LS_KEY, JSON.stringify({ v: 1, eq: state.eq })); } catch (x) {} });
+addEventListener('s9:look', e => { const g = e.detail && e.detail.gunSkins; if (!g || typeof g !== 'object') return; for (const [w, id] of Object.entries(g)) if (ID_RE.test(w) && BYID.has(id) && fits(BYID.get(id), w)) { state.eq[w] = id; const vm = vmRoot(w); if (vm) apply(w, id, vm); } try { localStorage.setItem(LS_KEY, JSON.stringify({ v: 1, eq: state.eq })); } catch (x) {} decorateArsenal(); });
 
 /* ======================================================================================= boot */
 let booted = false;
@@ -739,6 +782,7 @@ function onReady() {
     if (!booted) { booted = true; pullAccount(); refreshViewmodels(); decorateArsenal(); for (const r of gv('robots') || []) if (!r.remote && r.gunInner && !r.gunInner.userData.gsSkin) onBot(r); warm(); requestAnimationFrame(tick);
       // prefetch the textures + accents of the finishes you have equipped
       for (const w of Object.keys(state.eq)) { const s = skinOf(state.eq[w]); if (s && s !== FACTORY) { texReady(s); if (s.look && s.look.fx) loadAccents(w); } }
+      setTimeout(() => { try { css(); for (const w of WEAPON_IDS()) { const id = equippedId(w), k = w + ':' + id; if (id !== 'factory' && !ARS_TH.has(k) && !arsQ.includes(k)) arsQ.push(k); } if (gv('state') !== 'play') pumpArs(); } catch (e) {} }, 1500);
       setInterval(() => { pullAccount(); refreshViewmodels(); decorateArsenal(); }, 5000);
       addEventListener('s9modules', () => { refreshViewmodels(); decorateArsenal(); warm(); }); }
   };
@@ -752,7 +796,7 @@ const API = window.S9GunSkins = {
   apply, applyToViewmodel, preview, applyGunSkin: (w, id, target) => target ? apply(w, id, target) : applyToViewmodel(w, id),
   alias(twin, src) { if (twin && src && twin !== src) ALIAS.set(twin, ALIAS.get(src) || src); },
   isAnimated, setBotMode(m) { botMode = m === 'factory' ? 'factory' : 'random'; },
-  _onBot: onBot, _refresh: refreshViewmodels, _arsenal: decorateArsenal, openPicker, closePicker, _onRemote: onRemote, _send: sendPresence, _onDeathcam: onDeathcam, _onDrop: onDrop, _warm: warm,
+  _onBot: onBot, _refresh: refreshViewmodels, _arsenal: decorateArsenal, _equippedId: equippedId, openPicker, closePicker, _onRemote: onRemote, _send: sendPresence, _onDeathcam: onDeathcam, _onDrop: onDrop, _warm: warm,
   _state: state, _mats: MATS, _acc: ACC, _time: U.time, _loadAccents: loadAccents, _frameOf: frameOf, _roleOf: (o, w) => (roleInit(), roleOf(o, w)), _texReady: id => texReady(skinOf(id))
 };
 })();

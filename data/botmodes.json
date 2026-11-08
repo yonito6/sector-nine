@@ -1,0 +1,37 @@
+{
+  "note": "Offline vs-bots matches (modules/botmodes.js): match setup, difficulty presets and bot team-play tuning. Rules of the modes themselves are in data/modes.json (shared with the server). Distances in metres, times in seconds. Portable to the Unity port as-is.",
+  "match": {
+    "modes": ["ffa", "tdm", "demo"],
+    "modesNote": "modes offered in Play vs bots. Add \"demo\" to switch Demolition vs bots on (built, still being tuned).",
+    "teamSizes": [3, 4, 5],
+    "defaultTeamSize": 4,
+    "ffaBots": 7,
+    "tdmKillsPerPlayer": 10,
+    "tdmTimeLimit": 600,
+    "weapons": ["carbine", "wasp", "breacher", "sniper", "carbine"]
+  },
+  "difficulty": {
+    "easy":   { "label": "Easy",   "line": "Slow to react, miss a lot.", "skill": [0.32, 0.5],  "rotateDelay": 7,   "retakeWait": 2.5, "nades": 0.2, "hunt": 3, "escortLead": 9, "cancelActOnSight": true },
+    "normal": { "label": "Normal", "line": "Solid aim, play the objective.", "skill": [0.55, 0.85], "rotateDelay": 3.5, "retakeWait": 1.2, "nades": 0.6, "hunt": 5, "escortLead": 6, "cancelActOnSight": true },
+    "hard":   { "label": "Hard",   "line": "Fast, accurate, play as a team.", "skill": [0.88, 1.08], "rotateDelay": 1.5, "retakeWait": 0.4, "nades": 1, "hunt": 7, "escortLead": 4, "cancelActOnSight": false }
+  },
+  "tdm": {
+    "squadEvery": [8, 14],
+    "squadSpread": [2.5, 5.5],
+    "regroupDist": 16,
+    "intelShareDist": 32,
+    "intelLife": 6
+  },
+  "demo": {
+    "siteSwitchAfter": 0.45,
+    "siteSwitchSeen": 2,
+    "postPlantRing": [5, 10],
+    "holdRing": [3, 7],
+    "seenNearSite": 18,
+    "plantInside": 0.9,
+    "defuseReach": 1.1,
+    "pickReach": 1.4,
+    "lateDefuseMargin": 1.5,
+    "huntNearGoal": 14
+  }
+}
