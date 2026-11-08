@@ -66,7 +66,18 @@
     "random": { "vol": [0.88, 1.08], "rate": [0.96, 1.04] },
     "foePanner": { "model": "HRTF", "distance": "inverse", "ref": 3, "rolloff": 1.25, "max": 120, "verb": 0.14, "maxDistance": 55, "budgetPerHalfSecond": 6 },
     "playerVerb": 0.08,
-    "calibration": 1.0
+    "calibration": 1.0,
+    "clarity": {
+      "about": "Enemy footstep clarity mix (Cryzen / CS2 / Valorant conventions), OFF until the owner picks it on the listening page (s9-gunsfx tools/review/steps.html, same numbers in steps/clarity.json). foe: gain x, high-pass Hz, low-shelf Hz/dB, presence peak Hz/dB/Q; player: your own steps gain x; panner: distance falloff; air: high-cut from lpNear at 'near' m to lpFar at 'far' m; verb: reverb send near/far; duck: an enemy step within 'range' m dips ambience/your steps (dB) for 'release' s; occlusion: behind a wall = low-pass Hz + dB.",
+      "on": false,
+      "foe": { "gain": 1.3, "hp": 170, "lowShelfHz": 260, "lowShelfDb": -4, "presenceHz": 3400, "presenceDb": 5, "presenceQ": 0.9 },
+      "player": { "gain": 0.6 },
+      "panner": { "ref": 4, "rolloff": 0.85 },
+      "air": { "near": 8, "far": 40, "lpNear": 16000, "lpFar": 4500 },
+      "verb": { "near": 0.04, "far": 0.12, "farAt": 30 },
+      "duck": { "range": 22, "ambDb": -6, "meDb": -5, "attack": 0.02, "release": 0.4 },
+      "occlusion": { "lp": 3000, "db": -3 }
+    }
   },
   "render": {
     "about": "how each surface's sound is built: layers start at 'at' seconds; thump = falling sine (heel weight), noise = filtered noise burst, ring = decaying partials [Hz, amp, decay s], grains = many tiny bursts (crunch/rustle), chirps = little sine sweeps (bubbles/squeaks). A step = heel strike + toe roll; a landing = two feet, heavier and longer. 4 step + 3 landing variations per surface.",

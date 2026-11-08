@@ -43,7 +43,7 @@ const DEF = {
     cover: '#aaa395', wall: '#e6dfcf', wallEdge: '#06070a', edgePx: 1.6,
     hazards: { lava: 'rgba(255,110,40,.75)', acid: 'rgba(110,255,90,.6)', ice: 'rgba(120,200,255,.55)', water: 'rgba(80,160,255,.55)' }
   },
-  bigMap: { key: 'KeyM', fill: .86, keyChoices: ['KeyM', 'KeyN', 'KeyB', 'KeyK', 'KeyL', 'KeyJ', 'KeyH', 'KeyU', 'KeyI', 'KeyO', 'KeyP', 'KeyZ', 'KeyT', 'KeyY', 'CapsLock', 'Backquote', 'Comma', 'Period'] },
+  bigMap: { key: 'KeyM', fill: .86, keyChoices: ['KeyM', 'KeyN', 'KeyB', 'KeyK', 'KeyL', 'KeyJ', 'KeyH', 'KeyU', 'KeyI', 'KeyO', 'KeyP', 'KeyT', 'KeyY', 'CapsLock', 'Backquote', 'Comma', 'Period'] },
   budgets: { tickMsAvg: .35, tickMsP99: 1.5, drawOpsBase: 24, drawOpsPerEntity: 4, raysPerSecond: 40, cacheBuildsPerMap: 1 }
 };
 const clone = o => JSON.parse(JSON.stringify(o));

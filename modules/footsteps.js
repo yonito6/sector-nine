@@ -252,19 +252,41 @@
   function toBuf(ctx, data, sr) { const b = ctx.createBuffer(1, data.length, sr); b.copyToChannel ? b.copyToChannel(data, 0) : b.getChannelData(0).set(data); return b; }
   function warm(ctx) { if (!warmQ) warmQ = NAMES.slice(); const t = performance.now(); while (warmQ.length && performance.now() - t < 4) { const n = warmQ.shift(); try { bufferSet(ctx, n); } catch (e) { FS.errors++; FS.lastError = String(e); } } }
 
+  /* ---------- enemy footstep CLARITY mix (Cryzen / CS2 / Valorant conventions), OFF by default until the owner picks it ----------
+     data/surfaces.json mix.clarity (same numbers as the listening page tools/review/steps/clarity.json): enemy steps louder than
+     yours, a high-pass + low-shelf (no boom) and a presence peak (the heel click your ear places), softer distance falloff + a
+     distance high-cut (far sounds far, still audible), little reverb on close steps, ambience + your steps duck briefly when an
+     enemy steps near, occluded steps muffled but readable. on = mix.clarity.on, or localStorage 's9-steps-clarity' '1'/'0' (A/B). */
+  const CLD = { on: false, foe: { gain: 1.3, hp: 170, lowShelfHz: 260, lowShelfDb: -4, presenceHz: 3400, presenceDb: 5, presenceQ: .9 }, player: { gain: .6 }, panner: { ref: 4, rolloff: .85 },
+    air: { near: 8, far: 40, lpNear: 16000, lpFar: 4500 }, verb: { near: .04, far: .12, farAt: 30 }, duck: { range: 22, ambDb: -6, meDb: -5, attack: .02, release: .4 }, occlusion: { lp: 3000, db: -3 } };
+  const CLX = () => (D && D.mix && D.mix.clarity) || CLD;
+  function clarityOn() { let o = null; try { o = localStorage.getItem('s9-steps-clarity'); } catch (e) {} return o === '1' ? true : o === '0' ? false : CLX().on === true; }
+  FS.clarityOn = clarityOn; FS.clarityDefaults = CLD;
+  FS.setClarity = v => { try { if (v === null) localStorage.removeItem('s9-steps-clarity'); else localStorage.setItem('s9-steps-clarity', v ? '1' : '0'); } catch (e) {} FS.dropChains(); return clarityOn(); };
+  const dBg = x => Math.pow(10, x / 20), clamp01 = x => Math.max(0, Math.min(1, x));
+
   /* ---------- voice chains: created once, reused (only a buffer source per step is new) ---------- */
   let CH = null, baseDry = null;
+  FS.dropChains = () => { if (!CH) return; try { CH.meOut.disconnect(); CH.foeOut.disconnect(); } catch (e) {} CH = null; };
   function chains(AU) {
-    if (CH && CH.ctx === AU.ctx) return CH;
+    const cl = clarityOn();
+    if (CH && CH.ctx === AU.ctx && CH.cl === cl) return CH;
+    if (CH && CH.ctx === AU.ctx) FS.dropChains();
     // your steps go to the game's step bus; enemy steps to whatever bus the game routes enemy steps to (the settings
     // add-on swaps AU.dry for its "enemy footsteps boost" bus during sfx.foeStep). Chains are made from the frame loop,
     // never inside a wrapped call, so 'base' is the real step bus.
     const c = AU.ctx, mx = D.mix, fp = mx.foePanner, base = baseDry || AU.dry, meOut = c.createGain(), foeOut = c.createGain(); meOut.connect(base); foeOut.connect(base);
-    CH = { ctx: c, me: [], foe: [], next: 0, nextF: 0, base, meOut, foeOut, foeDest: base };
-    const mk = (pos) => { const g = c.createGain(), lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 12000; lp.Q.value = .5; g.connect(lp); let out = lp, pan = null;
-      if (pos) { pan = c.createPanner(); pan.panningModel = fp.model || 'HRTF'; pan.distanceModel = fp.distance || 'inverse'; pan.refDistance = fp.ref; pan.rolloffFactor = fp.rolloff; pan.maxDistance = fp.max; lp.connect(pan); out = pan; }
+    CH = { ctx: c, me: [], foe: [], next: 0, nextF: 0, base, meOut, foeOut, foeDest: base, cl };
+    const X = CLX();
+    const mk = (pos) => { const g = c.createGain(), lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 12000; lp.Q.value = .5; let pan = null, head = g;
+      if (pos && cl) {   // clarity: g -> high-pass -> low-shelf -> presence peak -> low-pass (distance / occlusion) -> HRTF
+        const hp = c.createBiquadFilter(), ls = c.createBiquadFilter(), pk = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = X.foe.hp; hp.Q.value = .7;
+        ls.type = 'lowshelf'; ls.frequency.value = X.foe.lowShelfHz; ls.gain.value = X.foe.lowShelfDb; pk.type = 'peaking'; pk.frequency.value = X.foe.presenceHz; pk.gain.value = X.foe.presenceDb; pk.Q.value = X.foe.presenceQ;
+        g.connect(hp); hp.connect(ls); ls.connect(pk); head = pk; }
+      head.connect(lp); let out = lp;
+      if (pos) { pan = c.createPanner(); pan.panningModel = fp.model || 'HRTF'; pan.distanceModel = fp.distance || 'inverse'; pan.refDistance = cl ? X.panner.ref : fp.ref; pan.rolloffFactor = cl ? X.panner.rolloff : fp.rolloff; pan.maxDistance = fp.max; lp.connect(pan); out = pan; }
       out.connect(pos ? foeOut : meOut); const vs = c.createGain(); vs.gain.value = pos ? fp.verb : mx.playerVerb; out.connect(vs); if (AU.verb) vs.connect(AU.verb);
-      return { g, lp, pan, busy: 0 }; };
+      return { g, lp, pan, vs, busy: 0 }; };
     for (let i = 0; i < 4; i++) CH.me.push(mk(false));
     for (let i = 0; i < 10; i++) CH.foe.push(mk(true));
     return CH;
@@ -297,14 +319,30 @@
     const m = mx[who === 'foe' ? 'foe' : 'player'], crouch = mode === 'crouch', base = land ? m.land : mode === 'sprint' ? m.sprint : m.walk;
     const vol = base * (crouch ? m.crouch : 1) * set.gain * (mx.calibration || 1) * R01(mx.random.vol[0], mx.random.vol[1]), rate = (mx.rate[mode] || 1) * R01(mx.random.rate[0], mx.random.rate[1]);
     const buf = list[v], s = c.createBufferSource(); s.buffer = buf; s.playbackRate.value = rate; s.connect(ch.g);
-    ch.g.gain.setValueAtTime(vol, now); ch.lp.frequency.setValueAtTime(mx.lp[mode] || 12000, now);
+    let gv = vol, lpf = mx.lp[mode] || 12000;
+    if (C.cl) { const X = CLX();
+      if (who === 'foe') { const cam = s9.camera.position, dist = cam.distanceTo(pos);
+        let occl = false; if (!FS.clarityTest || FS.clarityTest.occl !== false) try { const los = s9.lineOfSight || (typeof lineOfSight === 'function' ? lineOfSight : null); if (los && dist > 1.5) { _ce.x = pos.x; _ce.y = pos.y + .35; _ce.z = pos.z; occl = !los(cam, _ce); } } catch (e) {}
+        gv *= X.foe.gain * (occl ? dBg(X.occlusion.db) : 1);
+        lpf = Math.min(lpf * 1.6, Math.exp(Math.log(X.air.lpNear) + (Math.log(X.air.lpFar) - Math.log(X.air.lpNear)) * clamp01((dist - X.air.near) / (X.air.far - X.air.near)))); if (occl) lpf = Math.min(lpf, X.occlusion.lp);
+        ch.vs.gain.setValueAtTime(X.verb.near + (X.verb.far - X.verb.near) * clamp01(dist / X.verb.farAt), now);
+        if (dist < X.duck.range && !(FS.clarityTest && FS.clarityTest.duck === false)) duck(C, X, now); FS.lastFoe = { dist, occl, gain: gv, lp: lpf };
+      } else gv *= X.player.gain; }
+    ch.g.gain.setValueAtTime(gv, now); ch.lp.frequency.setValueAtTime(lpf, now);
     if (ch.pan) { if (ch.pan.positionX) { ch.pan.positionX.setValueAtTime(pos.x, now); ch.pan.positionY.setValueAtTime(pos.y, now); ch.pan.positionZ.setValueAtTime(pos.z, now); } else ch.pan.setPosition(pos.x, pos.y, pos.z); }
     s.start(now); ch.busy = now + buf.duration / rate + .03; AU.count = (AU.count || 0) + 1; FS.stats.plays++;
     FS.counts[name] = (FS.counts[name] || 0) + 1;
     if (FS.logOn) { const q = pos || at; FS.log.push({ who, mode, surface: name, x: q ? q.x : null, y: q ? q.y : null, z: q ? q.z : null, vol, rate, tag: tag || '', t: now, gt: ((S9() || {}).G || {}).time }); if (FS.log.length > 2000) FS.log.splice(0, 500); }
     return true;
   }
-  FS.play = play; FS.route = () => CH ? { foeOnOwnBus: CH.foeDest !== CH.base } : null;
+  // clarity: an enemy step near you dips the ambience (wind / hum bus of the settings add-on) and your own steps for a moment
+  const _ce = { x: 0, y: 0, z: 0 };
+  function duck(C, X, now) {
+    const a = X.duck.attack / 3, r = X.duck.release / 3, B = window.S9Settings && S9Settings.bus && S9Settings.bus(), amb = B && B.amb, base = B && B.ambLevel;
+    if (amb && base > 0) { amb.gain.cancelScheduledValues(now); amb.gain.setTargetAtTime(base * dBg(X.duck.ambDb), now, a); amb.gain.setTargetAtTime(base, now + .08, r); }
+    C.meOut.gain.cancelScheduledValues(now); C.meOut.gain.setTargetAtTime(dBg(X.duck.meDb), now, a); C.meOut.gain.setTargetAtTime(1, now + .08, r); FS.ducks = (FS.ducks || 0) + 1;
+  }
+  FS.play = play; FS.route = () => CH ? { foeOnOwnBus: CH.foeDest !== CH.base, clarity: !!CH.cl } : null;
   // for other add-ons with their own audio bus (killcam v2 replay): the right footstep buffer for a spot, no playback
   FS.bufferAt = (x, y, z, mode) => { const AU = (S9() || {}).AU; if (!AU || !AU.ctx || !D) return null; const set = bufferSet(AU.ctx, NAMES[surfaceAt(x, y, z)] || 'concrete'), L = mode === 'land' ? set.land : set.step; return L[Math.floor(Math.random() * L.length)]; }; FS.warmed = () => !!warmQ && !warmQ.length;
 
@@ -347,6 +385,7 @@
       const sprint = hs > 5, stride = sprint ? 2.4 : 1.85; KC.acc[k] = (KC.acc[k] || 0) + hs * dt;
       if (KC.acc[k] > stride) { KC.acc[k] = 0; _kv.x = _kp.x; _kv.y = _kp.y; _kv.z = _kp.z;
         const fr = F[F.length - 1], row = j < 0 ? fr.me : fr.b[j], crouch = row && (j < 0 ? row[5] : row[6]) > .5;
+        if (row && (j < 0 ? row[6] : row[11]) === 1) continue;   // silent walk: no steps in the replay either
         play('foe', crouch ? 'crouch' : sprint ? 'sprint' : 'walk', surfaceAt(_kp.x, _kp.y, _kp.z), _kv, 'killcam'); }
     }
   }

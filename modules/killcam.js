@@ -26,7 +26,7 @@ const HIST = 7.5;        // seconds of history kept (the killcam uses ~3-4 s of 
 const HZ = 60;           // fixed recording tick: every actor is sampled on the same 1/60 s grid (frames in between are interpolated)
 const S_ = 19;           // numbers per recorded sample:
 // 0 x,1 y,2 z,3 aimYaw,4 aimPitch,5 crouch,6 ads,7 reload 0-1 (-1 none),8 weapon index,9 on ground,10 alert,11 dead,
-// 12 dead time,13 visible,14 body yaw,15 knife swing 0-1 (-1 none),16 hp,17 sprinting,18 eye height above the feet
+// 12 dead time,13 visible,14 body yaw,15 knife swing 0-1 (-1 none),16 hp,17 sprinting (1) / silent walk (2),18 eye height above the feet
 const ANGLE = [3, 14], DISCRETE = [8, 9, 10, 11, 13, 17];
 // kills that are replayed as a third-person orbit around the blast instead of the killer's eyes
 const BLAST = new Set(['nade', 'nova', 'seeker', 'charge']);
@@ -64,17 +64,18 @@ function botVals(r) {
   V[7] = r.remote ? (r.kcRp !== undefined ? r.kcRp : r.reload > 0 ? .5 : -1) : r.reload > 0 ? clamp(1 - r.reload / ((BOTW[r.weapon] || {}).reload || 2), 0, 1) : -1;
   V[8] = widx(w); V[9] = r.onGround === false ? 0 : 1;
   V[10] = r.remote || r.targetVis || G.time - r.lastSeenT < 4 || G.time - r.lastHurt < 4 || r.mode === 'fight' ? 1 : 0;
-  V[11] = r.dead ? 1 : 0; V[12] = r.deadT || 0; V[13] = r.root.visible ? 1 : 0; V[14] = r.bodyYaw || 0; V[15] = r.remote && r.kcSw !== undefined ? r.kcSw : -1; V[16] = r.hp || 0; V[17] = 0;
+  V[11] = r.dead ? 1 : 0; V[12] = r.deadT || 0; V[13] = r.root.visible ? 1 : 0; V[14] = r.bodyYaw || 0; V[15] = r.remote && r.kcSw !== undefined ? r.kcSw : -1; V[16] = r.hp || 0; V[17] = (r.remote ? r.netWalk : r.walk) ? 2 : 0;   // 2 = silent walk
   V[18] = r.remote && Number.isFinite(r.kcEy) ? r.kcEy : lerp(1.62, 1.12, r.crouch || 0);   // the game's own eye height (entEye)
   return V;
 }
 function meVals() {
   V[0] = P.pos.x; V[1] = P.pos.y; V[2] = P.pos.z; V[3] = wrapPi(P.yaw + Math.PI); V[4] = P.pitch; V[5] = P.crouch || 0; V[6] = P.ads || 0;
   V[7] = P.reload > 0 && P.reloadDur ? clamp(1 - P.reload / P.reloadDur, 0, 1) : -1; V[8] = widx(P.weapon); V[9] = P.onGround ? 1 : 0; V[10] = P.sprint ? 0 : 1;
-  V[11] = P.dead ? 1 : 0; V[12] = P.dieT || 0; V[13] = 1; V[14] = V[3]; V[15] = P.swingT > 0 && P.swingDur ? clamp(1 - P.swingT / P.swingDur, 0, 1) : -1; V[16] = P.hp; V[17] = P.sprint ? 1 : 0;
+  V[11] = P.dead ? 1 : 0; V[12] = P.dieT || 0; V[13] = 1; V[14] = V[3]; V[15] = P.swingT > 0 && P.swingDur ? clamp(1 - P.swingT / P.swingDur, 0, 1) : -1; V[16] = P.hp; V[17] = P.sprint ? 1 : P.walk ? 2 : 0;
   V[18] = Number.isFinite(P.smoothY) ? clamp(P.smoothY - P.pos.y, .8, 1.8) : P.camY || 1.65;   // your real eye (step-up smoothing included)
   return V;
 }
+KC.meNow = () => Array.from(meVals());   // what the recorder stores for you right now (tests: 17 = 2 while silent-walking)
 function resetRec() { R.tracks.clear(); R.spawns.length = 0; for (const k of ['shots', 'fires', 'hits', 'throws', 'booms', 'kills', 'proj']) R[k].length = 0; R.lastT = -1; R.death = null; }
 // drop the oldest n numbers in place (splice(0, n) also builds an array of the removed ones every trim; copyWithin boxes
 // every double it moves): a plain loop moves them unboxed
@@ -184,7 +185,7 @@ netSend = function () {
   room.presence = function (st) {
     if (st && typeof st === 'object' && st.v === 1) {
       st.ad = R2(P.ads || 0); st.rp = P.reload > 0 && P.reloadDur ? R2(clamp(1 - P.reload / P.reloadDur, 0, 1)) : -1;
-      st.sw = P.swingT > 0 && P.swingDur ? R2(clamp(1 - P.swingT / P.swingDur, 0, 1)) : -1; st.wid = P.weapon; st.sp = P.sprint ? 1 : 0;
+      st.sw = P.swingT > 0 && P.swingDur ? R2(clamp(1 - P.swingT / P.swingDur, 0, 1)) : -1; st.wid = P.weapon; st.sp = P.sprint ? 1 : P.walk ? 2 : 0;
       st.yw4 = R4(P.yaw + Math.PI); st.pt4 = R4(P.pitch);
       st.ey = R2(Number.isFinite(P.smoothY) ? clamp(P.smoothY - P.pos.y, .8, 1.8) : P.camY || 1.65);   // your real eye height
       st.kwn = P.dead && R.death && hasW(R.death.weapon) ? R.death.weapon : '';                         // exact weapon that killed you
@@ -217,7 +218,7 @@ netReceive = function (E, pr) {
   if (!H.length || ts > H[H.length - 1].ts) {
     const yw = Number.isFinite(+pr.yw4) ? +pr.yw4 : +pr.yw || 0, pt = Number.isFinite(+pr.pt4) ? +pr.pt4 : +pr.pt || 0;
     H.push({ ts, aw, x: +pr.x[0] || 0, y: +pr.x[1] || 0, z: +pr.x[2] || 0, yaw: yw, pitch: pt, cr: +pr.cr || 0, g: pr.g ? 1 : 0, w: hasW(pr.wid) ? pr.wid : NET_W[pr.w | 0] || 'carbine',
-      ad: r.kcAds, ey: r.kcEy, gk: r.kcGk, rp: r.kcRp !== undefined ? r.kcRp : pr.rl ? .5 : -1, sw: r.kcSw !== undefined ? r.kcSw : -1, dd: pr.dd ? 1 : 0, hp: +pr.hp || 0, sp: pr.sp ? 1 : 0,
+      ad: r.kcAds, ey: r.kcEy, gk: r.kcGk, rp: r.kcRp !== undefined ? r.kcRp : pr.rl ? .5 : -1, sw: r.kcSw !== undefined ? r.kcSw : -1, dd: pr.dd ? 1 : 0, hp: +pr.hp || 0, sp: pr.sp === 2 ? 2 : pr.sp ? 1 : 0,
       shot: (pr.sh | 0) > shot0 && Array.isArray(pr.sx) ? { n: Math.min(6, (pr.sh | 0) - shot0), sx: pr.sx.slice(0, 6).map(Number) } : null,
       nade: (pr.ns | 0) > nade0 ? 1 : 0, proj: Array.isArray(pr.pj) && pr.pj[0] > proj0 ? 1 : 0, hit: cur && cur.hit ? { crit: cur.hit.crit, kill: cur.hit.kill } : null });
     while (H.length > 2 && aw - H[0].aw > HIST * 1000) H.shift();
@@ -942,7 +943,7 @@ function applyClip(c, el) {
   const K = c.ktr; let tk = rt, kDown = false;
   lin(K, rt, SB); if (SB[11] > .5 && !c.orbit) { kDown = true; let i = seg(K.t, rt); while (i > 0 && K.v[i * S_ + 11] > .5) i--; tk = K.t[i]; lin(K, tk, SB); }
   let thrW = 0; for (const t of c.kthrows) { const q = rt - t; if (q > -.15 && q < .6) thrW = Math.max(thrW, q < 0 ? 1 + q / .15 : q < .45 ? 1 : 1 - (q - .45) / .15); }   // a throw takes the gun off their eye
-  const kw = wname(SB[8]), W = WEAPONS[kw] || WEAPONS.carbine, cr = SB[5], ads = clamp(SB[6], 0, 1) * (1 - thrW), rl = SB[7], sw = SB[15], gnd = SB[9] > .5, sprint = SB[17] > .5;
+  const kw = wname(SB[8]), W = WEAPONS[kw] || WEAPONS.carbine, cr = SB[5], ads = clamp(SB[6], 0, 1) * (1 - thrW), rl = SB[7], sw = SB[15], gnd = SB[9] > .5, sprint = SB[17] > .5 && SB[17] < 1.5, walkQ = SB[17] > 1.5;
   viewAt(K, tk, VIEW);
   velAt(K, tk, _a); const hs = Math.hypot(_a.x, _a.z), air = !gnd || Math.abs(_a.y) > 2;
   if (!air && !kDown) KC.bob += dt * hs * (sprint ? 1.25 : 1.45);
@@ -1042,7 +1043,7 @@ function applyClip(c, el) {
   { const A = KC.aud, r = speedAt(rt, c);
     if (!kDown && !c.orbit) {
       if (!air && A.air) fxSound('land', { rate: r, t: rt }, 'step'); A.air = air;
-      if (!air && hs > 1) { A.step += hs * dt; if (A.step > (sprint ? 2.5 : 1.9)) { A.step = 0; fxSound(sprint ? 'stepSprint' : cr > .5 ? 'stepCrouch' : 'step', { rate: r, vol: .9, t: rt }, 'step'); } }
+      if (!air && hs > 1 && !walkQ) { A.step += hs * dt; if (A.step > (sprint ? 2.5 : 1.9)) { A.step = 0; fxSound(sprint ? 'stepSprint' : cr > .5 ? 'stepCrouch' : 'step', { rate: r, vol: .9, t: rt }, 'step'); } }
       if (rl >= 0 && A.rl < .14 && rl >= .14) fxSound(kw === 'sniper' ? 'bolt' : 'magOut', { rate: r, t: rt }, 'reload');
       if (rl >= 0 && A.rl < .58 && rl >= .58) fxSound('magIn', { rate: r, t: rt }, 'reload');
       if (ads >= .5 && A.ads < .5 && rl < 0) fxSound('adsIn', { rate: r, t: rt }, 'ads');

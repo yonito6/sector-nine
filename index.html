@@ -350,6 +350,7 @@ tr.me td{color:#ffd27a;background:rgba(255,154,60,.08)} td:nth-child(n+3),th:nth
       <kbd>Right click</kbd><span>Aim down sights</span>
       <kbd>R</kbd><span>Reload</span>
       <kbd>Shift</kbd><span>Sprint</span>
+      <kbd id="helpWalk">Z</kbd><span>Walk quietly (hold): enemies can't hear your steps</span>
       <kbd>Space ×2</kbd><span>Double jump</span>
       <kbd>C</kbd><span>Crouch · slide while sprinting</span>
       <kbd>E</kbd><span>Dash</span>
@@ -3594,7 +3595,7 @@ function resetPlayer() {
   Object.assign(P, { pos: new THREE.Vector3(0, 0, 25), vel: V3(), yaw: 0, pitch: 0, onGround: true, crouch: 0,
     hp: 100, ammo: WEAPONS[LOADOUT[0]].mag, mag: WEAPONS[LOADOUT[0]].mag, reserve: WEAPONS[LOADOUT[0]].reserve, weapon: LOADOUT[0], slots: LOADOUT.slice(), spawnAt: G.time || 0, store: Object.fromEntries([...LOADOUT.map(id => [id, { ammo: WEAPONS[id].mag, reserve: WEAPONS[id].reserve }]), ['knife', { ammo: 0, reserve: 0 }]]), swingT: 0, swingDur: 1, swingHeavy: false, swingHit: true, switchT: 0, boltT: 0, trigReady: true, reload: 0, reloadDur: 0, reloadEmpty: false, reloadStage: 0, fireCd: 0, heat: 0, shotIdx: 0, lastShot: -9, recoilAcc: 0,
     lastHurt: -99, bob: 0, stepAcc: 0, ads: 0, fov: 78, camY: 1.65, trauma: 0, hitFx: 0, dead: false,
-    shield: 0, chillT: 0, burnT: 0, charge: 0, spin: 0, burstLeft: 0, airJumps: 0, jumpQ: 0, lastGround: 0, dashT: 0, dashCd: 0, slideT: 0, crouchHold: false, nades: 2, nadeT: 9, od: 0, odT: 0, odAnnounced: false, killer: null });
+    shield: 0, chillT: 0, burnT: 0, charge: 0, spin: 0, burstLeft: 0, airJumps: 0, jumpQ: 0, lastGround: 0, dashT: 0, dashCd: 0, slideT: 0, crouchHold: false, walk: false, nades: 2, nadeT: 9, od: 0, odT: 0, odAnnounced: false, killer: null });
   for (const k in springs) springs[k].reset();
 }
 function clearDynamic() {
@@ -4767,7 +4768,7 @@ function fireShot() {
   const sm = P.shotMult || 1; P.shotMult = 1;
   if (G.time - P.lastShot > .25) P.shotIdx = 0; P.shotIdx++; P.lastShot = G.time;
   const hs = Math.hypot(P.vel.x, P.vel.z), ads = P.ads, scoped = w.scope ? clamp((ads - .7) / .3, 0, 1) : ads;
-  let spread = lerp(w.hip, w.ads, scoped) + (hs > 1 ? lerp(.022, w.scope ? .002 : .006, scoped) * (id === 'wasp' || id === 'pistol' ? .5 : 1) : 0) + (P.onGround ? 0 : .05 * (id === 'wasp' || id === 'pistol' ? .4 : 1)) + P.heat * lerp(.02, .006, scoped);
+  let spread = lerp(w.hip, w.ads, scoped) + (hs > 1 ? lerp(.022, w.scope ? .002 : .006, scoped) * (id === 'wasp' || id === 'pistol' ? .5 : 1) * (P.walk ? .5 : 1) : 0) + (P.onGround ? 0 : .05 * (id === 'wasp' || id === 'pistol' ? .4 : 1)) + P.heat * lerp(.02, .006, scoped);
   spread *= 1 - P.crouch * .35; if (w.scope) P.nsT = scoped < .5 ? G.time : 0;   // kill feed: no-scope = fired this shot without the scope up
   P.heat = Math.min(1, P.heat + (w.heat || 0));
   camera.getWorldDirection(shotDir); camRight.set(1, 0, 0).applyQuaternion(camera.quaternion); camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
@@ -5602,7 +5603,7 @@ function netReceive(E, pr) {
   r.ping = pr.pg | 0;
   if ((pr.K | 0) >= KILL_LIMIT && !G.ended && NET.inMatch) setTimeout(() => endMatch(r), 1200);
   if (pr.rl && !r.reload && !r.dead) sfx.foeReload(r.root.position, NET_W[pr.w | 0]);
-  r.netCrouch = +pr.cr || 0; r.netGround = !!pr.g; r.reload = pr.rl ? 1 : 0; r.shield = +pr.sd || 0; r.hp = clamp(+pr.hp || 0, 0, 100); r.kills = pr.K | 0; r.score = (pr.K | 0) * 100; r.shots = pr.sF | 0; r.hits = pr.sH | 0; r.headHits = pr.sHH | 0;
+  r.netCrouch = +pr.cr || 0; r.netWalk = pr.wk === 1; r.netGround = !!pr.g; r.reload = pr.rl ? 1 : 0; r.shield = +pr.sd || 0; r.hp = clamp(+pr.hp || 0, 0, 100); r.kills = pr.K | 0; r.score = (pr.K | 0) * 100; r.shots = pr.sF | 0; r.hits = pr.sH | 0; r.headHits = pr.sHH | 0;
   // the exact weapon id (wid) first: NET_W's order depends on which add-ons each client loaded (a mid-release session, a module
   // that failed to load), and an index from a different list draws the wrong gun in their hands
   const w = typeof pr.wid === 'string' && Object.prototype.hasOwnProperty.call(WEAPONS, pr.wid) ? pr.wid : NET_W[pr.w | 0] || 'carbine';
@@ -5647,7 +5648,7 @@ function netSend(dt) {
   NET.saveT = (NET.saveT || 0) - dt; if (NET.saveT <= 0 && NET.inMatch) { NET.saveT = 2; try { localStorage.setItem('sector9-room', JSON.stringify({ nick: NET.nick, code: NET.code, t: Date.now() })); } catch (e) {} }
   const R2 = v => Math.round(v * 100) / 100;
   const st = {
-    v: 1, lob: NET.inMatch ? 0 : 1, mp: CUR_MAP, jt: NET.joinT, n: NET.nick, c: NET.color | 0, x: [R2(P.pos.x), R2(P.pos.y), R2(P.pos.z)], yw: R2(P.yaw + Math.PI), pt: R2(P.pitch), cr: R2(P.crouch), g: P.onGround ? 1 : 0,
+    v: 1, lob: NET.inMatch ? 0 : 1, mp: CUR_MAP, jt: NET.joinT, n: NET.nick, c: NET.color | 0, x: [R2(P.pos.x), R2(P.pos.y), R2(P.pos.z)], yw: R2(P.yaw + Math.PI), pt: R2(P.pitch), cr: R2(P.crouch), wk: P.walk ? 1 : 0, g: P.onGround ? 1 : 0,
     w: Math.max(0, NET_W.indexOf(P.weapon)), wid: P.weapon, rl: P.reload > 0 ? 1 : 0, hp: Math.round(P.hp), sd: R2(P.shield), dd: P.dead ? 1 : 0, D: PLAYER_ENT.deaths, K: PLAYER_ENT.kills,
     kb: P.killer ? (P.killer.netId || 's') : 's', kw: NET.killW | 0, kh: NET.killH ? 1 : 0, kwb: NET.killWB ? 1 : 0, pj: NET.proj || null, sF: G.fired | 0, sH: G.hits | 0, sHH: G.headHits | 0, sh: NET.seq.shot, sx: NET.shot || null, hs: NET.seq.hit, hl: NET.hits, ns: NET.seq.nade, nv: NET.nade || null };
   NET.room.presence(st).catch(() => {});
@@ -5883,9 +5884,9 @@ function stopDeathcam() { if (DC.body) DC.body.visible = false; if (DC.gun) { sc
 /* ================= killcam: replay the last seconds from your killer's eyes ================= */
 const REC = { frames: [], shots: [], on: false, deathT: 0, killer: null, ki: -1, avatar: null, saved: [], lastRt: -1e9 };
 function recFrame() {
-  const f = { t: G.time, me: [P.pos.x, P.pos.y, P.pos.z, P.yaw, P.pitch, P.crouch], b: [] };
+  const f = { t: G.time, me: [P.pos.x, P.pos.y, P.pos.z, P.yaw, P.pitch, P.crouch, P.walk ? 1 : 0], b: [] };
   for (const r of robots) f.b.push(r.dead || !r.root.visible ? null : [r.root.position.x, r.root.position.y, r.root.position.z, r.bodyYaw, r.aimYaw, r.aimPitch, r.crouch, r.viewYaw ?? r.aimYaw, r.viewPitch ?? r.aimPitch,
-    r.ads || 0, r.reload > 0 ? clamp(1 - r.reload / ((BOTW[r.weapon] || {}).reload || 2), 0, 1) : -1]);
+    r.ads || 0, r.reload > 0 ? clamp(1 - r.reload / ((BOTW[r.weapon] || {}).reload || 2), 0, 1) : -1, (r.remote ? r.netWalk : r.walk) ? 1 : 0]);
   REC.frames.push(f);
   while (REC.frames.length && G.time - REC.frames[0].t > 4.5) REC.frames.shift();
   while (REC.shots.length && G.time - REC.shots[0].t > 4.5) REC.shots.shift();
@@ -6029,7 +6030,7 @@ function restoreReplay() {
 const fwd = V3(), right = V3(), wish = V3();
 // every movement number in one place (exported to data/move.json for the Unity version)
 const MOVE = { run: 5.6, sprint: 8.8, adsSpeed: 3.0, crouchSpeed: 2.8, accelGround: 11, accelAir: 1.6, slideFriction: 1.3, jump: 7.9, doubleJump: 7.9, coyoteTime: .1,
-  gravity: 20, dashGravity: 6, height: 1.8, crouchHeight: 1.2, radius: .4, stepUp: STEP, regenDelay: 5, regenRate: 8, overdriveSpeed: 1.25, knifeSpeed: 1.12, chillSpeed: .55, chargeSpeed: .75 };
+  walk: .53, gravity: 20, dashGravity: 6, height: 1.8, crouchHeight: 1.2, radius: .4, stepUp: STEP, regenDelay: 5, regenRate: 8, overdriveSpeed: 1.25, knifeSpeed: 1.12, chillSpeed: .55, chargeSpeed: .75 };
 function updatePlayer(dt, rdt) {
   P.slideT = Math.max(0, P.slideT - dt); P.dashT = Math.max(0, P.dashT - dt); P.dashCd = Math.max(0, P.dashCd - dt); P.shield = Math.max(0, P.shield - dt); P.jumpQ = Math.max(0, P.jumpQ - dt);
   if (P.nades < 2) { P.nadeT -= dt; if (P.nadeT <= 0) { P.nades++; P.nadeT = 9; } }
@@ -6040,9 +6041,11 @@ function updatePlayer(dt, rdt) {
   wish.set(0, 0, 0);
   if (keys.KeyW) wish.add(fwd); if (keys.KeyS) wish.sub(fwd); if (keys.KeyD) wish.add(right); if (keys.KeyA) wish.sub(right);
   if (window.MODE_frozen && MODE_frozen()) wish.set(0, 0, 0);   // demolition freeze time / planting
-  const sprint = (keys.ShiftLeft || keys.ShiftRight) && keys.KeyW && !keys.KeyS && P.reload <= 0 && !adsHeld && !crouching && P.onGround;
-  P.sprint = !!sprint;
-  let speed = (sprint ? MOVE.sprint : MOVE.run) * (W().move || 1); speed = lerp(speed, MOVE.adsSpeed, P.ads); speed = lerp(speed, MOVE.crouchSpeed, P.crouch); if (P.odT > 0) speed *= MOVE.overdriveSpeed; if (P.weapon === 'knife') speed *= MOVE.knifeSpeed; if (P.chillT > 0) speed *= MOVE.chillSpeed; if (P.charge > 0) speed *= MOVE.chargeSpeed;
+  // silent walk (hold Z, like CS Shift-walk): ~53% of the run speed, no footsteps for enemies, quiet for you; overrides sprint
+  const walking = !!keys.KeyZ && !(P.slideT > 0);
+  const sprint = !walking && (keys.ShiftLeft || keys.ShiftRight) && keys.KeyW && !keys.KeyS && P.reload <= 0 && !adsHeld && !crouching && P.onGround;
+  P.sprint = !!sprint; P.walk = walking;
+  let speed = (sprint ? MOVE.sprint : walking ? MOVE.run * MOVE.walk : MOVE.run) * (W().move || 1); if (walking) speed = Math.min(speed, MOVE.run * MOVE.walk); speed = lerp(speed, MOVE.adsSpeed, P.ads); speed = lerp(speed, MOVE.crouchSpeed, P.crouch); if (P.odT > 0) speed *= MOVE.overdriveSpeed; if (P.weapon === 'knife') speed *= MOVE.knifeSpeed; if (P.chillT > 0) speed *= MOVE.chillSpeed; if (P.charge > 0) speed *= MOVE.chargeSpeed;
   if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(speed);
   const MM = mapMods(P.pos.x, P.pos.z); speed *= MM.slow; if (wish.lengthSq() > 0) wish.setLength(speed);
   const accel = P.onGround ? MOVE.accelGround * MM.fric : MOVE.accelAir;
@@ -6074,7 +6077,7 @@ function updatePlayer(dt, rdt) {
   mapTriggers(PLAYER_ENT, dt); statusTick(PLAYER_ENT, dt);
   // footsteps
   const hs = Math.hypot(P.vel.x, P.vel.z);
-  if (P.onGround && hs > 1 && P.slideT <= 0) { P.stepAcc += hs * dt; const stride = sprint ? 2.5 : 1.9; if (P.stepAcc > stride) { P.stepAcc = 0; sfx.step(sprint, false, P.crouch > .5); } }
+  if (P.onGround && hs > 1 && P.slideT <= 0 && !P.walk) { P.stepAcc += hs * dt; const stride = sprint ? 2.5 : 1.9; if (P.stepAcc > stride) { P.stepAcc = 0; sfx.step(sprint, false, P.crouch > .5); } }
   // regen + heartbeat
   // (the HUD redraw - standings sort, DOM, online a localStorage write - only when the shown whole number changes, not every step)
   if (G.time - P.lastHurt > MOVE.regenDelay && P.hp < 100) { const h0 = Math.ceil(P.hp); P.hp = Math.min(100, P.hp + MOVE.regenRate * dt); if (Math.ceil(P.hp) !== h0) updateHud(); }
@@ -6436,7 +6439,7 @@ function animateBot(r, dt) {
   r.legYaw = damp(r.legYaw || 0, legT, 9, dt);
   // lower body
   const crouch = r.crouch > .5, L = _ABL; L.idle = L.walk = L.jog = L.sprint = L.cidle = L.cwalk = L.air = 0;
-  if (!r.onGround) L.air = 1; else if (crouch) L[hs > .4 ? 'cwalk' : 'cidle'] = 1; else if (hs < .4) L.idle = 1; else if (hs < 2.6) L.walk = 1; else if (hs < 5.2) L.jog = 1; else L.sprint = 1;
+  if (!r.onGround) L.air = 1; else if (crouch) L[hs > .4 ? 'cwalk' : 'cidle'] = 1; else if (hs < .4) L.idle = 1; else if (hs < 2.6 || (r.netWalk && hs < 3.6)) L.walk = 1; else if (hs < 5.2) L.jog = 1; else L.sprint = 1;
   const sg = back ? -1 : 1;
   A.walk.timeScale = sg * Math.max(.4, hs / 1.5); A.jog.timeScale = sg * Math.max(.5, hs / 3.9); A.sprint.timeScale = sg * hs / 6.1; A.cwalk.timeScale = sg * Math.max(.4, hs / 1.4);
   for (const k in L) { const a = A[k]; a.w = damp(a.w, L[k], 12, dt); a.setEffectiveWeight(a.w < .01 ? 0 : a.w); }
@@ -6519,6 +6522,11 @@ function foeSteps(r, dt) {
   if (ground && r.fsAir && (r.fsVy || 0) < -4) sfx.foeStep(p, false, true, false);
   r.fsAir = !ground; r.fsVy = r.remote ? ((p.y - (r.fsY ?? p.y)) / Math.max(dt, 1e-3)) : r.vy; r.fsY = p.y;
   if (!ground || hs < 1.2 || r.dashT > 0) return;
+  // a walking player (silent walk key) makes no step sound; the speed check means a client that claims walking while running is still heard
+  // (online the flag arrives with the newest state while the body is drawn ~100 ms in the past: it stays on for 0.5 s after the
+  // player let go of walk, so the last walking strides are not heard; the speed check still catches real running at once)
+  if (r.remote && r.netWalk) r.walkT = G.time;
+  if ((r.remote ? r.netWalk || G.time - (r.walkT ?? -9) < .5 : r.walk) && hs < MOVE.run * MOVE.walk * 1.2 + .3) { r.fsAcc = 0; return; }
   const sprint = hs > 5, stride = sprint ? 2.4 : 1.85;
   r.fsAcc = (r.fsAcc || 0) + hs * dt; if (r.fsAcc > stride) { r.fsAcc = 0; sfx.foeStep(p, sprint, false, (r.crouch || 0) > .5); }
 }

@@ -16,7 +16,7 @@ const DEFAULTS = {
     adsMode: 'hold',
     binds: {
       forward: ['KeyW', ''], back: ['KeyS', ''], left: ['KeyA', ''], right: ['KeyD', ''],
-      jump: ['Space', ''], crouch: ['KeyC', ''], crouchHold: ['ControlLeft', 'ControlRight'], sprint: ['ShiftLeft', 'ShiftRight'], dash: ['KeyE', ''],
+      jump: ['Space', ''], crouch: ['KeyC', ''], crouchHold: ['ControlLeft', 'ControlRight'], sprint: ['ShiftLeft', 'ShiftRight'], walk: ['KeyZ', ''], dash: ['KeyE', ''],
       fire: ['Mouse0', ''], ads: ['Mouse2', ''], reload: ['KeyR', ''], grenade: ['KeyG', ''], overdrive: ['KeyF', ''],
       primary: ['Digit1', ''], secondary: ['Digit2', ''], knife: ['Digit3', ''], weapon4: ['Digit4', ''], swap: ['KeyQ', ''], dropBomb: ['KeyB', ''],
       interact: ['KeyX', ''], scoreboard: ['Tab', ''], pause: ['Escape', ''], ptt: ['KeyV', '']
@@ -54,7 +54,7 @@ function capSkip(t) {
 /* ============ actions (what the game does) -> the key code index.html listens for ============ */
 const ACTIONS = [
   ['Movement', 'forward', 'Move forward', 'KeyW'], ['Movement', 'back', 'Move back', 'KeyS'], ['Movement', 'left', 'Strafe left', 'KeyA'], ['Movement', 'right', 'Strafe right', 'KeyD'],
-  ['Movement', 'jump', 'Jump (twice = double jump)', 'Space'], ['Movement', 'sprint', 'Sprint (hold)', 'ShiftLeft'], ['Movement', 'crouch', 'Crouch toggle / slide while sprinting', 'KeyC'],
+  ['Movement', 'jump', 'Jump (twice = double jump)', 'Space'], ['Movement', 'sprint', 'Sprint (hold)', 'ShiftLeft'], ['Movement', 'walk', 'Walk quietly (hold): enemies cannot hear your steps', 'KeyZ'], ['Movement', 'crouch', 'Crouch toggle / slide while sprinting', 'KeyC'],
   ['Movement', 'crouchHold', 'Crouch (hold)', 'ControlLeft'], ['Movement', 'dash', 'Dash · Use / Plant / Defuse', 'KeyE'],
   ['Combat', 'fire', 'Fire', 'Mouse0'], ['Combat', 'ads', 'Aim down sights', 'Mouse2'], ['Combat', 'reload', 'Reload', 'KeyR'], ['Combat', 'grenade', 'Plasma grenade (hold = throw far)', 'KeyG'], ['Combat', 'overdrive', 'Overdrive', 'KeyF'],
   ['Weapons', 'primary', 'Weapon 1 (primary)', 'Digit1'], ['Weapons', 'secondary', 'Weapon 2 (secondary)', 'Digit2'], ['Weapons', 'knife', 'Weapon 3 (knife)', 'Digit3'],
@@ -64,7 +64,7 @@ const ACTIONS = [
 ].map(([group, id, label, canon]) => ({ group, id, label, canon }));
 const ACT = Object.fromEntries(ACTIONS.map(a => [a.id, a]));
 // every code index.html reads (so a key that was re-bound AWAY from an action stops doing that action)
-const GAME_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyC', 'ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight', 'KeyE', 'KeyR', 'Digit1', 'Digit2', 'Digit3', 'KeyQ', 'KeyG', 'KeyF', 'KeyX', 'Digit4', 'KeyB', 'Tab', 'Mouse0', 'Mouse2']);
+const GAME_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyC', 'ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight', 'KeyZ', 'KeyE', 'KeyR', 'Digit1', 'Digit2', 'Digit3', 'KeyQ', 'KeyG', 'KeyF', 'KeyX', 'Digit4', 'KeyB', 'Tab', 'Mouse0', 'Mouse2']);
 
 /* ============ helpers ============ */
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -106,6 +106,8 @@ function sanitize(src) {
         if (a.id === 'pause') slots[0] = 'Escape'; else for (let i = 0; i < 2; i++) if (slots[i] === 'Escape') slots[i] = '';
         out.controls.binds[a.id] = slots;
       }
+      // an action added later (e.g. walk on Z) never steals a key the player already put on another action
+      for (const a of ACTIONS) if (!Array.isArray(b[a.id])) out.controls.binds[a.id] = out.controls.binds[a.id].map(k => k && ACTIONS.some(o => o.id !== a.id && Array.isArray(b[o.id]) && out.controls.binds[o.id].includes(k)) ? '' : k);
       // a key may only drive one action: later duplicates are dropped
       const seen = new Set();
       for (const a of ACTIONS) out.controls.binds[a.id] = out.controls.binds[a.id].map(k => { if (!k) return ''; if (seen.has(k)) return ''; seen.add(k); return k; });
@@ -287,7 +289,7 @@ function updateHudKeys() {
   const k = id => keyName(S.controls.binds[id][0] || S.controls.binds[id][1]) || '-';
   const set = (sel, t) => { const el = document.querySelector(sel); if (el) el.textContent = t; };
   set('#abJump kbd', `${k('jump').toUpperCase()} ×2`); set('#abDash kbd', k('dash').toUpperCase()); set('#abSlide kbd', k('crouch').toUpperCase());
-  set('#abNade kbd', k('grenade').toUpperCase()); set('#abOd kbd', k('overdrive').toUpperCase()); set('#dropHint kbd', k('interact').toUpperCase());
+  set('#abNade kbd', k('grenade').toUpperCase()); set('#helpWalk', k('walk').toUpperCase()); set('#abOd kbd', k('overdrive').toUpperCase()); set('#dropHint kbd', k('interact').toUpperCase());
 }
 
 /* ============ game hooks: sensitivity, volume, quality via the game's own controls ============ */
@@ -1043,6 +1045,8 @@ const api = {
   open: (t) => openPanel(t), close, isOpen: () => open, reset: w => { reset(w || 'all'); if (open) renderTab(); },
   exportCrosshair: () => exportCode(), importCrosshair: code => { const r = importCode(code); if (r.ok) { S.crosshair = r.c; save(); applyCrosshair(); if (open) renderTab(); } return r; },
   applyRemote, keyName, toggleFullscreen, sync: syncRemote,
+  // audio buses for other add-ons (footsteps clarity mix ducks the ambience briefly); ambLevel = the level the player set (0 while focus-muted)
+  bus: () => ({ amb: AUD.amb, fx: AUD.fx, foot: AUD.foot, ambLevel: S.audio.ambience * (S.audio.muteUnfocused && focusMuted ? 0 : 1) }),
   _audio: AUD, _grade: GRADE, _drawXH: drawXH, _cap: CAP
 };
 window.S9Settings = api;

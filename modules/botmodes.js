@@ -259,7 +259,13 @@
       if (mode() === 'demo' && state === 'dead') { const t = $('deathT'); if (t && !/spectat/i.test(t.textContent)) t.textContent = 'Out for this round · spectating your team'; }
     }
   }
-  { const pre = window.MODE_preRender; window.MODE_preRender = function (dt) { try { preTick(dt); } catch (e) { S.err = String(e && e.stack || e); if (!S.errLogged) { S.errLogged = 1; console.warn('botmodes', e); } } if (pre) return pre.apply(this, arguments); }; }
+  // the per-frame hook rides the MODE_preRender chain; a module that later REPLACES the chain (instead of wrapping it) cut botmodes off:
+  // no extra world steps, no match clock (Demolition stuck in freeze, TDM never at its kill target; 2026-11-08). Self-heal: re-hook
+  // whenever a match runs and the hook has not ticked for 0.5 s. S.frameId guards against a double call in one frame.
+  const hookPre = () => { const pre = window.MODE_preRender; const w = function (dt) { const fid = S.rafId; if (fid !== S.lastFid) { S.lastFid = fid; S.lastTick = performance.now(); try { preTick(dt); } catch (e) { S.err = String(e && e.stack || e); if (!S.errLogged) { S.errLogged = 1; console.warn('botmodes', e); } } } if (pre) return pre.apply(this, arguments); }; w.__s9bm = true; window.MODE_preRender = w; };
+  hookPre(); S.rehooks = 0; S.rafId = 0; S.lastTick = performance.now();
+  { const raf = () => { S.rafId++; requestAnimationFrame(raf); }; requestAnimationFrame(raf); }
+  setInterval(() => { try { if (S.on && S.M && (state === 'play' || state === 'dead') && performance.now() - S.lastTick > 500) { S.rehooks++; hookPre(); console.warn('botmodes: per-frame hook was cut off (MODE_preRender replaced); re-hooked', S.rehooks); } } catch (e) {} }, 250);
 
   /* ---------------- game hooks ---------------- */
   // spawns: bots at their side's spawn (the player's own spawn is modes.js's)
