@@ -2367,7 +2367,7 @@ MAP_DEFS.dunes = { exposure: 0.66, id: 'dunes', name: 'Sunken Temple', tag: 'Kin
    Two lava channels split the floor into three bands. Cross low on grated bridges or high on catwalks between stair
    platforms. The crucible stands on a plinth in the middle band between two smelters; glass-slit control rooms on
    pedestals watch the far corners (camps); conveyors and ingot piles give hop-on cover in the outer bands. */
-MAP_DEFS.foundry = { id: 'foundry', name: 'Magma Foundry', tag: 'Lava channels · catwalks · control rooms · 2-6 players', size: 56, kit: ['mapkit', 'kit_foundry'],
+MAP_DEFS.foundry = { exposure: 1, id: 'foundry', name: 'Magma Foundry', tag: 'Lava channels · catwalks · control rooms · 2-6 players', size: 56, kit: ['mapkit', 'kit_foundry'],
   tex: ['volcanic_rock_tiles', 'dark_brick_wall'], station: [16, 0, -5],
   spawns: [[-14, -26], [2, -25.5], [18, -26], [-26, -18], [25.5, -14.5], [5, -16], [14, 26], [-2, 25.5], [-18, 26], [26, 18], [-25.5, 14.5], [-5, 16], [-16, -3], [16, 3]],
   camps: [[-20, 4.2, -21.3, 0], [20, 4.2, 21.3, Math.PI], [13, 3.6, -16, 0], [-13, 3.6, 16, Math.PI], [13, 3.6, -10, -Math.PI / 2], [-13, 3.6, 10, Math.PI / 2], [-21, 0, -4, Math.PI / 2], [21, 0, 4, -Math.PI / 2]],
@@ -2478,7 +2478,7 @@ MAP_DEFS.glacier = { exposure: 0.7, id: 'glacier', name: 'Glacier Station', tag:
 /* ---------- Hologrid Arena (36 m, 1v1-3): fast symmetric duel ----------
    A raised octagonal dais with a holo emitter in the middle, an inner ring of chevrons and energy shields, an outer
    ring of chevrons, two corner towers on one diagonal and jump pads on the other. Point-symmetric: both halves equal. */
-MAP_DEFS.grid = { id: 'grid', name: 'Hologrid Arena', tag: 'Duel arena · centre dais · corner towers · 1v1-3', size: 36, kit: ['mapkit', 'kit_arena'],
+MAP_DEFS.grid = { exposure: 1, id: 'grid', name: 'Hologrid Arena', tag: 'Duel arena · centre dais · corner towers · 1v1-3', size: 36, kit: ['mapkit', 'kit_arena'],
   tex: [], station: [0, 0, 12.5],
   spawns: [[-15.5, 4], [15.5, -4], [-4, -15.5], [4, 15.5], [-10, 10], [10, -10], [0, -10.5], [0, 10.5], [-15.5, -4], [15.5, 4], [4, -15.5], [-4, 15.5]],
   camps: [[-14, 3.6, -14, .79], [14, 3.6, 14, -2.36], [-2.6, 1.2, -2.6, -2.36], [2.6, 1.2, 2.6, .79], [-12, 0, 0, Math.PI / 2], [12, 0, 0, -Math.PI / 2]],
@@ -2570,7 +2570,7 @@ function neonLayout() {
     holo(['CYBERCLINIC', 'NO QUESTIONS'], [.4, 2.4, 2.8], s * -25.6, 4.3, s * -14, s > 0 ? Math.PI / 2 : -Math.PI / 2);
   }
 }
-MAP_DEFS.neon = { id: 'neon', name: 'Neon District', tag: 'City blocks · rooftop billboards · walk-in arcade · 4-8 players', size: 80, kit: ['mapkit', 'kit_neon'],
+MAP_DEFS.neon = { exposure: 1, id: 'neon', name: 'Neon District', tag: 'City blocks · rooftop billboards · walk-in arcade · 4-8 players', size: 80, kit: ['mapkit', 'kit_neon'],
   tex: ['worn_asphalt', 'precast_concrete_wall'], station: [0, 0, 0],
   spawns: [[-28, -37], [-38, -24], [-22, -8], [-8, -37], [8, -37], [30, -37], [37, -12], [12, -8], [28, 37], [38, 24], [22, 8], [8, 37], [-8, 37], [-30, 37], [-37, 12], [-12, 8]],
   camps: [[-11.4, 3.6, -15.2, .79], [-16.6, 3.6, -20.6, -2.03], [11.4, 3.6, 15.2, -2.36], [16.6, 3.6, 20.6, 1.11], [16, 0, -20.2, 0], [-16, 0, 20.2, 3.14], [-28, 0, -27.2, 0], [28, 0, 27.2, 3.14]],
@@ -3425,6 +3425,9 @@ function hitGeometry() {
     glintMat: new THREE.SpriteMaterial({ map: tex(T.star), color: new THREE.Color(9, 8, 6), blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true }) };
 }
 const robots = []; let targetsDirty = true; const targets = [];
+// readability floor: an alive fighter's body glows faintly in its team colour so it never sinks into a dark map (Cryzen-style flat
+// readable characters). Per map, set by graphics.js (LOOK fill); 0 = off. A material value only (no shader change, no cost).
+let BOT_FILL = 0, BOT_FILLW = 0; const BOT_WHITE = new THREE.Color(1, 1, 1);   // BOT_FILLW: 0 = team colour .. 1 = white (on maps tinted like the team colour)
 function buildBot(profile) {
   if (!HB) hitGeometry();
   const model = THREE.SkeletonUtils.clone(ASSET.soldier.scene);
@@ -3436,7 +3439,7 @@ function buildBot(profile) {
     if (!o.isMesh) return;
     o.castShadow = o.receiveShadow = false; o.frustumCulled = false;
     const m = o.material.clone(); m.envMapIntensity = .85;
-    if (/Visor/i.test(m.name)) { m.emissive = col.clone(); m.emissiveIntensity = 2.6; visor = m; }
+    if (/Visor/i.test(m.name)) { m.emissive = col.clone(); m.emissiveIntensity = 1.25; visor = m; }   // a crisp team-colour accent, below the bloom threshold (2.6 haloed every enemy head)
     else { m.color = new THREE.Color(1, 1, 1).lerp(col, .22); m.emissive = new THREE.Color(0, 0, 0); m.roughness = .7; m.metalness = .25; body = m; }
     o.material = m;
   });
@@ -3713,12 +3716,12 @@ function buildPads() {
   const add = (x, z, kind) => {
     const c = nearestOk(cellOf(x, z)), px = cellX(c), pz = cellZ(c), py = NAV.h[c];
     const g = new THREE.Group(); g.position.set(px, py, pz); scene.add(g);
-    const col = kind === 'od' ? new THREE.Color(4, 1.4, .3) : new THREE.Color(.6, 4, 1.4);
+    const col = kind === 'od' ? new THREE.Color(2.4, .85, .2) : new THREE.Color(.4, 2.4, .85);   // readability pass: was 4x (a blooming sun next to players)
     const rm = new THREE.Mesh(ring, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .8, side: THREE.DoubleSide, depthWrite: false })); rm.rotation.x = -Math.PI / 2; rm.position.y = .03; g.add(rm);
     const item = new THREE.Group(); item.position.y = 1; g.add(item);
     if (kind === 'od') item.add(new THREE.Mesh(core, new THREE.MeshBasicMaterial({ color: col, wireframe: true })), new THREE.Mesh(new THREE.IcosahedronGeometry(.16, 0), new THREE.MeshBasicMaterial({ color: col })));
     else { const m = new THREE.MeshBasicMaterial({ color: col }); item.add(new THREE.Mesh(cross, m)); const v = new THREE.Mesh(cross, m); v.rotation.z = Math.PI / 2; item.add(v); }
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex(T.glow), color: col.clone().multiplyScalar(.5), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); glow.scale.setScalar(1.8); item.add(glow);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex(T.glow), color: col.clone().multiplyScalar(.35), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); glow.scale.setScalar(1.3); item.add(glow);
     PADS.push({ g, item, rm, kind, x: px, y: py, z: pz, ready: true, t: 0 });
   };
   add(-22, 0, 'hp'); add(22, 0, 'hp'); add(0, -21, 'hp'); add(0, 21, 'hp'); add(-1.2, 2.2, 'od');
@@ -6465,7 +6468,7 @@ function animateBot(r, dt) {
   r.flash.visible = r.flashT > 0; if (r.flash.visible) r.flash.material.rotation = rand(0, 6.28);
   // shield shimmer, hit flash
   r.shield = Math.max(0, r.shield - dt); r.bubble.visible = r.shield > 0;
-  if (r.hitT > .25) r.body.emissive.setRGB(.8, .7, .6); else if (!r.dead) { if (r.chillT > 0) r.body.emissive.setRGB(.15, .45, .7); else if (r.burnT > 0) r.body.emissive.setRGB(.6, .2, .04); else r.body.emissive.setRGB(0, 0, 0); }
+  if (r.hitT > .25) r.body.emissive.setRGB(.8, .7, .6); else if (!r.dead) { if (r.chillT > 0) r.body.emissive.setRGB(.15, .45, .7); else if (r.burnT > 0) r.body.emissive.setRGB(.6, .2, .04); else r.body.emissive.copy(r.color).lerp(BOT_WHITE, BOT_FILLW).multiplyScalar(BOT_FILL); }
 }
 // a dead operator's armour breaks down into drifting light in their colour
 const _dz = new THREE.Vector3();

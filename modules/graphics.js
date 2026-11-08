@@ -43,21 +43,28 @@
   // sat = saturation, con = S-curve contrast, sh/hi = shadow/highlight tint, vig = vignette, bloom = strength x,
   // fogH = height-fog amount (0..1), fall = how fast haze thins with height (per m), boost = extra haze at ground,
   // scat = sun glow in the haze, ao = occlusion strength
-  const LOOK_BASE = { sat: 1.12, con: .26, sh: [.92, 1, 1.08], hi: [1.06, 1, .92], vig: .42, bloom: 1, fogH: .8, fall: .09, boost: 1.45, scat: .5, ao: 1, aoDirect: .4, probe: 1 };
+  // readability (2026-11-08, owner: "too much glow around enemies, neon map glowing too hard"; benchmark Cryzen):
+  // bloomT = bloom threshold in ON-SCREEN brightness (divided by the map's exposure, so a sunny low-exposure map does not bloom lit
+  // walls/players), bloomR = bloom radius (small = a tight glow on the light itself, no wide haze), glow = scale of every over-bright
+  // light material on the map (neon tubes, signs, lava, holograms: colour/emissive > 1), applied once per map load (material values only)
+  const LOOK_BASE = { sat: 1.12, con: .26, sh: [.92, 1, 1.08], hi: [1.06, 1, .92], vig: .42, bloom: 1, fogH: .8, fall: .09, boost: 1.45, scat: .5, ao: 1, aoDirect: .4, probe: 1,
+    bloomT: 1.05, bloomR: .3, glow: 1, fill: 0, fillW: 0, hemiK: 1, lift: 0, fogK: 1 };
+  // fill = enemy body self-light in its team colour (index.html BOT_FILL; fillW = towards white on maps tinted like a team colour), hemiK = the map's sky/ground fill light x (shadows
+  // without the old bloom haze), lift = black level in the final picture (no pure-black crush), fogK = distance fog density x
   // 2026-11-08 readability pass (docs/SMOOTHNESS_VS_CRYZEN.md, render/contrast.js shots): yard/caverns softer S-curve (lifted shadows),
   // glacier/dunes/biolab stronger S-curve (flat/washed), biolab less ground haze; exposure + sky fill are in index.html MAPS/MAP_DEFS
   const LOOK = {
-    dunes: { sat: 1.1, con: .28, sh: [.9, .98, 1.1], hi: [1.07, 1.01, .9], fall: .07, boost: 1.6, scat: .9, aoDirect: .4 },
-    neon: { sat: 1.24, con: .28, sh: [.95, .92, 1.14], hi: [1.06, .98, 1.02], bloom: 1.25, fall: .12, boost: 1.7, scat: .35, ao: 1.1 },
-    foundry: { sat: 1.16, con: .2, sh: [.9, .96, 1.1], hi: [1.1, .99, .86], bloom: 1.15, fall: .1, boost: 1.5, scat: .6 },
-    glacier: { sat: 1.15, con: .26, sh: [.92, 1, 1.1], hi: [1.02, 1.01, 1], fall: .06, boost: 1.4, scat: .7 },
-    docks: { sat: 1.08, con: .16, fall: .1, boost: 1.6, scat: .3 },
-    orbital: { sat: 1.12, con: .2, fogH: .4, scat: .4, bloom: 1.1 },
-    biolab: { sat: 1.16, con: .3, sh: [.92, 1.04, 1.02], hi: [1.04, 1.02, .94], boost: 1.2 },
-    caverns: { sat: 1.2, con: .1, bloom: 1.2, boost: 1.5, ao: 1.15 },
-    shrine: { sat: 1.12, con: .16, hi: [1.08, 1, .9], scat: .9 },
-    grid: { sat: 1.2, con: .2, bloom: 1.2, fogH: .5 },
-    yard: { sat: 1.12, con: .1 },
+    dunes: { glow: .8, fill: .1, hemiK: 1.25, lift: .02, sat: 1.1, con: .28, sh: [.9, .98, 1.1], hi: [1.07, 1.01, .9], fall: .07, boost: 1.6, scat: .9, aoDirect: .4 },
+    neon: { glow: .6, fill: .2, hemiK: 1.8, lift: .035, fogK: .8, sat: 1.24, con: .28, sh: [.95, .92, 1.14], hi: [1.06, .98, 1.02], bloom: .8, fall: .12, boost: 1.7, scat: .35, ao: 1.1 },
+    foundry: { glow: .85, fill: .12, fillW: .7, hemiK: 1.4, lift: .03, sat: 1.16, con: .2, sh: [.9, .96, 1.1], hi: [1.1, .99, .86], bloom: .85, fall: .1, boost: 1.5, scat: .6 },
+    glacier: { glow: .8, fill: .08, sat: 1.15, con: .26, sh: [.92, 1, 1.1], hi: [1.02, 1.01, 1], fall: .06, boost: 1.4, scat: .7 },
+    docks: { glow: .7, fill: .15, hemiK: 1.35, lift: .03, fogK: .75, sat: 1.08, con: .16, fall: .1, boost: 1.6, scat: .3 },
+    orbital: { glow: .75, fill: .1, hemiK: 1.3, lift: .025, sat: 1.12, con: .2, fogH: .4, scat: .4, bloom: .9 },
+    biolab: { glow: .8, fill: .12, sat: 1.16, con: .3, sh: [.92, 1.04, 1.02], hi: [1.04, 1.02, .94], boost: 1.2 },
+    caverns: { fill: .15, lift: .015, sat: 1.2, con: .1, bloom: .85, boost: 1.5, ao: 1.15 },
+    shrine: { glow: .8, fill: .16, sat: 1.12, con: .16, hi: [1.08, 1, .9], scat: .9 },
+    grid: { glow: .6, fill: .15, hemiK: 1.6, lift: .035, fogK: .6, sat: 1.2, con: .2, bloom: .8, fogH: .5 },
+    yard: { fill: .1, sat: 1.12, con: .1 },
   };
   const lookOf = id => Object.assign({}, LOOK_BASE, LOOK[id] || {});
 
@@ -304,7 +311,7 @@ if (s9ProbeK > 0.001) {
   /* ---------- final pass: FXAA + sharpen + grade (replaces the game's grade shader, same uniforms) ---------- */
   const GRADE_FRAG = `
 uniform sampler2D tDiffuse; uniform float uTime,uHurt,uHit,uAds,uDying,uExposure; uniform vec2 uRes; varying vec2 vUv;
-uniform float uAA, uSharp, uGrain, uSat, uCon, uVig; uniform vec3 uShT, uHiT;
+uniform float uAA, uSharp, uGrain, uSat, uCon, uVig, uLift; uniform vec3 uShT, uHiT;
 vec3 aces(vec3 x){ return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.); }
 vec3 tm(vec2 uv){ vec3 c = clamp(texture2D(tDiffuse, uv).rgb, 0., 64.); if (c.r != c.r || c.g != c.g || c.b != c.b) c = vec3(0.); return aces(c*uExposure); }
 float lu(vec3 c){ return dot(c, vec3(.299,.587,.114)); }
@@ -338,11 +345,12 @@ void main(){
   col = pow(clamp(col, 0., 1.), vec3(1./2.2));
   col = mix(col, col*col*(3.-2.*col), uCon);
   float n = fract(sin(dot(floor(vUv*uRes) + fract(uTime*7.13)*97.0, vec2(12.9898,78.233)))*43758.5453);
+  col = uLift + col*(1.-uLift);
   col += (n-.5)*uGrain;
   gl_FragColor = vec4(col,1.);
 }`;
   const GU = grade.uniforms;
-  Object.assign(GU, { uAA: { value: 1 }, uSharp: { value: .3 }, uGrain: { value: .015 }, uSat: { value: 1.1 }, uCon: { value: .15 }, uVig: { value: .45 }, uShT: { value: new T.Vector3(.92, 1, 1.08) }, uHiT: { value: new T.Vector3(1.06, 1, .92) } });
+  Object.assign(GU, { uAA: { value: 1 }, uSharp: { value: .3 }, uGrain: { value: .015 }, uSat: { value: 1.1 }, uCon: { value: .15 }, uVig: { value: .45 }, uLift: { value: 0 }, uShT: { value: new T.Vector3(.92, 1, 1.08) }, uHiT: { value: new T.Vector3(1.06, 1, .92) } });
   grade.material.uniforms = GU; grade.material.fragmentShader = GRADE_FRAG; grade.material.needsUpdate = true;
 
   /* ---------- AO volume per map ---------- */
@@ -433,7 +441,7 @@ void main(){
   function applyLook() {
     const L = S.look = lookOf(S.map), Tt = TIERS[S.tier];
     GU.uAA.value = Tt.aa; GU.uSharp.value = Tt.sharp; GU.uGrain.value = Tt.grain;
-    GU.uSat.value = L.sat; GU.uCon.value = L.con; GU.uVig.value = L.vig; GU.uShT.value.set(...L.sh); GU.uHiT.value.set(...L.hi);
+    GU.uSat.value = L.sat; GU.uCon.value = L.con; GU.uVig.value = L.vig; GU.uLift.value = L.lift; GU.uShT.value.set(...L.sh); GU.uHiT.value.set(...L.hi);
     const A = S.aoMaps[S.map];
     if (A) { U.s9AOVol.value = A.tex; U.s9AOMin.value.copy(A.min); U.s9AOSize.value.copy(A.size); }
     else U.s9AOVol.value = blank3D;
@@ -443,7 +451,29 @@ void main(){
     ACT.probe = S.probe && !S.capturing ? Tt.probe * L.probe : 0;
     if (has('sun') && sun) { U.s9SunDir.value.copy(sun.position).normalize(); U.s9SunCol.value.copy(sun.color).multiplyScalar(Math.min(1.2, sun.intensity) * .12); }
     if (has('scene') && scene.fog) U.s9SunCol.value.lerp(scene.fog.color, .35);
-    if (bloom) { if (S.bloom0 === undefined) S.bloom0 = { s: bloom.strength, r: bloom.radius, t: bloom.threshold }; bloom.strength = S.bloom0.s * L.bloom * Tt.bloomK; bloom.radius = S.bloom0.r; bloom.threshold = S.bloom0.t; }
+    if (bloom) { if (S.bloom0 === undefined) S.bloom0 = { s: bloom.strength, r: bloom.radius, t: bloom.threshold }; bloom.strength = S.bloom0.s * L.bloom * Tt.bloomK;
+      const ex = (has('MAPS') && (MAPS.find(m => m.id === S.map) || {}).exposure) || .9;
+      bloom.radius = L.bloomR; bloom.threshold = L.bloomT / ex; }
+    applyGlow(L.glow);
+    if (typeof BOT_FILL !== 'undefined') { BOT_FILL = L.fill; BOT_FILLW = L.fillW; }
+    // fill light + fog: the map build sets them; the first look applied after a load remembers those values (S.base0 per map)
+    if (has('MAPROOT') && (!S.base0 || S.base0.map !== S.map)) {
+      const hl = MAPROOT.children.filter(o => o.isHemisphereLight);
+      S.base0 = { map: S.map, hemi: hl.map(o => [o, o.intensity]), fog: has('scene') && scene.fog ? scene.fog.density : null };
+    }
+    if (S.base0) { if (L.hemiK !== 1) for (const [o, i] of S.base0.hemi) o.intensity = i * L.hemiK; if (L.fogK !== 1 && S.base0.fog != null && scene.fog) scene.fog.density = S.base0.fog * L.fogK; }
+  }
+  // over-bright light materials of the current map x k (original values kept on the material, so re-applying never compounds)
+  function applyGlow(k) {
+    if (!has('MAPROOT')) return;
+    const seen = new Set();
+    MAPROOT.traverse(o => { if (!o.material) return; for (const m of [].concat(o.material)) {
+      if (!m || seen.has(m)) continue; seen.add(m); const u = m.userData;
+      if ((m.isMeshBasicMaterial || m.isSpriteMaterial) && m.color) { if (!u.s9g0) { if (Math.max(m.color.r, m.color.g, m.color.b) <= 1.001) continue; u.s9g0 = m.color.clone(); } m.color.copy(u.s9g0).multiplyScalar(k); }
+      else if (m.emissive && m.emissive.isColor) { if (u.s9gE === undefined) { if (Math.max(m.emissive.r, m.emissive.g, m.emissive.b) * (m.emissiveIntensity == null ? 1 : m.emissiveIntensity) <= 1.001) continue; u.s9gE = m.emissiveIntensity == null ? 1 : m.emissiveIntensity; } m.emissiveIntensity = u.s9gE * k; }
+      else if (m.isShaderMaterial && m.uniforms && m.uniforms.uCol && m.uniforms.uCol.value && m.uniforms.uCol.value.isColor) { const c = m.uniforms.uCol.value; if (!u.s9g0) { if (Math.max(c.r, c.g, c.b) <= 1.001) continue; u.s9g0 = c.clone(); } c.copy(u.s9g0).multiplyScalar(k); }
+    } });
+    S.glowK = k;
   }
 
   /* ---------- hooks into the game ---------- */
@@ -477,7 +507,7 @@ void main(){
       const pre = Promise.all([loadAO(mid), TIERS[S.tier].hd && def ? loadHD(def.tex || []) : null]);
       const r = await _lm.apply(this, arguments);
       await pre;
-      S.map = has('CUR_MAP') ? CUR_MAP : mid;
+      S.map = has('CUR_MAP') ? CUR_MAP : mid; S.base0 = null;   // the build just set the map's own fill light + fog
       const A = S.aoMaps[S.map]; if (A) { try { renderer.initTexture(A.tex); } catch (e) {} }
       patchWorld(false); applyTextures(); applyLook(); captureProbe(); applyLook();
       return r;
@@ -634,7 +664,7 @@ void main(){
     if (syncing) return; syncing = true;
     const id = has('CUR_MAP') ? CUR_MAP : null, def = has('MAPS') ? MAPS.find(m => m.id === id) : null;
     await Promise.all([id ? loadAO(id) : null, TIERS[S.tier].hd && def ? loadHD(def.tex || []) : null]);
-    S.map = id;
+    S.map = id; S.base0 = null;
     patchWorld(true); applyQuality(); applyTextures(); applyLook(); captureProbe(); applyLook();
     const A = S.aoMaps[S.map]; if (A) { try { renderer.initTexture(A.tex); } catch (e) {} }
     try { warmShaders(); } catch (e) {}

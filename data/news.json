@@ -2,6 +2,18 @@
   "about": "What's New feed shown in the game (modules/news.js). Newest first is not required: the game sorts by date + version. Fields: id (unique), date YYYY-MM-DD, version, title, items[], big (highlighted card), image (optional, relative path like assets/ui/news/x.jpg). Written by the release manager (qa/release) when a big feature goes live.",
   "entries": [
     {
+      "id": "mod-menu",
+      "date": "2026-11-08",
+      "version": "2026.11.08-r15",
+      "title": "New main menu",
+      "big": true,
+      "items": [
+        "One clear home screen: Play vs bots or Multiplayer",
+        "Big map previews to pick where you play",
+        "Browse rooms with mode, map and player count, or create your own"
+      ]
+    },
+    {
       "id": "mod-killcam",
       "date": "2026-11-08",
       "version": "2026.11.08-r12",
