@@ -700,6 +700,157 @@
    }
   },
   {
+   "id": "obelisk_arctic",
+   "weapon": "obelisk",
+   "name": "Arctic Camo",
+   "rarity": "common",
+   "collection": null,
+   "unlockLevel": 1,
+   "desc": "Snow camo for long, cold, very quiet days.",
+   "look": {
+    "sc": 1.6,
+    "bump": 0.4,
+    "trim": {
+     "pat": 0.6,
+     "tint": [
+      0.8,
+      0.82,
+      0.85
+     ],
+     "rough": 0.7,
+     "metal": 0.2
+    },
+    "metal": {
+     "col": "#9aa9b6",
+     "rough": 0.4
+    },
+    "tex": "sniper_arctic",
+    "n": 512,
+    "emi": false,
+    "body": [
+     0.94,
+     0.94,
+     0.94
+    ],
+    "acc": [
+     0.987,
+     0.987,
+     0.987
+    ],
+    "rs": 1.4
+   }
+  },
+  {
+   "id": "obelisk_pixel",
+   "weapon": "obelisk",
+   "name": "Pixel Hunter",
+   "rarity": "rare",
+   "collection": null,
+   "unlockLevel": 1,
+   "desc": "Khaki digital camo. You see it, it sees you first.",
+   "look": {
+    "sc": 1.8,
+    "bump": 0.2,
+    "trim": {
+     "pat": 0.5,
+     "tint": [
+      0.5,
+      0.5,
+      0.45
+     ],
+     "rough": 0.7,
+     "metal": 0.2
+    },
+    "metal": {
+     "col": "#5a6040",
+     "rough": 0.5
+    },
+    "tex": "sniper_pixel",
+    "n": 512,
+    "emi": false
+   }
+  },
+  {
+   "id": "obelisk_viper",
+   "weapon": "obelisk",
+   "name": "Viper",
+   "rarity": "epic",
+   "collection": null,
+   "unlockLevel": 6,
+   "desc": "Venom-green snakeskin. Strikes once.",
+   "look": {
+    "sc": 2.2,
+    "bump": 1.1,
+    "trim": {
+     "pat": 0.3,
+     "tint": [
+      0.3,
+      0.4,
+      0.3
+     ],
+     "rough": 0.35,
+     "metal": 0.5
+    },
+    "metal": {
+     "col": "#3cff6a",
+     "rough": 0.3
+    },
+    "glow": "#3cff6a",
+    "tex": "sniper_viper",
+    "n": 512,
+    "emi": false
+   }
+  },
+  {
+   "id": "obelisk_ninefold",
+   "weapon": "obelisk",
+   "name": "Ninefold Prism",
+   "rarity": "mythic",
+   "collection": null,
+   "unlockLevel": 31,
+   "animated": true,
+   "desc": "Animated: nine shard facets refract the light around you.",
+   "look": {
+    "sc": 2.6,
+    "bump": 1.0,
+    "trim": {
+     "pat": 0.5,
+     "tint": [
+      0.6,
+      0.6,
+      0.7
+     ],
+     "rough": 0.1,
+     "metal": 0.8
+    },
+    "metal": {
+     "col": "#ffe27a",
+     "rough": 0.1
+    },
+    "glow": "#ffe27a",
+    "gi": 2.0,
+    "iri": 0.5,
+    "mode": 4,
+    "spd": 1.5,
+    "fx": "holo",
+    "fxc": "#ff3d6e",
+    "tex": "sniper_ninefold",
+    "n": 1024,
+    "emi": true,
+    "body": [
+     0.99,
+     0.99,
+     0.99
+    ],
+    "acc": [
+     1.0395,
+     1.0395,
+     1.0395
+    ],
+    "rs": 1.4
+   }
+  },
+  {
    "id": "nova_desert",
    "weapon": "nova",
    "name": "Desert Patrol",

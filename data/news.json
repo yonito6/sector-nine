@@ -2,6 +2,17 @@
   "about": "What's New feed shown in the game (modules/news.js). Newest first is not required: the game sorts by date + version. Fields: id (unique), date YYYY-MM-DD, version, title, items[], big (highlighted card), image (optional, relative path like assets/ui/news/x.jpg). Written by the release manager (qa/release) when a big feature goes live.",
   "entries": [
     {
+      "id": "mod-w_obelisk",
+      "date": "2026-11-08",
+      "version": "2026.11.08-r18",
+      "title": "New weapon: BR-6 Obelisk",
+      "big": true,
+      "items": [
+        "A bolt-action sniper: one heavy shot, then you work the bolt",
+        "Head or body shot kills, strongest scope in the game"
+      ]
+    },
+    {
       "id": "mod-footsteps",
       "date": "2026-11-08",
       "version": "2026.11.08-r17",

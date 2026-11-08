@@ -1,5 +1,5 @@
 {
-  "v": "17",
+  "v": "18",
   "modules": [
     "settings",
     "graphics",
@@ -20,6 +20,7 @@
     "roundfx",
     "w_poopgun",
     "w_flytrap",
+    "w_obelisk",
     "menu",
     "friends",
     "playercard",
