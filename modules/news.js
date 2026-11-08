@@ -33,12 +33,13 @@
 
   const CSS = `
 #btnNews{position:relative}
-#btnNews .s9n-dot{display:none;position:absolute;top:-8px;right:-8px;font:600 9px/1 var(--mono,monospace);letter-spacing:.12em;color:#14100b;background:var(--sodium,#ff9a3c);padding:3px 5px 2px;border-radius:2px;box-shadow:0 0 0 2px var(--bg,#0b0d10),0 0 12px rgba(255,154,60,.55);pointer-events:none}
-#btnNews.s9n-has .s9n-dot{display:block;animation:s9nPulse 1.8s ease-in-out infinite}
+#btnNews .s9n-dot{display:none;position:static;margin-left:8px;vertical-align:middle;white-space:nowrap;font:600 9px/1 var(--mono,monospace);letter-spacing:.12em;color:#14100b;background:var(--sodium,#ff9a3c);padding:3px 5px 2px;border-radius:2px;box-shadow:0 0 0 2px var(--bg,#0b0d10),0 0 12px rgba(255,154,60,.55);pointer-events:none}
+#btnNews.s9n-has .s9n-dot{display:inline-block;animation:s9nPulse 1.8s ease-in-out infinite}
 @keyframes s9nPulse{50%{box-shadow:0 0 0 2px var(--bg,#0b0d10),0 0 2px rgba(255,154,60,.2)}}
 #s9news{position:fixed;inset:0;z-index:70;display:grid;place-items:center;padding:24px 16px;background:rgba(5,6,8,.78);backdrop-filter:blur(3px)}
+@media (max-height:500px){#s9news{padding:8px 12px}#s9news .s9n-box{max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px)}#s9news .s9n-head{padding:12px 16px 10px}#s9news h2{font-size:30px}#s9news .s9n-list{padding:12px 16px 16px}}
 #s9news[hidden]{display:none!important}
-#s9news .s9n-box{width:min(760px,100%);max-height:min(860px,calc(100vh - 48px));display:flex;flex-direction:column;background:#0e1115;border:1px solid var(--line,rgba(236,230,216,.18));box-shadow:0 30px 80px rgba(0,0,0,.6);color:var(--ink,#ece6d8)}
+#s9news .s9n-box{width:min(760px,100%);max-height:min(860px,calc(100vh - 48px));max-height:min(860px,calc(100dvh - 48px));display:flex;flex-direction:column;background:#0e1115;border:1px solid var(--line,rgba(236,230,216,.18));box-shadow:0 30px 80px rgba(0,0,0,.6);color:var(--ink,#ece6d8)}
 #s9news .s9n-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:22px 24px 16px;border-bottom:1px solid var(--line,rgba(236,230,216,.18))}
 #s9news .s9n-kick{font:600 11px/1 var(--mono,monospace);letter-spacing:.3em;text-transform:uppercase;color:var(--sodium,#ff9a3c);margin-bottom:8px}
 #s9news h2{font-family:var(--display,Impact,sans-serif);font-weight:900;font-size:clamp(34px,6vw,54px);line-height:.85;margin:0;letter-spacing:.01em}

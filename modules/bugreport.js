@@ -238,12 +238,14 @@ function verdict(pin, h, rayD) {
 function makeMarker(p, i) {
   const s = S9(), THREE = s.THREE, grp = new THREE.Group(); grp.userData.s9bug = true;
   const col = PIN_COLS[i % PIN_COLS.length];
-  const core = new THREE.Mesh(new THREE.SphereGeometry(.07, 12, 8), new THREE.MeshBasicMaterial({ color: col, toneMapped: false, fog: false }));
+  // hot near-white core inside a coloured glow: stands out on any floor (the orange pin 2 core melted into Dunes sand); stick, head + halo keep the pin colour
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.07, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(col).lerp(new THREE.Color(0xffffff), .7), toneMapped: false, fog: false }));
+  const pinMat = new THREE.MeshBasicMaterial({ color: col, toneMapped: false, fog: false });
   const halo = new THREE.Mesh(new THREE.SphereGeometry(.2, 16, 10), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .35, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false }));
   halo.renderOrder = 999;
   const n = new THREE.Vector3(...(p.normal || [0, 1, 0])).normalize();
-  const stick = new THREE.Mesh(new THREE.CylinderGeometry(.012, .012, .45, 6), core.material); stick.position.copy(n).multiplyScalar(.225); stick.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(.05, 10, 8), core.material); head.position.copy(n).multiplyScalar(.45);
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(.012, .012, .45, 6), pinMat); stick.position.copy(n).multiplyScalar(.225); stick.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.05, 10, 8), pinMat); head.position.copy(n).multiplyScalar(.45);
   for (const m of [core, halo, stick, head]) { m.userData.s9bug = true; m.castShadow = m.receiveShadow = false; m.frustumCulled = false; grp.add(m); }
   grp.position.set(...p.point); s.scene.add(grp); return grp;
 }

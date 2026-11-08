@@ -37,7 +37,7 @@
     profile: '<circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4.2 4-6.5 8-6.5s7.2 2.3 8 6.5"/>',
     friends: '<circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.6 6.5-5.6s5.9 2 6.5 5.6"/><circle cx="17" cy="7.5" r="2.8"/><path d="M16.5 13.3c2.9.1 4.6 2 5 5"/>',
     settings: '<circle cx="12" cy="12" r="3"/><path d="M10.3 2.5h3.4l.5 2.6 1.9.8 2.2-1.5 2.4 2.4-1.5 2.2.8 1.9 2.6.5v3.4l-2.6.5-.8 1.9 1.5 2.2-2.4 2.4-2.2-1.5-1.9.8-.5 2.6h-3.4l-.5-2.6-1.9-.8-2.2 1.5-2.4-2.4 1.5-2.2-.8-1.9-2.6-.5v-3.4l2.6-.5.8-1.9-1.5-2.2 2.4-2.4 2.2 1.5 1.9-.8z"/>',
-    news: '<path d="M3 10v4h3l7 5V5L6 10z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>',
+    news: '<path d="M3 10.2v3.6a1 1 0 0 0 1 1h2.6L17 19.5v-15L6.6 9.2H4a1 1 0 0 0-1 1z"/><path d="M7.4 14.8 9 20h2.6l-1.3-4.4"/><path d="M20 9.6a3 3 0 0 1 0 4.8"/>',
     bug: '<rect x="7" y="7" width="10" height="13" rx="5"/><path d="M9 7.5 7.5 4M15 7.5 16.5 4M7 12H3M21 12h-4M7 17l-3 2M17 17l3 2M12 10v9"/>',
     controls: '<rect x="2" y="6" width="20" height="12" rx="1.5"/><path d="M6 10h1M10 10h1M14 10h1M18 10h0M6 14h12"/>',
     shop: '<path d="M12 2 20 8 12 22 4 8z"/><path d="M4 8h16M12 2 9 8l3 14 3-14z"/>',
@@ -341,15 +341,24 @@
 .s9m-grid .s9m-map:focus-visible{outline:2px solid var(--c);outline-offset:2px}
 /* responsive */
 @media (min-width:761px) and (max-width:1500px){.s9m-brand b{font-size:22px}#s9m .s9m-nav{gap:2px;container:s9nav/inline-size}#s9m .s9m-nav>button:is(.ghost,:not(.ghost)){padding:0 9px;letter-spacing:.08em}}
-/* the top bar copes with any number of nav items: as the nav gets narrower the labels fold into icons (tooltip stays), lowest priority first; "What's new" keeps its label (and NEW badge) longest */
-@container s9nav (max-width:700px){#s9m .s9m-nav:has(>button:nth-child(5))>button:is(.ghost,:not(.ghost)):not(#btnNews){font-size:0;gap:0;padding:0 12px}#s9m .s9m-nav:has(>button:nth-child(5))>button:is(.ghost,:not(.ghost)):not(#btnNews) b,#s9m .s9m-nav:has(>button:nth-child(5))>button:is(.ghost,:not(.ghost)):not(#btnNews) .s9n-dot{margin-left:6px}}
-@container s9nav (max-width:520px){#s9m .s9m-nav>button:is(.ghost,:not(.ghost)):not(#btnNews){font-size:0;gap:0;padding:0 12px}#s9m .s9m-nav>button:is(.ghost,:not(.ghost)):not(#btnNews) b,#s9m .s9m-nav>button:is(.ghost,:not(.ghost)):not(#btnNews) .s9n-dot{margin-left:6px}}
-@container s9nav (max-width:390px){#s9m .s9m-nav:has(>button:nth-child(6))>button:is(.ghost,:not(.ghost)){font-size:0;gap:0;padding:0 12px}#s9m .s9m-nav:has(>button:nth-child(6))>button:is(.ghost,:not(.ghost)) b,#s9m .s9m-nav:has(>button:nth-child(6))>button:is(.ghost,:not(.ghost)) .s9n-dot{margin-left:6px}}
-@container s9nav (max-width:300px){#s9m .s9m-nav>button:is(.ghost,:not(.ghost)){font-size:0;gap:0;padding:0 12px}#s9m .s9m-nav>button:is(.ghost,:not(.ghost)) b,#s9m .s9m-nav>button:is(.ghost,:not(.ghost)) .s9n-dot{margin-left:6px}}
+/* the top bar never overlaps: fitTop() measures it and steps through fit levels f1..f5 (each adds to the last) until everything fits in one row.
+   f1 nav labels -> icons (tooltips stay; What's new keeps its label) / f2 right side compact (Friends count, Shop icon, chip without the level line)
+   f3 What's new -> megaphone icon with a NEW pip inside its box / f4 account chip = rank badge only / f5 tighter spacing */
+#s9m .s9m-top.f1 .s9m-nav>button:is(.ghost,:not(.ghost)):not(#btnNews),#s9m .s9m-top.f3 .s9m-nav>#btnNews:is(.ghost,:not(.ghost)){font-size:0;gap:0;padding:0 12px}
+#s9m .s9m-top.f1 .s9m-nav>button:not(#btnNews) b:not(.s9m-badge){display:none}
+#s9m .s9m-top.f1 .s9m-nav>button .s9m-badge{position:absolute;top:3px;right:3px;padding:1px 3px;font-size:9px;line-height:1}
+#s9m .s9m-top.f2 .s9m-right>#btnFriends{font-size:0;gap:6px;padding:0 10px}#s9m .s9m-top.f2 #btnFriends .s9m-fc{font-size:12px}#s9m .s9m-top.f2 #btnFriends .s9m-fc .w{display:none}
+#s9m .s9m-top.f2 .s9m-right>button.s9s-open:is(.ghost,:not(.ghost)){font-size:0;padding:0 10px}
+#s9m .s9m-top.f2 #s9a-chip .lv{display:none}#s9m .s9m-top.f2 #s9a-chip{max-width:180px}
+#s9m .s9m-top.f3 .s9m-nav>#btnNews .s9n-dot{position:absolute;top:6px;right:6px;width:8px;height:8px;padding:0;font-size:0;border-radius:50%;box-shadow:0 0 6px rgba(255,154,60,.8)}
+#s9m .s9m-top.f4 #s9a-chip{max-width:56px;padding:4px;gap:0}#s9m .s9m-top.f4 #s9a-chip>span:not(:first-child){display:none}#s9m .s9m-top.f4 .s9m-brand b{display:none}
+#s9m .s9m-top.f5{gap:8px}#s9m .s9m-top.f5 .s9m-nav>button:is(.ghost,:not(.ghost)){padding:0 9px}#s9m .s9m-top.f5 :is(.s9m-util,.s9m-right){gap:4px}#s9m .s9m-top.f5 .s9m-util>button:is(.ghost,:not(.ghost)){width:38px}
+/* the account chip never spills its text past its own border */
+#s9m #s9a-chip{overflow:hidden;min-width:0}#s9m #s9a-chip .lv{display:block;overflow:hidden;text-overflow:ellipsis}
 #s9m .s9m-nav>button b{font-size:10px}
 /* the NEW tag of "What's new" sits inside the button in the nav (it was a corner badge when the button lived in the icon row, which poked out of the box) */
 @media (min-width:761px){#s9m .s9m-nav>#btnNews .s9n-dot{position:static;box-shadow:none;vertical-align:middle;white-space:nowrap}}
-@media (max-width:760px){#s9m .s9m-nav>#btnNews .s9n-dot{top:3px;right:3px;box-shadow:none}}
+@media (max-width:760px){#s9m .s9m-nav>#btnNews .s9n-dot{position:absolute;top:3px;right:3px;margin:0;box-shadow:none}}
 @media (max-width:1240px){.s9m-brand b{display:none}.s9m-two{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}.s9m-create{grid-template-columns:1fr}.s9m-cards{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:1040px){.s9m-browse{grid-template-columns:1fr}.s9m-side{grid-template-columns:1fr 1fr}}
 @media (max-width:760px){
@@ -395,6 +404,9 @@
 .s9m-chip{min-width:40px;padding:0 10px}
 @media (max-width:760px){.s9m-pair{grid-template-columns:1fr}.s9m-pair .s9m-field{margin-bottom:16px}.s9m-bottom .s9m-sum{display:none}
   .s9m-seg{display:grid;grid-template-columns:auto 1fr 1fr 1fr;width:100%}.s9m-seg button{padding:0 6px;font-size:10px;letter-spacing:.06em;border-right:1px solid var(--ln)}}
+/* phone in landscape / very short window: slimmer top bar and hero so the two big choices fit on screen */
+@media (max-height:500px) and (min-width:561px){#s9m .s9m-top{padding-top:6px;padding-bottom:6px}#s9m .s9m-nav>button:is(.ghost,:not(.ghost)),#s9m .s9m-util>button:is(.ghost,:not(.ghost)),#s9m .s9m-right>button,#s9m #s9a-chip{height:36px}#s9m .s9m-util>button:is(.ghost,:not(.ghost)){width:36px}
+  .s9m-scr{padding-top:10px}.s9m-home{gap:10px}.s9m-hero h1{font-size:clamp(34px,8vh,52px)}.s9m-hero p,.s9m-hero .s9m-k{display:none}.s9m-choice{min-height:0;padding:14px 18px}.s9m-choice h2{font-size:clamp(28px,9vh,46px)}.s9m-choice p{display:none}}
 @media (max-height:820px) and (min-width:761px){.s9m-choice{min-height:clamp(220px,40vh,420px)}.s9m-hero h1{font-size:clamp(52px,6.2vw,110px)}}
 /* ---- review round 2 ---- */
 #s9m .s9m-bg::after{background:linear-gradient(180deg,transparent 0,rgba(255,154,60,.04) 55%,rgba(255,154,60,.09) 85%,transparent 100%)}
@@ -628,6 +640,7 @@
       const id = e.dataTransfer.getData('text/s9pid'), r = netRoom(); if (id && r && r.isHost && r.send) { const p = r.meta && r.meta.players && r.meta.players.find(q => q.id === id); if (!p || p.team !== col.dataset.col) r.send({ k: 'setTeam', id, team: col.dataset.col }); } });
     root.addEventListener('pointerover', tipShow); root.addEventListener('pointerout', tipHide); root.addEventListener('focusin', tipShow); root.addEventListener('focusout', tipHide);
     ST.built = true;
+    setupFit();
   }
 
   function buildLobby() {
@@ -925,6 +938,28 @@
       const now = document.activeElement;
       if (had && now !== had && (!now || now === document.body) && had.isConnected && !had.closest('[hidden],[inert]') && had.getClientRects().length) try { had.focus({ preventScroll: true }); } catch (e) {}
     }
+  }
+  /* ------------------------------------------------------------------ top bar fit: nothing in the top row ever overlaps
+     Measures the real row (long nicks, Lv badges, friend counts, shard balances, any number of add-on buttons, Windows scaling)
+     and adds fit levels f1..f5 until the nav and the row both fit. Desktop/landscape only: at 760px and below the row wraps (CSS grid). */
+  const FIT_MAX = 5; let fitRaf = 0;
+  function fitTop() {
+    fitRaf = 0; const top = root && root.querySelector('.s9m-top'); if (!top || !navEl) return 0;
+    for (let i = 1; i <= FIT_MAX; i++) top.classList.remove('f' + i);
+    if (innerWidth <= 760 || !top.getClientRects().length) { top.dataset.fit = '0'; return 0; }
+    const over = () => navEl.scrollWidth > navEl.clientWidth + 1 || top.scrollWidth > top.clientWidth + 1 ||
+      [...top.children].some(c => { const r = c.getBoundingClientRect(); return r.width && (r.right > top.clientWidth + 1 || r.left < -1); });
+    let lv = 0; while (lv < FIT_MAX && over()) top.classList.add('f' + (++lv));
+    top.dataset.fit = String(lv); return lv;
+  }
+  function fitSoon() { if (!fitRaf) fitRaf = requestAnimationFrame(fitTop); }
+  function setupFit() {
+    const top = root.querySelector('.s9m-top');
+    try { new ResizeObserver(fitSoon).observe(root); } catch (e) {}
+    addEventListener('resize', fitSoon);
+    try { new MutationObserver(fitSoon).observe(top, { subtree: true, childList: true, characterData: true, attributeFilter: ['hidden', 'style'] }); } catch (e) {}
+    try { document.fonts && document.fonts.ready.then(fitSoon); } catch (e) {}
+    fitTop();
   }
   let adopting = false;
   function adopt() { keepFocus(adoptNow); }
@@ -1267,7 +1302,7 @@
 
   const api = window.S9Menu = {
     ready: false, addNavButton, setBadge, addPanel, show: n => show(n), back: () => back(), screen: () => ST.screen, vis: () => ST.vis,
-    setVis: v => setVis(v), syncFriends, _st: ST
+    setVis: v => setVis(v), syncFriends, fit: () => fitTop(), _st: ST
   };
   init();
 })();
