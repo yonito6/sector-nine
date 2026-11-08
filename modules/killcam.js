@@ -129,6 +129,8 @@ const _animateBot = animateBot;
 animateBot = function (r) { if (KC.live && !KC.inReplay && r && !r.kcGhost) return; return _animateBot.apply(this, arguments); };
 const _updateRobots = updateRobots;
 updateRobots = function (dt, menu) {
+  // offline, the match is over while the final killcam fills the screen: the hidden live bots need not wander behind it
+  if (menu && KC.fin && KC.fin.shown && state === 'matchend' && !NET.on) return;
   const r = _updateRobots.apply(this, arguments);
   if (!menu) { try { if (recording()) record(); if (state === 'dead' && KC.clip && !KC.live) buildGhosts(1);
     // spectator mode switched on while a replay runs: spectate.js holds the death timer at 0, so the replay would never get
@@ -636,7 +638,10 @@ startKillcam = function (killer) {
   DC.T = Math.max(DCT, RS - END_PAD - c.dur);      // short footage: the death cam simply runs a bit longer
   REC.on = true; REC.deathT = c.deathT; REC.killer = killer; REC.ki = robots.indexOf(killer); REC.lastRt = -1e9;
   KC.hpKey = null; fillBanner(c); if (KC.log) KC.log.length = 0; if (KC.snd) KC.snd.length = 0;
-  setTimeout(() => { try { if (KC.clip && KC.clip.deathT === c.deathT && !KC.live) prewarm(KC.clip); } catch (e) { warnOnce(e); } }, Math.max(100, (DC.T - .3) * 1000));   // after the actors are built (one per frame), before the replay
+  // after the actors are built (one per frame), before the replay: build + compile, then draw it off screen at a few moments
+  // (one step per task, ~a frame apart, so the death cam never stalls on all of it at once)
+  const warm = () => { try { const k = KC.clip; if (k && k.deathT === c.deathT && !KC.live && warmStep(k)) setTimeout(warm, 16); } catch (e) { warnOnce(e); } };
+  setTimeout(warm, Math.max(100, (DC.T - .45) * 1000));
 };
 const _stopKillcam = stopKillcam;
 stopKillcam = function () {
@@ -647,7 +652,7 @@ stopKillcam = function () {
   if (D0) { D0.fx.style.opacity = '0'; D0.hm.style.opacity = '0'; D0.down.hidden = true; D0.you.style.opacity = '0'; } KC.youSet = false;
   if (was && camera.fov < 40) { camera.fov = 62; camera.updateProjectionMatrix(); }
   DC.T = DCT0; KC.clip = null; if (!KC.fin) duck(false);
-  vmRestore();
+  vmRestore(); restoreHands();
 };
 // the killer's finish on the first-person gun during the replay; your own finishes come back afterwards
 function vmFinish(vm, kw, c) {
@@ -765,6 +770,7 @@ function fxSound(key, o, kind) { return playBuf(AUD.buf[key], o, { kind: kind ||
 
 /* ================= replay frame ================= */
 const live = { bots: [], misc: [], vm: null };
+const LVM = { gv: false, vis: [], vm: null, pos: new THREE.Vector3(), rot: new THREE.Euler(), fl: false, ret: null, rear: null, hasMag: false, magP: new THREE.Vector3(), magV: false, hasArm: false, arm: new THREE.Vector3() };
 function hideGhosts() { for (const g of GH.values()) { g.root.visible = false; g.gun.visible = false; } }
 const PX = new Map();
 function hideProxies() { for (const m of PX.values()) m.visible = false; }
@@ -790,6 +796,15 @@ function kickAt(rt, fires) {   // recoil as a smooth pulse per shot (rises in ~1
   return Math.min(k, 1.8);
 }
 const VIEW = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 };
+// someone else's shot that flies past the killer's head: drawn through the lens it filled the screen with a giant white wedge
+// (the beam is a few cm wide, a few cm from the eye). Like any shooter, a tracer stops 1.5 m before it reaches the camera.
+const _nb = new THREE.Vector3(), _nd = new THREE.Vector3(), _nc = new THREE.Vector3();
+function nearCam(a, b) {
+  const L = _nd.subVectors(b, a).length(); if (L < 1e-4) return null; _nd.multiplyScalar(1 / L);
+  const tc = clamp(_nc.subVectors(camera.position, a).dot(_nd), 0, L); _nb.copy(a).addScaledVector(_nd, tc);
+  if (_nb.distanceToSquared(camera.position) > .7 * .7) return b;
+  const end = tc - 1.5; return end < 1 ? null : _nb.copy(a).addScaledVector(_nd, end);
+}
 const _ndc = new THREE.Vector3();
 function muzzleWorld(vm, scoped, out) {   // the killer's muzzle as seen on screen, put into the world so tracers leave their gun
   camera.updateMatrixWorld(); const fwd = _c.set(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -893,7 +908,7 @@ function orbitCam(c, rt) {
 const _applyReplay = applyReplay, _restoreReplay = restoreReplay;
 applyReplay = function () {
   const c = KC.clip; if (!c || !REC.on) return false;
-  try { if (P.dieT > RS + .25 || (window.SPECTATE && window.SPECTATE.on)) { stopKillcam(); if (!(window.SPECTATE && window.SPECTATE.on)) $('death').hidden = false; return false; } return applyClip(c, Math.max(0, P.dieT - DC.T)); } catch (e) { warnOnce(e); KC.inReplay = false; try { restoreClip(); } catch (e2) {} REC.on = false; KC.clip = null; return false; }
+  try { if (P.dieT > RS + .25 || (window.SPECTATE && window.SPECTATE.on)) { stopKillcam(); if (!(window.SPECTATE && window.SPECTATE.on)) $('death').hidden = false; return false; } return applyClip(c, Math.max(0, P.dieT - DC.T)); } catch (e) { warnOnce(e); KC.inReplay = false; try { restoreClip(); } catch (e2) {} restoreHands(); REC.on = false; KC.clip = null; return false; }
 };
 restoreReplay = function () { try { restoreClip(); } catch (e) { warnOnce(e); } };
 // pose the world as it was at replay time and look through the killer's eyes; el = seconds since the replay started
@@ -951,8 +966,8 @@ function applyClip(c, el) {
   // ---- their weapon, in their hands ----
   const vm = WM[kw] || WM.carbine;
   if (!c.orbit) vmFinish(vm, kw, c);
-  live.vm = { gv: gunVisible, vis: [], vm, pos: vm.group.position.clone(), rot: vm.group.rotation.clone(), fl: vm.flash ? vm.flash.visible : false, ret: vm.reticle ? vm.reticle.visible : null, rear: vm.rear ? vm.rear.visible : null,
-    mag: vm.mag ? [vm.mag.position.clone(), vm.mag.visible] : null, arm: vm.leftArm ? vm.leftArm.position.clone() : null };
+  { const v = LVM; v.gv = gunVisible; v.vis.length = 0; v.vm = vm; v.pos.copy(vm.group.position); v.rot.copy(vm.group.rotation); v.fl = vm.flash ? vm.flash.visible : false; v.ret = vm.reticle ? vm.reticle.visible : null; v.rear = vm.rear ? vm.rear.visible : null;
+    v.hasMag = !!vm.mag; if (vm.mag) { v.magP.copy(vm.mag.position); v.magV = vm.mag.visible; } v.hasArm = !!vm.leftArm; if (vm.leftArm) v.arm.copy(vm.leftArm.position); live.vm = v; }   // (one record reused every frame: no garbage)
   for (const id in WM) if (WM[id].group.visible) { live.vm.vis.push(WM[id].group); WM[id].group.visible = false; }
   let thr = 0; for (const t of c.kthrows) { const k = (rt - t) / .45; if (k >= 0 && k <= 1) thr = Math.max(thr, Math.sin(Math.PI * k)); }
   const showVm = !scoped && !kDown && !c.orbit;
@@ -990,7 +1005,7 @@ function applyClip(c, el) {
   for (const f of c.fires) if (f > prev && f <= rt) { lin(K, f, SA); const w = wname(SA[8]), r = speedAt(f, c); gunSound(w, { rate: r, delay: sched(f), t: f }, 'killer'); if (w === 'sniper') fxSound('bolt', { rate: r, delay: sched(f) + .11 / r, t: f }, 'bolt'); }
   for (const f of c.ofires) if (f.t > prev && f.t <= rt) { const tr = R.tracks.get(f.ent); if (!tr || !lin(tr, f.t, SA)) continue; const pos = new THREE.Vector3(SA[0], SA[1] + 1.4, SA[2]);
     gunSound(wname(SA[8]), { rate: speedAt(f.t, c), delay: sched(f.t), pos, vol: .8, t: f.t }, f.ent === c.victim ? 'victim' : 'other'); }
-  for (const s of c.oshots) if (s.t > prev && s.t <= rt) _tracer(s.a, s.b, s.c, s.w, s.l / Math.max(sp, SLOW));
+  for (const s of c.oshots) if (s.t > prev && s.t <= rt) { const b = nearCam(s.a, s.b); if (b) _tracer(s.a, b, s.c, s.w, s.l / Math.max(sp, SLOW)); }
   for (const t of c.kthrows) if (t > prev && t <= rt) fxSound('nadeThrow', { rate: speedAt(t, c), delay: sched(t), t }, 'throw');
   for (const b of c.booms) if (b.t > prev && b.t <= rt) { burst(b.p); fxSound('explode', { rate: speedAt(b.t, c), delay: sched(b.t), pos: b.p.clone(), ref: 8, vol: 1.3, t: b.t, who: 'world' }, 'boom'); }
   // grenades / rockets / bolts in the air
@@ -1040,8 +1055,12 @@ function applyClip(c, el) {
   if (KC.log && renderer.info && renderer.info.programs) { const P0 = renderer.info.programs; if (first || !KC.prgSeen) { KC.prgSeen = new Set(P0.map(p => p.id)); KC.newPrg = []; } else if (P0.length !== KC.prgN) { for (const p of P0) if (!KC.prgSeen.has(p.id)) { KC.prgSeen.add(p.id); KC.newPrg.push([+(rt - c.deathT).toFixed(3), p.name, String(p.cacheKey).slice(0, 160)]); } } KC.prgN = P0.length; }
   if (KC.log) KC.log.push({ hpb: KC.hpShown, hpt: SHP[16], hptx: $('kcBHpT') ? $('kcBHpT').textContent : '', final: c.final, el, rt, wall: performance.now(), x: camera.position.x, y: camera.position.y, z: camera.position.z, yaw: camera.rotation.y, pitch: camera.rotation.x, fov: camera.fov, scoped, ads, kw, vm: vm.group.visible, xh: d ? d.cross.style.opacity === '1' : false,
     hm: KC.hmT > 0, kDown, slow, me: gm ? meInfo(gm) : null, inWall: inWall(camera.position), inBody: inBody(camera.position, c), occ: gm && gm.root.visible ? !lineOfSight(camera.position, _ndc.set(gm.root.position.x, gm.root.position.y + 1.1, gm.root.position.z)) : null, fix: +(KC.wallFix || 0).toFixed(3), orbit: !!c.orbit, hi: !!c.hi,
-    fin: c.fin && c.fin[kw] || 'factory', vmFin: vm.group.visible ? vm.group.userData.gsSkin || 'factory' : null, roll: camera.rotation.z, scopeOp: scoped, prg: renderer.info && renderer.info.programs ? renderer.info.programs.length : 0, cast: c.cast.length, proxies: [...PX.values()].filter(m => m.visible).length });
+    fin: c.fin && c.fin[kw] || 'factory', vmFin: vm.group.visible ? vm.group.userData.gsSkin || 'factory' : null, roll: camera.rotation.z, scopeOp: scoped, prg: renderer.info && renderer.info.programs ? renderer.info.programs.length : 0, cast: c.cast.length, proxies: [...PX.values()].filter(m => m.visible).length, ft: document.timeline ? +document.timeline.currentTime || 0 : 0, gunHand: gunHandGap() });
   return true;
+}
+function gunHandGap() {   // test probe: the farthest any actor's gun sits from its right hand this frame (m)
+  let m = 0; for (const g of GH.values()) { if (!g.root.visible || !g.gun.visible || !g.B || !g.B.rhand) continue; g.B.rhand.getWorldPosition(_c); m = Math.max(m, _c.distanceTo(g.gun.position)); }
+  return +m.toFixed(3);
 }
 function meInfo(g) {   // test probe: where you are on the killer's screen and how your legs move
   const p = g.root.position; _c.set(p.x, p.y + 1.2, p.z); const toMe = _d.subVectors(_c, camera.position), dist = toMe.length(); toMe.normalize();
@@ -1114,14 +1133,90 @@ function poseBoomKC(vm, rt, dt, c, K) {
   KB.ang2 += dt * 26; KB.blade.rotation.set(.12 * Math.sin(flyD * 3), KB.ang2, 0);
   m.visible = true;
 }
+// your own gloves come back when the replay ends (not after every replay frame: that swapped the hands twice per frame)
+function restoreHands() { if (KC.hk) { KC.hk = null; try { window.S9Skins.handsFor(null); } catch (e) {} } }
 function restoreClip() {
   if (!KC.inReplay) return; KC.inReplay = false;
   hideKcBlade(); resetBoomVm();
-  if (KC.hk) { KC.hk = null; try { window.S9Skins.handsFor(null); } catch (e) {} }
   hideGhosts(); hideProxies(); showLive();
   const v = live.vm; if (v) { const vm = v.vm; vm.group.position.copy(v.pos); vm.group.rotation.copy(v.rot); if (vm.flash) vm.flash.visible = v.fl; if (vm.reticle && v.ret !== null) vm.reticle.visible = v.ret; if (vm.rear && v.rear !== null) vm.rear.visible = v.rear;
-    if (v.mag) { vm.mag.position.copy(v.mag[0]); vm.mag.visible = v.mag[1]; } if (v.arm) vm.leftArm.position.copy(v.arm);
+    if (v.hasMag && vm.mag) { vm.mag.position.copy(v.magP); vm.mag.visible = v.magV; } if (v.hasArm && vm.leftArm) vm.leftArm.position.copy(v.arm);
     vm.group.visible = false; for (const g of v.vis) g.visible = true; gunVisible = v.gv; live.vm = null; }
+}
+
+/* ---- warm-up: draw the replay once, off screen, before it is shown ----
+   The first replay frame used to pay for everything the live view had not drawn yet: shader programs (gun finishes on the
+   killer's viewmodel and on the actors, lit materials seen from the killer's side of the map, splats and cilia that were off
+   screen), texture uploads and the driver's own first-draw work. renderer.compile() alone misses the last two and anything
+   hidden at that moment, so the replay is drawn for real at a few moments of the clip into the composer's own target (the
+   next composer.render clears and redraws it: nothing reaches the screen), with exactly what the replay will show posed. */
+const WARM_N = 5, _wp = new THREE.Vector3(), _wq = new THREE.Quaternion(), _wu = new THREE.Vector3();
+function warmTimes(c) { return [c.t0 + .02, (c.t0 + c.deathT) / 2, c.deathT - .06, Math.min(c.t1, c.deathT + .3)]; }
+function warmRender(c, t) {
+  if (typeof renderer !== 'object' || !renderer || typeof gunScene !== 'object') return;
+  const t0w = performance.now(), fov = camera.fov, gv0 = gunVisible, vis = [], sm = renderer.shadowMap, smA = sm.autoUpdate, smN = sm.needsUpdate;
+  _wp.copy(camera.position); _wq.copy(camera.quaternion); _wu.copy(camera.up);
+  let vm = null, vp = null, vr = null;
+  try {
+    buildGhosts(99);
+    for (const ent of c.cast) {
+      const g = GH.get(ent), tr = ent === c.victim ? c.me : R.tracks.get(ent); if (!g || !tr) continue;
+      if (ent === c.victim && t >= c.deathT) { lin(c.me, t, SA); poseGhost(g, c.me, t, 0, true, { tPos: c.deathT - c.victimDelay, y: SA[1], dead: true, deadT: (t - c.deathT) * 1.15 }); }
+      else poseGhost(g, tr, t, 0, true, ent === c.victim ? { tPos: Math.max(c.me.t[0], t - c.victimDelay), dead: false } : { fires: c.fireMap.get(ent) });
+    }
+    const K = c.ktr; lin(K, t, SB);
+    if (c.orbit) orbitCam(c, t);
+    else { viewAt(K, t, VIEW); const eyeH = clamp(herm(K, t, 18), .8, 1.8) || 1.6; camera.position.set(VIEW.x, VIEW.y + eyeH, VIEW.z); camera.rotation.set(clamp(VIEW.pitch, -1.5, 1.5), VIEW.yaw + Math.PI, 0, 'YXZ'); }
+    camera.updateMatrixWorld();
+    if (!c.orbit) { const kw = wname(SB[8]); vm = WM[kw] || WM.carbine; vmFinish(vm, kw, c); vp = vm.group.position.clone(); vr = vm.group.rotation.clone();
+      for (const id in WM) if (WM[id].group.visible) { vis.push(WM[id].group); WM[id].group.visible = false; }
+      vm.group.position.copy(vm.hip || HIP_POS); vm.group.visible = true; vm.group.updateMatrixWorld(true); gunVisible = true; }
+    sm.autoUpdate = false; sm.needsUpdate = false;   // (the static shadow map is not re-drawn from here)
+    const prev = renderer.getRenderTarget(); renderer.setRenderTarget(rt);
+    try { renderer.render(scene, camera); if (vm) { renderer.clearDepth(); renderer.render(gunScene, gunCam); } } finally { renderer.setRenderTarget(prev); }
+  } finally {
+    sm.autoUpdate = smA; sm.needsUpdate = smN;
+    hideGhosts();
+    if (vm) { vm.group.visible = false; vm.group.position.copy(vp); vm.group.rotation.copy(vr); for (const g of vis) g.visible = true; }
+    gunVisible = gv0; camera.position.copy(_wp); camera.quaternion.copy(_wq); camera.up.copy(_wu);
+    if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); } camera.updateMatrixWorld();
+    KC.warmRenderMs = (KC.warmRenderMs || 0) + performance.now() - t0w;
+  }
+}
+// the overlay too: its first paint used to land on the first replay frames (the browser's own GPU raster compiles a shader
+// for every new kind of paint: the banner's shadows and text, the vignette and kill-flash gradients, the scope ring, the
+// marker over the victim, each a 20-40 ms stall of the GPU process that the 3D frames queue behind). The final killcam shows
+// it all at 1% opacity during the live slow motion before the replay (painted for real, invisible), then at full opacity.
+function warmDom(on) {
+  const d = dom(), kc = $('killcam'), sc = $('scope'); if (!d || !kc) return;
+  if (on) { kc.hidden = false; kc.style.opacity = '.01'; d.fx.style.transition = 'none'; d.fx.style.background = ''; d.fx.style.opacity = '1'; d.hm.style.opacity = '1'; d.down.hidden = false;
+    d.you.style.opacity = '1'; if (!d.you.firstChild.textContent) d.you.firstChild.textContent = 'YOU'; d.cross.style.opacity = '1'; if (sc) { setStyle(sc, 'opacity', '.01'); KC.scopeWarm = true; } }
+  else { kc.style.opacity = ''; d.fx.style.opacity = '0'; d.hm.style.opacity = '0'; d.down.hidden = true; d.you.style.opacity = '0'; if (sc && KC.scopeWarm) { setStyle(sc, 'opacity', '0'); KC.scopeWarm = false; } }
+}
+// ...and once per session, in the menu (where a hitch shows nowhere): a copy of the whole overlay (banner, top bar, kill flash,
+// vignette, scope ring, marker, hitmarker) is painted at 1% opacity for a few frames, so the browser has compiled every one
+// of those paint shaders before any killcam runs. The ids are the originals' (the styles are id-based); the copy sits after
+// them in the page, so every lookup still finds the real elements, and it is removed after ~6 frames.
+let ovWarm = 0;
+function warmOverlayOnce() {
+  if (ovWarm || typeof state === 'undefined' || state !== 'menu' || document.hidden) return; const d = dom(), kc = $('killcam'), sc = $('scope'); if (!d || !kc) return; ovWarm = 1;
+  try {
+    const box = document.createElement('div'); box.setAttribute('aria-hidden', 'true'); box.style.cssText = 'position:fixed;inset:0;opacity:.01;pointer-events:none;z-index:1;contain:strict';
+    const k = kc.cloneNode(true); k.hidden = false; k.style.opacity = '1'; for (const e of k.querySelectorAll('[hidden]')) e.hidden = false;
+    for (const e of k.querySelectorAll('#kcFx,#kcYou,#kcHm,#kcCross')) e.style.opacity = '1';
+    const y = k.querySelector('#kcYou span'); if (y) y.textContent = 'YOU'; const b = k.querySelector('#kcBName'); if (b) b.textContent = 'FINAL KILL'; const t = k.querySelector('.kc-top b'); if (t) t.textContent = 'FINAL KILLCAM';
+    box.appendChild(k); if (sc) { const q = sc.cloneNode(true); q.style.opacity = '1'; box.appendChild(q); }
+    document.body.appendChild(box);
+    let n = 0; const done = () => { if (++n < 6) { requestAnimationFrame(done); return; } box.remove(); ovWarm = 2; }; requestAnimationFrame(done);
+  } catch (e) { warnOnce(e); }
+}
+{ const tryWarm = () => { if (ovWarm) return; warmOverlayOnce(); if (!ovWarm) setTimeout(tryWarm, 1500); }; setTimeout(tryWarm, 2500); }
+KC.overlayWarm = () => ovWarm;
+// one step per call: 0 = build every gun + finish and compile (prewarm), 1.. = a real draw at one moment of the clip
+function warmStep(c) {
+  const i = c.warmI | 0; if (i >= WARM_N) return false; c.warmI = i + 1;
+  if (i === 0) prewarm(c); else warmRender(c, warmTimes(c)[i - 1]);
+  return true;
 }
 
 /* ================= FINAL KILLCAM: the match-winning kill, from the winner's eyes, for everyone at match end ================= */
@@ -1147,8 +1242,13 @@ const _endMatch = endMatch;
 endMatch = function (winner) {
   const was = G.ended, RF = window.S9RoundFX;
   const defer = !was && !!winner && !NET.on && !!finalKillOf(winner) && !!(RF && RF.enabled && typeof RF.celebrate === 'function');
+  // roundfx loads AFTER this module, so its own endMatch hook runs around this one and checks RF.enabled once we return:
+  // switched back on right away, it built the podium at once (a ~2 s freeze on the winning kill: its soldier portraits
+  // compile in their own WebGL context) and played its fanfare / cheers under the replay. It comes back on after this
+  // whole call (a microtask), so the podium starts only from endFinal, whichever order the add-ons load in.
   if (defer) RF.enabled = false;
-  let res; try { res = _endMatch.apply(this, arguments); } finally { if (defer) RF.enabled = true; }
+  let res; try { res = _endMatch.apply(this, arguments); } catch (e) { if (defer) RF.enabled = true; throw e; }
+  if (defer) Promise.resolve().then(() => { RF.enabled = true; });
   let started = false;
   if (!was && G.ended && winner && state === 'matchend') { try { started = startFinal(winner); } catch (e) { warnOnce(e); } }
   if (defer) { const o = rfxTable(winner); if (started) KC.finDefer = o; else { try { RF.celebrate(o); } catch (e) { warnOnce(e); } } }
@@ -1163,11 +1263,12 @@ function startFinal(winner) {
   stopKillcam(); KC.fin = c; KC.clip = c; KC.first = true; KC.rt = c.t0; KC.bob = 0; KC.hmT = 0; c.startWall = 0;
   KC.hpKey = null; fillBanner(c); if (KC.log) KC.log.length = 0; if (KC.snd) KC.snd.length = 0;
   $('mend').hidden = true; $('hud').hidden = false; $('death').hidden = true;
-  c.holdUntil = performance.now() + FINAL_SLOWMO; c.shown = false;   // first the live final kill in slow motion (the replay screen opens in composer.render below)
+  c.holdUntil = performance.now() + FINAL_SLOWMO; c.shown = false; c.warmI = 0;   // first the live final kill in slow motion (the replay screen opens in composer.render below)
   return true;
 }
 function endFinal() {
-  const c = KC.fin; if (!c) return; KC.fin = null; KC.clip = null; KC.live = false; duck(false); vmRestore();
+  const c = KC.fin; if (!c) return; KC.fin = null; KC.clip = null; KC.live = false; duck(false); vmRestore(); restoreHands();
+  if (c.domWarm && !c.shown) { try { warmDom(false); } catch (e) { warnOnce(e); } }
   hideGhosts(); hideProxies(); setStyle($('scope'), 'opacity', '0'); $('killcam').hidden = true; $('hud').classList.remove('kcview');
   if (state === 'matchend') { $('hud').hidden = true; $('mend').hidden = false; }
   if (camera.fov < 40) { camera.fov = 62; camera.updateProjectionMatrix(); }
@@ -1194,11 +1295,21 @@ if (typeof composer === 'object' && composer && typeof composer.render === 'func
     if (state !== 'matchend') { endFinal(); return _render.apply(this, arguments); }
     if (c.cast.some(e => !GH.has(e))) { buildGhosts(2); return _render.apply(this, arguments); }   // actors first, a couple per frame (no hitch)
     if (!c.shown) {
-      if (performance.now() < c.holdUntil) { hitstop = Math.max(hitstop, .1); const m = $('mend'); if (m) m.hidden = true; return _render.apply(this, arguments); }   // slow-mo on the final kill; results stay hidden
+      // slow-mo on the final kill; results stay hidden. Meanwhile the replay is drawn once off screen, one step per frame
+      // (warmStep), so its first frames are not the ones that compile shaders / upload textures. It opens when both are done.
+      if (!c.domWarm) { c.domWarm = true; try { warmDom(true); } catch (e) { warnOnce(e); } }
+      let warming = false; if (c.warmI < WARM_N) { try { warming = warmStep(c); } catch (e) { warnOnce(e); c.warmI = WARM_N; } }
+      if (performance.now() < c.holdUntil || warming) { hitstop = Math.max(hitstop, .1); const m = $('mend'); if (m) m.hidden = true; return _render.apply(this, arguments); }
+      try { warmDom(false); } catch (e) { warnOnce(e); }
       c.shown = true; $('hud').classList.add('kcview'); $('killcam').hidden = false;
     }
-    if (!c.startWall) c.startWall = performance.now();
-    const el = (performance.now() - c.startWall) / 1000;
+    // the replay clock steps by this frame's own time (rdt: the vsync-aligned rAF delta, capped at 50 ms, the same clock the
+    // normal killcam runs on through P.dieT). performance.now() read here also counted however long this frame's game code
+    // took, so every frame landed a slightly different amount of replay time later (micro-stutter at any refresh rate), and
+    // after one slow frame the replay jumped ahead to catch up (a skipped moment)
+    const rdt = clamp(+arguments[0] || 0, 0, .05);
+    if (!c.startWall) { c.startWall = performance.now(); c.el = 0; } else c.el += rdt;
+    const el = c.el;
     if (el > c.dur + .9) { endFinal(); return _render.apply(this, arguments); }
     let ok = false; try { ok = applyClip(c, el); } catch (e) { warnOnce(e); KC.inReplay = false; }
     try { return _render.apply(this, arguments); } finally { if (ok) restoreClip(); }
