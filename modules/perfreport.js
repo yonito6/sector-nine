@@ -1,6 +1,6 @@
 /* Sector Nine - anonymous per-match FPS report (add-on module, no index.html edits).
    Purpose: tell the owner how the game runs on real players' PCs. ONE small summary per match goes to POST {server}/api/perf:
-     { avg, low1, tier, scale, gpu, soft, igpu, phone, ping, ver }
+     { avg, low1, tier, scale, gpu, soft, igpu, phone, ping, ver, hz, p99, h50, gms, cms }
    avg = average FPS of the match, low1 = "1% low" FPS (average of the slowest 1% of frames), tier = graphics tier, scale = render scale (pixel ratio),
    gpu = GPU renderer string, soft/igpu/phone = software renderer / integrated GPU / phone flags, ping = ms (online only, else omitted), ver = game version.
    NO names, no account or room ids, no cookies, no user agent. The server keeps only these numbers and shows aggregates (GET /api/perf/summary).
@@ -45,7 +45,12 @@ function summarize(ms, secs) {
   let worst = 0; for (let i = 0; i < n; i++) worst += srt[i];
   const round1 = v => Math.round(v * 10) / 10;
   const avg = ms.length / secs, low1 = 1000 / (worst / n);
-  return { avg: round1(avg), low1: round1(Math.min(low1, avg)), frames: ms.length, secs: round1(secs) };
+  // beyond vsync (a 60 Hz screen caps avg at 60 and puts every 1% low under 60): the screen's refresh (median frame interval,
+  // snapped to a common rate), the 99th percentile frame interval and hitches > 50 ms per minute
+  const asc = ms.slice().sort((a, b) => a - b), med = asc[asc.length >> 1], raw = med > 0 ? 1000 / med : 0;
+  const hz = [30, 48, 50, 60, 72, 75, 90, 100, 120, 144, 165, 170, 180, 200, 240, 280, 360].reduce((b, r) => Math.abs(r - raw) < Math.abs(b - raw) ? r : b, 60);
+  const p99 = asc[Math.min(asc.length - 1, Math.floor(asc.length * 0.99))], h50 = ms.filter(v => v > 50).length / (secs / 60);
+  return { avg: round1(avg), low1: round1(Math.min(low1, avg)), frames: ms.length, secs: round1(secs), hz: Math.abs(hz - raw) / hz < 0.06 ? hz : round1(raw), p99: round1(p99), h50: round1(h50) };
 }
 API.stats = () => M ? summarize(M.ms, M.secs) : null;
 
@@ -60,6 +65,8 @@ API.payload = () => {
   const p = { avg: s.avg, low1: s.low1, tier: ['performance', 'balanced', 'high', 'ultra'].includes(tier) ? tier : 'balanced', scale: Math.max(0.25, Math.min(4, Math.round(scale * 100) / 100)),
     gpu: gpu.slice(0, 80), soft: SOFT_RE.test(gpu), igpu: IGPU_RE.test(gpu) && !SOFT_RE.test(gpu), phone: isPhone() };
   if (rtt !== null && rtt >= 0 && rtt < 5000) p.ping = rtt;
+  p.hz = s.hz; p.p99 = s.p99; p.h50 = s.h50;
+  const st = g(() => window.S9GFX && S9GFX.status(), null); if (st && st.gpuMs > 0) p.gms = Math.round(st.gpuMs * 10) / 10; if (st && st.cpuMs > 0) p.cms = Math.round(st.cpuMs * 10) / 10;   // what a frame costs (headroom under a capped screen)
   const ver = g(() => String(window.S9_VERSION || '').slice(0, 32), ''); if (ver) p.ver = ver;
   return p;
 };

@@ -3800,7 +3800,29 @@ async function startMatch(mapId) {
   $('feed').innerHTML = ''; $('kfeed').innerHTML = ''; updateHud(true);
   banner((MAPS.find(m => m.id === CUR_MAP) || MAPS[0]).name.toUpperCase(), `Free for all · ${BOT_COUNT + 1} players · first to ${KILL_LIMIT} kills`); sfx.wave();
   setTimeout(() => { for (const r of robots.slice(0, 3)) if (state === 'play') kfeedText(`${r.name} joined the match`); }, 900);
-  warmShaders();
+  warmShaders(); prewarmView();
+}
+// The first second of a match: draw the real spawn view (gun included) while the menu still covers the screen, so the texture
+// uploads, shadow-map shaders and the graphics driver's first-draw work for what the player sees happen during loading, not as
+// 50-70 ms hitches in the first second of play (qa/gate.d/smooth.js "first 5 s"). The last draw is the spawn view itself.
+function prewarmView() {
+  try {
+    const c = camera, g0 = gunVisible, t0 = performance.now();
+    // every texture of the world and the guns uploaded now (three.js uploads a texture the first time something using it is drawn)
+    const seen = new Set(), up = o => { if (!o.material) return; for (const m of [].concat(o.material)) for (const k in m) { const t = m[k]; if (t && t.isTexture && !t.isRenderTargetTexture && !seen.has(t)) { seen.add(t); try { renderer.initTexture(t); } catch (e) {} } } };
+    scene.traverse(up); gunScene.traverse(up);
+    gunVisible = true;
+    // one draw of EVERYTHING (no frustum culling, hidden objects shown): the graphics driver (ANGLE / D3D11) finishes each shader at
+    // the first real draw of an object, which renderer.compile does not do; a laptop trace showed 36-224 ms GPU-process flushes in
+    // the first 1.5 s of play otherwise. State restored right after, all within this task (never presented).
+    const keep = []; for (const r of [scene, gunScene]) r.traverse(o => { keep.push([o, o.visible, o.frustumCulled]); o.visible = true; o.frustumCulled = false; });
+    c.position.set(P.pos.x, P.pos.y + 1.65, P.pos.z); c.rotation.set(0, P.yaw, 0); c.updateMatrixWorld();
+    try { composer.render(0); } finally { for (const [o, v, f] of keep) { o.visible = v; o.frustumCulled = f; } }
+    for (const a of [Math.PI / 2, Math.PI, -Math.PI / 2, 0]) { c.position.set(P.pos.x, P.pos.y + 1.65, P.pos.z); c.rotation.set(0, P.yaw + a, 0); c.updateMatrixWorld(); composer.render(0); }
+    gunVisible = g0;
+    try { const gl = renderer.getContext(); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4)); } catch (e) {}   // wait for the GPU here, behind the menu
+    perf.prewarm = Math.round(performance.now() - t0);
+  } catch (e) { console.warn('prewarmView', e); }
 }
 function standings() { return [PLAYER_ENT, ...robots].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || b.score - a.score); }
 const ord = n => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th');
@@ -5693,7 +5715,7 @@ function updateRemote(r, dt) {
     nx += C.x; ny += C.y; nz += C.z;
     const vx = (nx - p.x) / Math.max(dt, 1e-3), vz = (nz - p.z) / Math.max(dt, 1e-3);
     r.vel.x = damp(r.vel.x, vx, 12, dt); r.vel.z = damp(r.vel.z, vz, 12, dt);
-    p.set(nx, ny, nz);
+    p.set(nx, ny, nz); stepEase(r, p, dt);
     r.aimYaw = a.yaw + wrapPi(b.yaw - a.yaw) * k; r.aimPitch = lerp(a.pitch, b.pitch, k);
   }
   if (r.dead) { fallDead(r.root.position, r, dt); if (r.preQ) [r.B.hips, r.B.spine, r.B.spine1, r.B.spine2, r.B.neck].forEach((b, i) => b && b.quaternion.copy(r.preQ[i])); r.preQ = null; if (r.dq) { for (const [b, q] of r.dq) b.quaternion.copy(q); r.dq = null; } r.deadT += dt; r.mixer.update(dt); r.gun.visible = false; if (!updateDeathFx(r, dt)) derez(r); return; }
@@ -5714,7 +5736,7 @@ function startOnlineMatch() {
   NET.hits = []; NET.killW = 0; NET.killH = false;
   $('feed').innerHTML = ''; $('kfeed').innerHTML = ''; updateHud(true);
   banner('FREE FOR ALL', `${(NET.room && NET.room.meta && NET.room.meta.name) || 'Online'} · first to ${KILL_LIMIT}`);
-  onNetPeers();
+  onNetPeers(); prewarmView();
 }
 
 /* ================= knife: plasma-edged combat blade (key 3) ================= */
@@ -6837,8 +6859,20 @@ function simPresent(dt, rdt) {
     if (a < 1 && r._ipOk && r._ip.distanceToSquared(r.root.position) < 4) {
       const q = r.root.position; (r._ic || (r._ic = new THREE.Vector3())).copy(q); q.lerpVectors(r._ip, r._ic, a); SIM.bots.push(r);
     }
+    { const q = r.root.position, y = q.y; if (stepEase(r, q, rdt) && SIM.bots[SIM.bots.length - 1] !== r) { (r._ic || (r._ic = new THREE.Vector3())).set(q.x, y, q.z); SIM.bots.push(r); } }
     if (!r.dead) { const d = r.animDt || 0; r.animDt = 0; if (!kcLive()) animateBot(r, d); }   // every drawn frame (also 0-step ones): the gun stays in the hand
   }
+}
+// stairs and ledges: a bot / remote player that steps up (up to MOVE.stepUp, 0.38 m) is lifted in ONE simulation step, which was
+// drawn as a 0.3 m hop on every stair (lagtrace: 12-56 per 40 s per map). Like Source / Unreal's stair smoothing, the DRAWN height
+// rises over ~0.1 s instead; drops, jumps, falls and respawns are drawn exactly. Drawing only: bots get their simulation height back
+// in simRestore (hit tests / AI never see it); a remote player's drawn spot is re-made from its states every frame anyway.
+function stepEase(r, q, dt) {   // -> true when the drawn height was changed
+  const y = q.y, s = r._sy;
+  if (s === undefined || r.dead || y <= s || y - s > .7 || r.onGround === false || Math.abs(q.x - r._sx) + Math.abs(q.z - r._sz) > 2) { r._sy = y; r._sx = q.x; r._sz = q.z; return false; }
+  if (dt > 0) r._sy = Math.min(y, s + Math.max((y - s) * (1 - Math.exp(-dt * 22)), 1.2 * dt));
+  r._sx = q.x; r._sz = q.z; if (r._sy >= y - 1e-4) { r._sy = y; return false; }
+  q.y = r._sy; return true;
 }
 function simUnP() {   // the player's simulation values come back as soon as the camera and the gun are placed
   if (!SIM.pOn) return; SIM.pOn = false; P.pos.copy(SIM.pc); for (const k of SIM.keys) if (k in SIM.cur) P[k] = SIM.cur[k];

@@ -537,7 +537,7 @@ void main(){
   // (a CPU-bound frame does not get faster at a lower resolution). Floor: never below 0.5 or ~430 rendered lines.
   // Each change resizes the render targets once (a few ms), at most one change per second, in steps of 0.05.
   S.adapt.own = false;
-  const DR = S.dynres = { mode: 'auto', active: false, scale: 0, max: 0, floor: .5, over: 0, under: 0, lastT: 0, raisedT: -1e9, noRaiseUntil: 0, changes: 0, lastDir: 0, atFloor: 0 };
+  const DR = S.dynres = { holdUntil: 0, mode: 'auto', active: false, scale: 0, max: 0, floor: .5, over: 0, under: 0, lastT: 0, raisedT: -1e9, noRaiseUntil: 0, changes: 0, lastDir: 0, atFloor: 0 };
   try { const v = window.S9Settings && S9Settings.get().video.autoRes; if (v === 'auto' || v === 'always' || v === 'off') DR.mode = v; } catch (e) {}
   const prMax = () => Math.min(devicePixelRatio || 1, TIERS[S.tier] ? TIERS[S.tier].maxPR : 1);
   // integrated / software GPU (a laptop whose browser draws on the built-in chip): Auto also covers High/Ultra. Player reports
@@ -553,6 +553,7 @@ void main(){
     if (PR > max + .001) { setPR(max, now); }
     DR.scale = PR;
     if (!has('state') || state !== 'play' || !f) { DR.over = DR.under = 0; return; }
+    if (now < DR.holdUntil) { DR.over = DR.under = 0; return; }   // the first seconds of a match (uploads, first draws) do not set the resolution
     const B = Math.max(1000 / 60, capMs()), gpuKnown = !!tq && g > 0;
     // a GPU timer also counts the gaps while a slow CPU is still sending the frame: GPU-bound only if the card's time clearly
     // exceeds the CPU time spent submitting the frame (c)
@@ -599,7 +600,8 @@ void main(){
     };
   }
   // a tier lowered by adapt() applies at the next match start (behind the warm-up), never mid-fight
-  if (has('startMatch')) { const _sm = startMatch; startMatch = function () { if (S.pendingTier) { CFG.q = S.pendingTier; S.pendingTier = null; applyQuality(); } return _sm.apply(this, arguments); }; }
+  if (has('startMatch')) { const _sm = startMatch; startMatch = function () { if (S.pendingTier) { CFG.q = S.pendingTier; S.pendingTier = null; applyQuality(); } return Promise.resolve(_sm.apply(this, arguments)).then(r => { DR.holdUntil = performance.now() + 2500; return r; }); }; }
+  if (typeof startOnlineMatch === 'function') { const _so = startOnlineMatch; startOnlineMatch = function () { const r = _so.apply(this, arguments); DR.holdUntil = performance.now() + 2500; return r; }; }
 
   /* ---------- settings menu: add Ultra, remember a player's own choice ---------- */
   function syncOptions() {
@@ -636,7 +638,8 @@ void main(){
 #s9gpuwarn{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;width:min(560px,calc(100vw - 32px));box-sizing:border-box;
  background:rgba(14,10,12,.96);border:1px solid #ff5a4a;border-left-width:4px;color:#ece6d8;font:13px/1.45 system-ui,sans-serif;padding:12px 40px 12px 14px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
 #s9gpuwarn b{color:#ff7a6a;display:block;font-size:14px;margin-bottom:4px}#s9gpuwarn ol{margin:6px 0 0 18px;padding:0}#s9gpuwarn li{margin:2px 0}#s9gpuwarn small{color:#9aa0a6;display:block;margin-top:6px;word-break:break-word}
-#s9gpuwarn button{position:absolute;top:6px;right:6px;width:30px;height:30px;border:0;background:transparent;color:#ece6d8;font-size:20px;cursor:pointer}`;
+#s9gpuwarn button{position:absolute;top:6px;right:6px;width:30px;height:30px;border:0;background:transparent;color:#ece6d8;font-size:20px;cursor:pointer}
+#s9gpuwarn button.nev{position:static;width:auto;height:auto;margin-top:8px;padding:5px 10px;border:1px solid #6a6f75;font:12px system-ui,sans-serif;color:#cfd3d6}#s9gpuwarn button.nev:hover{border-color:#ece6d8;color:#fff}`;
     document.head.appendChild(css);
     const d = document.createElement('div'); d.id = 's9gpuwarn'; d.setAttribute('role', 'alert');
     const steps = software
@@ -644,9 +647,9 @@ void main(){
       : '<ol><li>Windows Settings &gt; System &gt; Display &gt; Graphics &gt; your browser &gt; Options &gt; <b style="display:inline;font-size:inherit">High performance</b>, then restart the browser.</li><li>Laptop: plug in the charger (on battery the fast card often stays off).</li></ol>';
     d.innerHTML = `<b>${software ? 'Your browser is not using your graphics card' : 'The game is running on your built-in graphics chip'}</b>` +
       (software ? 'The game is drawn by the processor instead, so it runs slowly and heats the CPU. Graphics were set to Performance.' : 'If your computer also has an NVIDIA or AMD card, tell Windows to use it for your browser:') + steps +
-      `<small>Detected: ${String(gpuName).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';')}</small><button type="button" aria-label="Close">×</button>`;
-    const close = () => { d.remove(); try { localStorage.setItem(GW, gpuName); } catch (e) {} };
-    d.querySelector('button').addEventListener('click', close);
+      `<small>Detected: ${String(gpuName).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';')}</small><button type="button" class="nev">Don't show again</button><button type="button" class="x" aria-label="Close">×</button>`;
+    const close = () => { d.remove(); try { localStorage.setItem(GW, gpuName); } catch (e) {} };   // once per device (per GPU): closing, "Don't show again" or starting a match all remember it
+    d.querySelectorAll('button').forEach(x => x.addEventListener('click', close));
     document.body.appendChild(d);
     // shown in the menu; gone once a match starts (it is remembered as seen)
     const iv = setInterval(() => { if (!d.isConnected) return clearInterval(iv); if (has('state') && state !== 'menu' && state !== 'loading') { clearInterval(iv); close(); } }, 500);
