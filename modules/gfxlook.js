@@ -36,6 +36,7 @@
     if (!g || !g.attributes.position || !g.attributes.normal || g.morphAttributes.position) return false;
     if ((g.index ? g.index.count : g.attributes.position.count) < 3) return false;
     if (o.userData.noProbe || o.userData.s9nolm) return false;
+    if (o.userData.wallbang) return false;   // wallbang panels (index.html buildWallbangSpots, r10) are thin dynamic boxes added after the bake: no baked UVs, lit like props
     // the endless ground outside the walls is not part of the arena (it would eat the whole atlas)
     if (!g.boundingBox) g.computeBoundingBox();
     const bb = g.boundingBox.clone().applyMatrix4(o.matrixWorld), lim = (typeof HALF !== 'undefined' ? HALF : 40) * 2 + 20;

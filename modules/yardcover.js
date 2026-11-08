@@ -42,11 +42,17 @@
     C.boxes = proxy.length; C.meshes = out;
     try { buildNav(); } catch (e) { C.err = 'nav ' + e.message; }
     // bots must never stand on or path through cover: close every nav cell whose centre lies inside a cover box (buildNav treats boxes <= 1.75 m as walkable steps)
-    try { const N = NAV.N, Sz = NAV.S; for (const b of proxy) { const i0 = Math.max(0, Math.floor((b.min.x + HALF) / Sz) - 1), i1 = Math.min(N - 1, Math.ceil((b.max.x + HALF) / Sz) + 1), j0 = Math.max(0, Math.floor((b.min.z + HALF) / Sz) - 1), j1 = Math.min(N - 1, Math.ceil((b.max.z + HALF) / Sz) + 1);
-      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const x = -HALF + (i + .5) * Sz, z = -HALF + (j + .5) * Sz; if (x > b.min.x - .2 && x < b.max.x + .2 && z > b.min.z - .2 && z < b.max.z + .2) NAV.ok[j * N + i] = 0; } } } catch (e) { C.err = 'navclose ' + e.message; }
+    C.proxy = proxy; closeNav();
     try { targetsDirty = true; renderer.shadowMap.needsUpdate = true; } catch (e) {}
     try { renderer.compile(scene, camera); } catch (e) {}
   }
+  // close the nav cells under every cover box; runs after EVERY buildNav on the yard (a later rebuild used to reopen the hovering car: its top counted as a walkable step)
+  function closeNav() { const boxes = C.proxy || []; if (!boxes.length || typeof NAV === "undefined" || !NAV.ok) return; try {
+    const N = NAV.N, Sz = NAV.S; for (const b of boxes) { const i0 = Math.max(0, Math.floor((b.min.x + HALF) / Sz) - 1), i1 = Math.min(N - 1, Math.ceil((b.max.x + HALF) / Sz) + 1), j0 = Math.max(0, Math.floor((b.min.z + HALF) / Sz) - 1), j1 = Math.min(N - 1, Math.ceil((b.max.z + HALF) / Sz) + 1);
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const x = -HALF + (i + .5) * Sz, z = -HALF + (j + .5) * Sz; if (x > b.min.x - .2 && x < b.max.x + .2 && z > b.min.z - .2 && z < b.max.z + .2) NAV.ok[j * N + i] = 0; } }
+    } catch (e) { C.err = "navclose " + e.message; } }
+  const _bn = buildNav;
+  buildNav = function () { const r = _bn.apply(this, arguments); try { if (typeof CUR_MAP !== "undefined" && CUR_MAP === "yard" && C.map === "yard") closeNav(); } catch (e) {} return r; };
   const _lm = loadMap;
   loadMap = async function (id) {
     const before = typeof CUR_MAP !== 'undefined' ? CUR_MAP : null, kids = MAPROOT.children.length;
