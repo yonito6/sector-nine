@@ -44,18 +44,20 @@
   // fogH = height-fog amount (0..1), fall = how fast haze thins with height (per m), boost = extra haze at ground,
   // scat = sun glow in the haze, ao = occlusion strength
   const LOOK_BASE = { sat: 1.12, con: .26, sh: [.92, 1, 1.08], hi: [1.06, 1, .92], vig: .42, bloom: 1, fogH: .8, fall: .09, boost: 1.45, scat: .5, ao: 1, aoDirect: .4, probe: 1 };
+  // 2026-11-08 readability pass (docs/SMOOTHNESS_VS_CRYZEN.md, render/contrast.js shots): yard/caverns softer S-curve (lifted shadows),
+  // glacier/dunes/biolab stronger S-curve (flat/washed), biolab less ground haze; exposure + sky fill are in index.html MAPS/MAP_DEFS
   const LOOK = {
-    dunes: { sat: 1.1, con: .2, sh: [.9, .98, 1.1], hi: [1.07, 1.01, .9], fall: .07, boost: 1.6, scat: .9, aoDirect: .4 },
+    dunes: { sat: 1.1, con: .28, sh: [.9, .98, 1.1], hi: [1.07, 1.01, .9], fall: .07, boost: 1.6, scat: .9, aoDirect: .4 },
     neon: { sat: 1.24, con: .28, sh: [.95, .92, 1.14], hi: [1.06, .98, 1.02], bloom: 1.25, fall: .12, boost: 1.7, scat: .35, ao: 1.1 },
     foundry: { sat: 1.16, con: .2, sh: [.9, .96, 1.1], hi: [1.1, .99, .86], bloom: 1.15, fall: .1, boost: 1.5, scat: .6 },
-    glacier: { sat: 1.06, con: .14, sh: [.92, 1, 1.1], hi: [1.02, 1.01, 1], fall: .06, boost: 1.4, scat: .7 },
+    glacier: { sat: 1.15, con: .26, sh: [.92, 1, 1.1], hi: [1.02, 1.01, 1], fall: .06, boost: 1.4, scat: .7 },
     docks: { sat: 1.08, con: .16, fall: .1, boost: 1.6, scat: .3 },
     orbital: { sat: 1.12, con: .2, fogH: .4, scat: .4, bloom: 1.1 },
-    biolab: { sat: 1.16, con: .18, sh: [.92, 1.04, 1.02], hi: [1.04, 1.02, .94], boost: 1.6 },
-    caverns: { sat: 1.2, con: .18, bloom: 1.2, boost: 1.5, ao: 1.15 },
+    biolab: { sat: 1.16, con: .3, sh: [.92, 1.04, 1.02], hi: [1.04, 1.02, .94], boost: 1.2 },
+    caverns: { sat: 1.2, con: .1, bloom: 1.2, boost: 1.5, ao: 1.15 },
     shrine: { sat: 1.12, con: .16, hi: [1.08, 1, .9], scat: .9 },
     grid: { sat: 1.2, con: .2, bloom: 1.2, fogH: .5 },
-    yard: { sat: 1.12, con: .18 },
+    yard: { sat: 1.12, con: .1 },
   };
   const lookOf = id => Object.assign({}, LOOK_BASE, LOOK[id] || {});
 
@@ -508,7 +510,10 @@ void main(){
   const DR = S.dynres = { mode: 'auto', active: false, scale: 0, max: 0, floor: .5, over: 0, under: 0, lastT: 0, raisedT: -1e9, noRaiseUntil: 0, changes: 0, lastDir: 0, atFloor: 0 };
   try { const v = window.S9Settings && S9Settings.get().video.autoRes; if (v === 'auto' || v === 'always' || v === 'off') DR.mode = v; } catch (e) {}
   const prMax = () => Math.min(devicePixelRatio || 1, TIERS[S.tier] ? TIERS[S.tier].maxPR : 1);
-  const drWanted = () => DR.mode === 'always' || (DR.mode === 'auto' && (S.tier === 'performance' || S.tier === 'balanced'));
+  // integrated / software GPU (a laptop whose browser draws on the built-in chip): Auto also covers High/Ultra. Player reports
+  // (/api/perf/summary): High on Intel UHD 630 averaged 19.5 fps with Auto never stepping in; a graphics card's High stays untouched.
+  const weakGpu = () => !!(S.integrated || S.software);
+  const drWanted = () => DR.mode === 'always' || (DR.mode === 'auto' && (S.tier === 'performance' || S.tier === 'balanced' || weakGpu()));
   const capMs = () => { try { const c = window.S9Settings && S9Settings._cap; return c && c.ms ? c.ms : 0; } catch (e) { return 0; } };
   function setPR(v, now) { v = Math.round(v * 20) / 20; if (v < DR.floor - 1e-6) v = Math.min(DR.max || v, Math.ceil(DR.floor * 20 - 1e-6) / 20); /* a .05 step never lands below the floor */ if (Math.abs(v - PR) < .001) return false; PR = v; resize(); DR.lastT = now; DR.changes++; return true; }
   function dynRes(f, g, now, c) {
@@ -526,7 +531,11 @@ void main(){
     if (now - DR.lastT < 1000) return;
     if (DR.over >= 2 && PR > DR.floor + .001) {
       if (now - DR.raisedT < 3000) DR.noRaiseUntil = now + 30000;   // the last raise did not fit: stay lower for a while
-      setPR(Math.max(DR.floor, PR - (f > B * 1.5 ? .1 : .05)), now); DR.over = 0; DR.lastDir = -1; S.adapt.lowered++;
+      // far over budget (e.g. High on a built-in chip): one jump to the estimated scale (GPU cost ~ pixels = scale^2) instead of
+      // many .1 steps; each change rebuilds the render targets (~60-90 ms hitch on an Intel UHD 630)
+      // only when the GPU timer itself says so (a CPU-starved frame can look GPU-bound: then the old small steps)
+      const est = f > B * 2 && gpuKnown && g > B * 1.5 ? PR * Math.sqrt(B * 1.05 / Math.max(f, g)) : PR - (f > B * 1.5 ? .1 : .05);
+      setPR(Math.max(DR.floor, Math.min(PR - .05, est)), now); DR.over = 0; DR.lastDir = -1; S.adapt.lowered++;
     } else if (DR.under >= (gpuKnown ? 4 : 8) && PR < max - .001 && now > DR.noRaiseUntil) {
       setPR(Math.min(max, PR + .05), now); DR.under = 0; DR.raisedT = now; DR.lastDir = 1;
     }

@@ -408,7 +408,12 @@ function hookRenderer() {
     return orig.call(this, sc, cam);
   };
 }
-function applyGrade() { const m = GRADE.mat; if (!m) return; m.uniforms.uExposure.value = (GRADE.base || .9) * S.video.brightness; if (m.uniforms.uGamma) m.uniforms.uGamma.value = S.video.gamma; }
+// brightness scales the CURRENT map's own exposure (index.html MAPS[].exposure: sunny maps sit lower). It used to scale the value
+// caught once at start (the first map's), so every settings change / account sync gave the map on screen the wrong exposure
+// (Sunken Temple 0.66 -> 0.9 = washed out), and each map load dropped the brightness setting: re-applied after every loadMap.
+function mapExposure() { try { const d = MAPS.find(m => m.id === CUR_MAP); if (d) return d.exposure || .9; } catch (e) {} return GRADE.base || .9; }
+function applyGrade() { const m = GRADE.mat; if (!m) return; m.uniforms.uExposure.value = mapExposure() * S.video.brightness; if (m.uniforms.uGamma) m.uniforms.uGamma.value = S.video.gamma; }
+if (typeof loadMap === 'function') { const _lm = loadMap; loadMap = async function () { const r = await _lm.apply(this, arguments); applyGrade(); return r; }; }
 function applyVideo() {
   const s = S9(); if (s && s.camera && fovActive()) s.camera.updateProjectionMatrix();
   S.video.fps = S.video.fpsMode !== 'off';

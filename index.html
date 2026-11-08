@@ -1325,7 +1325,7 @@ function buildWorld(layout = true) {
 
   MAT.beacons = [];
   // lighting
-  scene.add(new THREE.HemisphereLight(0x8a8ac0, 0x3a2a30, .95));
+  scene.add(new THREE.HemisphereLight(0x8a8ac0, 0x3a2a30, 1.8));   // night map: stronger sky fill so the ground/walls read (docs/SMOOTHNESS_VS_CRYZEN.md)
   sun = new THREE.DirectionalLight(0xff8a8a, 1.9);
   sun.position.copy(SUN_DIR).multiplyScalar(70); sun.castShadow = true;
   Object.assign(sun.shadow.camera, { left: -HALF - 8, right: HALF + 8, top: HALF + 8, bottom: -HALF - 8, near: 1, far: 160 });
@@ -1889,7 +1889,7 @@ function themed(def) {
 }
 const crate = (x, z, s, mat, y = 0) => addBox(x, y, z, s, s, s, mat, { surface: 'metal' });
 const MAPS = [
-  { id: 'yard', name: 'Sector Nine Yard', tag: 'Three lanes · sniper towers · cargo maze · 4-6 players', tex: [], station: [0, 3.6, 0], kit: true, ...YARD, build: () => { scene.fog.color.copy(FOG_COL); scene.fog.density = .011; buildWorld(false); yardLayout(); MAPROOT.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { if (m.envMapIntensity !== undefined && !m.userData.envScaled) { m.envMapIntensity *= .55; m.userData.envScaled = true; } }); }); } },
+  { id: 'yard', exposure: 1.05, name: 'Sector Nine Yard', tag: 'Three lanes · sniper towers · cargo maze · 4-6 players', tex: [], station: [0, 3.6, 0], kit: true, ...YARD, build: () => { scene.fog.color.copy(FOG_COL); scene.fog.density = .011; buildWorld(false); yardLayout(); MAPROOT.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { if (m.envMapIntensity !== undefined && !m.userData.envScaled) { m.envMapIntensity *= .55; m.userData.envScaled = true; } }); }); } },
 
   { id: 'glacier', name: 'Glacier Station', tag: 'Frozen research outpost · ice floors · jump pads', tex: ['snow_floor', 'rock_wall_08'], station: [0, 1.4, 0],
     build: themed({ sky: { zen: [.08, .16, .3], mid: [.35, .5, .66], hor: [.78, .86, .92], low: [.5, .58, .66], sunDir: [.6, .25, -.75], sunCol: [1, .95, .85], sunSize: 900, sunGlow: .6, cloud: [.85, .9, .98], cloudAmt: .55, aurora: [.2, 1, .6], auroraAmt: .25 },
@@ -2112,12 +2112,12 @@ const MAP_DEFS = {};
    An open-air atrium with an acid pool and a raised observation walkway (camp) sits inside a roofed corridor ring.
    Decontamination doors lead out to roofed outer rooms (specimen hall north, server room south, four corner labs)
    and two open courtyards east and west. Thin panel walls can be shot through; tanks and concrete can't. */
-MAP_DEFS.biolab = { id: 'biolab', name: 'Toxic Bio-Lab', tag: 'Indoor labs · acid pool · observation walkway · 2-4 players', size: 48, kit: ['mapkit', 'kit_biolab'],
+MAP_DEFS.biolab = { exposure: 0.78, id: 'biolab', name: 'Toxic Bio-Lab', tag: 'Indoor labs · acid pool · observation walkway · 2-4 players', size: 48, kit: ['mapkit', 'kit_biolab'],
   tex: ['forest_ground_06', 'green_metal_rust'], station: [-6.5, 0, 3.2],
   spawns: [[-18, -21], [18, -21], [-18, 21], [18, 21], [-21, -6], [21, 6], [-21, 6], [21, -6], [-10, -10], [10, 10], [-6, 21], [6, -21], [-10, 2], [10, -2]],
   camps: [[-6, 3.6, -6, 0], [-2, 3.6, -5, .4], [-4, 0, -21, .3], [0, 0, 21.5, Math.PI], [-21, 0, 0, Math.PI / 2], [21, 0, 0, -Math.PI / 2], [-21, 0, -21, .79], [21, 0, 21, -2.36]],
   build: themed({ sky: { zen: [.04, .07, .03], mid: [.2, .28, .1], hor: [.55, .62, .25], low: [.1, .14, .05], sunDir: [-.4, .35, -.8], sunCol: [.9, 1, .5], sunSize: 400, sunGlow: .6, cloud: [.35, .42, .2], cloudAmt: .9 },
-    fog: [.22, .3, .12, .022], hemi: [0xb8e080, 0x203010, .95], sunLight: [0xd8ff9a, 1.4], skyline: ['jungle', [.05, .09, .04], [.6, 2.6, .5]], weather: 'spores', accents: [[[.6, 2.6, .5], 0, 6, 20]],
+    fog: [.22, .3, .12, .013], hemi: [0xc4d8a8, 0x203010, .95], sunLight: [0xecf8cc, 1.4], skyline: ['jungle', [.05, .09, .04], [.6, 2.6, .5]], weather: 'spores', accents: [[[.6, 2.6, .5], 0, 6, 20]],
     build() {
       mFloor(RM('green_metal_rust', 2.5, { color: 0x8a988a, envMapIntensity: .3 }), 0x1a2410);
       mWalls(RM('green_metal_rust', 3, { color: 0x9aa890 }), 5, MAT.dark, [[2, glowMat([.5, 2.4, .4])]]);
@@ -2213,12 +2213,12 @@ function cavernsLayout() {
     for (const [x, z, r] of [[-24, -30.4, 0], [26, -30.4, 0], [-6, -30.4, 0], [-30.4, 10, 1], [30.4, -2, 3]]) { put('cv_overhang', x, z, r); put('cv_overhang', -x, -z, r + 2); }
   });
 }
-MAP_DEFS.caverns = { id: 'caverns', name: 'Crystal Caverns', tag: 'Winding caves · crystal chamber · high ledges · 2-6 players', tex: ['rock_wall_08'],
+MAP_DEFS.caverns = { exposure: 1.15, id: 'caverns', name: 'Crystal Caverns', tag: 'Winding caves · crystal chamber · high ledges · 2-6 players', tex: ['rock_wall_08'],
   station: [-17, 0, 0], kit: ['mapkit', 'kit_caverns'], size: 64,
   spawns: [[-30, -30], [30, 30], [-30, 30], [30, -30], [0, -28], [0, 28], [-30, 2], [30, -2], [-12, -28], [12, 28], [-24, -6], [24, 6], [-6, -16], [6, 16]],
   camps: [[-9, 3.6, -11, .69], [9, 3.6, -11, -.69], [-9, 3.6, 11, 2.46], [9, 3.6, 11, -2.46], [0, 0, -14.2, 0], [0, 0, 14.2, 3.14], [-24, 0, -20, .9], [24, 0, 20, -2.24]],
   build: themed({ sky: { zen: [.01, .005, .02], mid: [.03, .01, .05], hor: [.08, .03, .12], low: [.02, .01, .03], sunDir: [0, 1, 0], sunCol: [.6, .3, 1], sunSize: 50, sunGlow: .15, stars: .25 },
-    fog: [.06, .025, .1, .024], hemi: [0x9a7aff, 0x100818, .95], sunLight: [0xc0a0ff, 1.2], skyline: ['cavern', [.04, .02, .06], [.8, .3, 2.6]], weather: 'fireflies', accents: [[[1.6, .4, 3], 0, 8, 20], [[.4, 2.6, 2.4], -20, 4, -10]],
+    fog: [.06, .025, .1, .024], hemi: [0x9a7aff, 0x100818, 2.4], sunLight: [0xc0a0ff, 1.2], skyline: ['cavern', [.04, .02, .06], [.8, .3, 2.6]], weather: 'fireflies', accents: [[[1.6, .4, 3], 0, 8, 20], [[.4, 2.6, 2.4], -20, 4, -10]],
     build() {
       mFloor(RM('alienrock', 3, { color: 0x7a6a98, envMapIntensity: .3, metalness: 0 }), 0x0c0812);
       const rock = RM('alienrock', 3, { color: 0x5a4c78, metalness: 0, envMapIntensity: .3 }); MAT.step = rock;
