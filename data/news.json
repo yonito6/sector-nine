@@ -2,6 +2,18 @@
   "about": "What's New feed shown in the game (modules/news.js). Newest first is not required: the game sorts by date + version. Fields: id (unique), date YYYY-MM-DD, version, title, items[], big (highlighted card), image (optional, relative path like assets/ui/news/x.jpg). Written by the release manager (qa/release) when a big feature goes live.",
   "entries": [
     {
+      "id": "mod-footsteps",
+      "date": "2026-11-08",
+      "version": "2026.11.08-r17",
+      "title": "Footsteps that match the floor",
+      "big": false,
+      "items": [
+        "Metal, concrete, sand, snow, grass and more each sound different",
+        "Enemy footsteps tell you what they are walking on",
+        "Footsteps in the killcam replay"
+      ]
+    },
+    {
       "id": "mod-menu",
       "date": "2026-11-08",
       "version": "2026.11.08-r15",
