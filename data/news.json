@@ -2,6 +2,19 @@
   "about": "What's New feed shown in the game (modules/news.js). Newest first is not required: the game sorts by date + version. Fields: id (unique), date YYYY-MM-DD, version, title, items[], big (highlighted card), image (optional, relative path like assets/ui/news/x.jpg). Written by the release manager (qa/release) when a big feature goes live.",
   "entries": [
     {
+      "id": "mod-gfxmat",
+      "date": "2026-11-09",
+      "version": "2026.11.09-r20",
+      "title": "Sharper, richer surfaces",
+      "big": true,
+      "items": [
+        "Scratched metal panels, grimy concrete and rust streaks on the maps",
+        "Cleaner edges (SMAA) and sharper image on High and Ultra",
+        "Softer, crisper shadows and a subtle rim light so players read better in the dark",
+        "Bullet holes and scorch marks that stay and fade"
+      ]
+    },
+    {
       "id": "mod-w_obelisk",
       "date": "2026-11-08",
       "version": "2026.11.08-r18",

@@ -331,7 +331,7 @@ void main(){
       let seen = true;
       if (on && typeof camera !== 'undefined') { const p = r.root.position, cp = camera.position; _rv.set(p.x - cp.x, p.y + 1 - cp.y, p.z - cp.z); const d2 = _rv.lengthSq(); camera.getWorldDirection(_rf); seen = d2 < 2025 && (_rv.dot(_rf) > -1.2); }
       R.ov.visible = on && seen && R.body.visible && op > .05 && r.root.visible;
-      R.mat.uniforms.uOp.value = op; R.mat.uniforms.uK.value = M.level >= 3 ? .24 : .26;
+      R.mat.uniforms.uOp.value = op; R.mat.uniforms.uK.value = (M.level >= 3 ? .24 : .26) * M.rimK;
     }
     M.rims = RIMS.size;
   }
@@ -650,6 +650,8 @@ void main(){
       contact: !!(CS.im && CS.im.visible) };
   };
   M.CS = CS; M.D = D; M.UG = UG; M.KP = KP; M.get = () => ({ smaa, cas, TEX, RIMS });
+  M.rimK = 1;   // edge-light strength x per map (graphics.js LOOK.rim: dark maps get a brighter edge instead of a flat body colour)
+  M.setRimK = k => { M.rimK = k > 0 ? +k : 1; };
   M.setRimBase = c => { if (c) RIMB.setRGB(c[0], c[1], c[2]); else RIMB.copy(RIM0); for (const r of RIMS) if (r.gmRim) rimCol(r, r.gmRim.mat.uniforms.uCol.value); };
   window.S9GFXM = M;
   // graphics.js counts materials it upgraded; ours are upgraded too (its hook runs first inside ours), so count them for its status

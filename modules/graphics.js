@@ -48,23 +48,25 @@
   // walls/players), bloomR = bloom radius (small = a tight glow on the light itself, no wide haze), glow = scale of every over-bright
   // light material on the map (neon tubes, signs, lava, holograms: colour/emissive > 1), applied once per map load (material values only)
   const LOOK_BASE = { sat: 1.12, con: .26, sh: [.92, 1, 1.08], hi: [1.06, 1, .92], vig: .42, bloom: 1, fogH: .8, fall: .09, boost: 1.45, scat: .5, ao: 1, aoDirect: .4, probe: 1,
-    bloomT: 1.05, bloomR: .3, glow: 1, fill: 0, fillW: 0, hemiK: 1, lift: 0, fogK: 1 };
-  // fill = enemy body self-light in its team colour (index.html BOT_FILL; fillW = towards white on maps tinted like a team colour), hemiK = the map's sky/ground fill light x (shadows
+    bloomT: 1.05, bloomR: .3, glow: 1, fill: 0, fillW: 0, rim: 1, hemiK: 1, lift: 0, fogK: 1 };
+  // fill = enemy body self-light in its team colour (index.html BOT_FILL): kept at 0 on every map. 2026-11-09 owner: "enemies appear
+  // with very low details" - a flat colour over the body washed out the suit's texture, normals and specular (r15). Readability on
+  // dark maps comes from rim = gfxmat's edge light x (High/Ultra; it only lights the silhouette's edge, the suit keeps its detail), hemiK = the map's sky/ground fill light x (shadows
   // without the old bloom haze), lift = black level in the final picture (no pure-black crush), fogK = distance fog density x
   // 2026-11-08 readability pass (docs/SMOOTHNESS_VS_CRYZEN.md, render/contrast.js shots): yard/caverns softer S-curve (lifted shadows),
   // glacier/dunes/biolab stronger S-curve (flat/washed), biolab less ground haze; exposure + sky fill are in index.html MAPS/MAP_DEFS
   const LOOK = {
-    dunes: { glow: .8, fill: .1, hemiK: 1.25, lift: .02, sat: 1.1, con: .28, sh: [.9, .98, 1.1], hi: [1.07, 1.01, .9], fall: .07, boost: 1.6, scat: .9, aoDirect: .4 },
-    neon: { glow: .6, fill: .2, hemiK: 1.8, lift: .035, fogK: .8, sat: 1.24, con: .28, sh: [.95, .92, 1.14], hi: [1.06, .98, 1.02], bloom: .8, fall: .12, boost: 1.7, scat: .35, ao: 1.1 },
-    foundry: { glow: .85, fill: .12, fillW: .7, hemiK: 1.4, lift: .03, sat: 1.16, con: .2, sh: [.9, .96, 1.1], hi: [1.1, .99, .86], bloom: .85, fall: .1, boost: 1.5, scat: .6 },
-    glacier: { glow: .8, fill: .08, sat: 1.15, con: .26, sh: [.92, 1, 1.1], hi: [1.02, 1.01, 1], fall: .06, boost: 1.4, scat: .7 },
-    docks: { glow: .7, fill: .15, hemiK: 1.35, lift: .03, fogK: .75, sat: 1.08, con: .16, fall: .1, boost: 1.6, scat: .3 },
-    orbital: { glow: .75, fill: .1, hemiK: 1.3, lift: .025, sat: 1.12, con: .2, fogH: .4, scat: .4, bloom: .9 },
-    biolab: { glow: .8, fill: .12, sat: 1.16, con: .3, sh: [.92, 1.04, 1.02], hi: [1.04, 1.02, .94], boost: 1.2 },
-    caverns: { fill: .15, lift: .015, sat: 1.2, con: .1, bloom: .85, boost: 1.5, ao: 1.15 },
-    shrine: { glow: .8, fill: .16, sat: 1.12, con: .16, hi: [1.08, 1, .9], scat: .9 },
-    grid: { glow: .6, fill: .15, hemiK: 1.6, lift: .035, fogK: .6, sat: 1.2, con: .2, bloom: .8, fogH: .5 },
-    yard: { fill: .1, sat: 1.12, con: .1 },
+    dunes: { glow: .8, hemiK: 1.25, lift: .02, sat: 1.1, con: .28, sh: [.9, .98, 1.1], hi: [1.07, 1.01, .9], fall: .07, boost: 1.6, scat: .9, aoDirect: .4 },
+    neon: { rim: 2, glow: .6, hemiK: 1.8, lift: .035, fogK: .8, sat: 1.24, con: .28, sh: [.95, .92, 1.14], hi: [1.06, .98, 1.02], bloom: .8, fall: .12, boost: 1.7, scat: .35, ao: 1.1 },
+    foundry: { rim: 1.4, glow: .85, hemiK: 1.4, lift: .03, sat: 1.16, con: .2, sh: [.9, .96, 1.1], hi: [1.1, .99, .86], bloom: .85, fall: .1, boost: 1.5, scat: .6 },
+    glacier: { glow: .8, sat: 1.15, con: .26, sh: [.92, 1, 1.1], hi: [1.02, 1.01, 1], fall: .06, boost: 1.4, scat: .7 },
+    docks: { rim: 1.5, glow: .7, hemiK: 1.35, lift: .03, fogK: .75, sat: 1.08, con: .16, fall: .1, boost: 1.6, scat: .3 },
+    orbital: { rim: 1.4, glow: .75, hemiK: 1.3, lift: .025, sat: 1.12, con: .2, fogH: .4, scat: .4, bloom: .9 },
+    biolab: { glow: .8, sat: 1.16, con: .3, sh: [.92, 1.04, 1.02], hi: [1.04, 1.02, .94], boost: 1.2 },
+    caverns: { rim: 1.8, lift: .015, sat: 1.2, con: .1, bloom: .85, boost: 1.5, ao: 1.15 },
+    shrine: { glow: .8, sat: 1.12, con: .16, hi: [1.08, 1, .9], scat: .9 },
+    grid: { rim: 1.8, glow: .6, hemiK: 1.6, lift: .035, fogK: .6, sat: 1.2, con: .2, bloom: .8, fogH: .5 },
+    yard: { rim: 1.5, sat: 1.12, con: .1 },
   };
   const lookOf = id => Object.assign({}, LOOK_BASE, LOOK[id] || {});
 
@@ -456,6 +458,7 @@ void main(){
       bloom.radius = L.bloomR; bloom.threshold = L.bloomT / ex; }
     applyGlow(L.glow);
     if (typeof BOT_FILL !== 'undefined') { BOT_FILL = L.fill; BOT_FILLW = L.fillW; }
+    try { if (window.S9GFXM && S9GFXM.setRimK) S9GFXM.setRimK(L.rim); } catch (e) {}
     // fill light + fog: the map build sets them; the first look applied after a load remembers those values (S.base0 per map)
     if (has('MAPROOT') && (!S.base0 || S.base0.map !== S.map)) {
       const hl = MAPROOT.children.filter(o => o.isHemisphereLight);
