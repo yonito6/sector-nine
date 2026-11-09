@@ -1,0 +1,30 @@
+# Publishes the game to GitHub Pages. Replaces "legacy" Pages (2026-11-09): its deploy step aborts at 10 min,
+# and after a GitHub outage the file sync of this ~270 MB site took just over 10 min (3 failed deploys in a row).
+name: Deploy site
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deploy
+        uses: actions/deploy-pages@v4
+        with:
+          timeout: 2400000
