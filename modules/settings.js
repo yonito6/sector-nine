@@ -24,7 +24,7 @@ const DEFAULTS = {
   },
   mouse: { sens: 1, adsMult: 1, invertY: false },
   crosshair: { style: 'crossdot', color: '#ece6d8', length: 9, thickness: 2, gap: 5, outline: true, outlineThickness: 1, outlineOpacity: .5, dot: 2, opacity: 1, dynamic: true, adsShow: false },
-  video: { fov: 78, quality: 'medium', autoRes: 'auto', fps: true, fpsMode: 'simple', fpsCap: 'off', shake: 1, brightness: 1, gamma: 1, viewBob: 'full', gunSway: true, hitFlinch: true },
+  video: { fov: 72, quality: 'medium', autoRes: 'auto', fps: true, fpsMode: 'simple', fpsCap: 'off', shake: 1, brightness: 1, gamma: 1, viewBob: 'full', gunSway: true, hitFlinch: true },
   audio: { master: .8, effects: 1, ambience: 1, footsteps: 1, voice: 1, muteUnfocused: false }
 };
 // number limits and allowed values (used to clean anything loaded from storage, the server or a share code)
@@ -32,7 +32,7 @@ const NUM = {
   'mouse.sens': [.05, 10], 'mouse.adsMult': [.1, 3],
   'crosshair.length': [0, 30], 'crosshair.thickness': [1, 10], 'crosshair.gap': [-4, 30], 'crosshair.outlineThickness': [1, 4], 'crosshair.outlineOpacity': [0, 1],
   'crosshair.dot': [0, 10], 'crosshair.opacity': [.1, 1],
-  'video.fov': [70, 110], 'video.shake': [0, 1], 'video.brightness': [.6, 1.5], 'video.gamma': [.6, 1.6],
+  'video.fov': [60, 110], 'video.shake': [0, 1], 'video.brightness': [.6, 1.5], 'video.gamma': [.6, 1.6],
   'audio.master': [0, 1], 'audio.effects': [0, 1], 'audio.ambience': [0, 1], 'audio.footsteps': [1, 2], 'audio.voice': [0, 1]
 };
 const ENUM = {
@@ -114,6 +114,7 @@ function sanitize(src) {
     }
   }
   if (typeof src.updatedAt === 'number' && isFinite(src.updatedAt)) out.updatedAt = src.updatedAt;
+  if (src.fovV === 2) out.fovV = 2;
   return out;
 }
 
@@ -124,10 +125,14 @@ try {
   const raw = localStorage.getItem(LS_KEY);
   if (raw) { firstRun = false; let parsed = null; try { parsed = JSON.parse(raw); } catch (e) { loadNote = 'Your saved settings were damaged, so the defaults were loaded.'; } S = sanitize(parsed); }
 } catch (e) {}
+// default field of view 78 -> 72 (2026-11-09, owner: enemies looked too small; 78 vertical = ~110 horizontal, wider than CS2 / Valorant).
+// Once per settings copy (the mark travels with account sync): still on the old default 78 -> 72; a player's own choice is kept.
+function fovMigrate(o) { if (!o || !o.video || o.fovV === 2) return false; const ch = o.video.fov === 78; if (ch) o.video.fov = 72; o.fovV = 2; return ch; }
+let fovMigrated = fovMigrate(S); if (!firstRun) { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {} }
 
 let saveT = 0, syncT = 0, syncState = '';
 function save() {
-  S.updatedAt = Date.now();
+  S.updatedAt = Date.now(); S.fovV = 2;   // a fov saved from now on is the player's own choice (never migrated)
   try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {}
   clearTimeout(syncT); syncT = setTimeout(syncRemote, 1200);
   clearTimeout(saveT); setStatus('Saved');
@@ -159,6 +164,7 @@ function applyRemote(remote) {
   const r = sanitize(remote);
   if (S.updatedAt && r.updatedAt && r.updatedAt < S.updatedAt) { syncRemote(); return false; }   // this device is newer: push it up
   S = r; if (!S.updatedAt) S.updatedAt = Date.now();
+  if (fovMigrate(S)) { S.updatedAt = Date.now(); setTimeout(syncRemote, 0); }   // an account copy still on the old default
   try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {}
   applyAll(); if (open) renderTab();
   return true;
@@ -741,7 +747,7 @@ const NOTE = () => `<div class="s9s-note live"${loadNote ? '' : ' hidden'}><span
 // sensitivity equivalents: the game turns .0021 rad per mouse count at 1.0
 const cm360 = s => (2 * Math.PI / (.0021 * s)) / 800 * 2.54;
 const sensExtra = () => `≈ ${cm360(S.mouse.sens).toFixed(1)} cm per 360° at 800 DPI · same feel as CS2 ${(S.mouse.sens * .0021 * 180 / Math.PI / .022).toFixed(2)} · Valorant ${(S.mouse.sens * .0021 * 180 / Math.PI / .07).toFixed(3)}`;
-const fovExtra = () => `${S.video.fov}° vertical ≈ ${Math.round(360 / Math.PI * Math.atan(Math.tan(S.video.fov * Math.PI / 360) * 16 / 9))}° horizontal on a 16:9 screen. Default 78.`;
+const fovExtra = () => `${S.video.fov}° vertical ≈ ${Math.round(360 / Math.PI * Math.atan(Math.tan(S.video.fov * Math.PI / 360) * 16 / 9))}° horizontal on a 16:9 screen. Default 72.`;
 
 function tabHTML(t) {
   if (t === 'gameplay') return NOTE() + sec('Feedback', rToggle('gameplay.damageNumbers', 'Damage numbers', 'Numbers that pop out of an enemy when you hit them.') +
@@ -1041,7 +1047,7 @@ function hookFrame() {
 /* ============ boot ============ */
 const api = {
   DEFAULTS: clone(DEFAULTS), ACTIONS: ACTIONS.map(a => ({ ...a })),
-  get: () => clone(S), set: (path, v) => set(path, v, { rerender: true }),
+  get: () => { const c = clone(S); delete c.fovV; return c; }, set: (path, v) => set(path, v, { rerender: true }),
   open: (t) => openPanel(t), close, isOpen: () => open, reset: w => { reset(w || 'all'); if (open) renderTab(); },
   exportCrosshair: () => exportCode(), importCrosshair: code => { const r = importCode(code); if (r.ok) { S.crosshair = r.c; save(); applyCrosshair(); if (open) renderTab(); } return r; },
   applyRemote, keyName, toggleFullscreen, sync: syncRemote,

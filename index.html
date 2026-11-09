@@ -6632,6 +6632,21 @@ function lock() {
 }
 function menuScene() { clearDynamic(); state = 'menu'; Object.assign(G, { time: 0, matchT: MATCH_TIME, ended: false }); newRoster(); }
 async function play() { initAudio(); lock(); await startMatch(); setState('play'); }
+// The audio graph is built in the MENU (the browser keeps it suspended until the Play click resumes it; all game sound goes through
+// AU.out, which is muted in the menu: the same state as being back in the menu after a match, so nothing sounds different).
+// Then the footstep / hit / gun-voice buffers and the killcam's pre-rendered sounds are made while the player is in the menu,
+// not in the first frame of play (a laptop profile: killcam pre-render 240 ms inside setState('play'), footstep buffers 50-100 ms each).
+let modsLoaded = false; addEventListener('s9modules', () => { modsLoaded = true; });
+function preAudio() {
+  if (AU.ctx) return true; if (state !== 'menu' || !modsLoaded) return false;   // every add-on loaded first (the settings add-on watches audio start-up)
+  // add-ons that wrap sound functions must have done so first (the settings add-on wires its buses when audio starts and has to be
+  // the outer wrapper of sfx.foeStep, as when audio started at the Play click): footsteps (FOOTSTEPS.old)
+  if (window.FOOTSTEPS && !window.FOOTSTEPS.old && !window.FOOTSTEPS.loadError) return false;
+  initAudio(); if (!AU.ctx) return true;
+  setTimeout(() => { try { if (state === 'menu' && typeof stopKillcam === 'function') stopKillcam(); } catch (e) {} }, 600);   // killcam's audio bus + pre-render (idempotent)
+  return true;
+}
+{ let n = 0; const iv = setInterval(() => { if (++n > 240 || preAudio()) clearInterval(iv); }, 500); }   // as soon as the menu is up (2 min max)
 function resume() { initAudio(); setState(P.dead ? 'dead' : 'play'); lock(); }
 $('btnPlay').addEventListener('click', play); $('btnNext').addEventListener('click', () => { if (NET.on) { initAudio(); startOnlineMatch(); setState('play'); lock(); } else play(); }); $('btnResume').addEventListener('click', resume);
 $('mapSel').innerHTML = '<option value="random">Random rotation</option>' + MAPS.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
