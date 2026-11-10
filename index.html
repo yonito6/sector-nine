@@ -2941,7 +2941,7 @@ function initAudio() {
     const ws = c.createBufferSource(); ws.buffer = brown; ws.loop = true; const wf = c.createBiquadFilter(); wf.type = 'lowpass'; wf.frequency.value = 240; const wg = c.createGain(); wg.gain.value = .028;
     const lfo = c.createOscillator(); lfo.frequency.value = .07; const lg = c.createGain(); lg.gain.value = 50; lfo.connect(lg); lg.connect(wf.frequency); lfo.start();
     ws.connect(wf); wf.connect(wg); wg.connect(AU.master); ws.start();
-    setTimeout(() => { try { AU.hitBuf = { body: hitSample('body'), head: hitSample('head'), shield: hitSample('shield') }; warmGunVoices(); } catch (e) {} }, 300);
+    setTimeout(() => { try { AU.hitBuf = { body: hitSample('body'), head: hitSample('head'), shield: hitSample('shield') }; warmGunVoices(); loadGunSamples(); } catch (e) {} }, 300);
   } catch (e) { AU.ctx = null; }
 }
 // How other players' / bots' sounds are mixed (same numbers in data/sound_mix.json for the Unity port; qa/qa_sound.js
@@ -3165,6 +3165,10 @@ const GUN_VOICE = {
   rail: { dur: 1.1, verb: .7, echo: .5, vol: 1.1, fn: L => { L.noise(0, 'hp', 8000, 4000, .02, .7, .015, 1); L.tone(0, 4200, 120, .06, .35, .35, 'saw', 1.2); L.tone(0, 880, 880, 1, .45, .14, 'fm'); L.tone(0, 1318, 1318, 1, .3, .08, 'sin'); L.tone(0, 90, 30, .06, .3, 1, 'sin', 2); L.crackle(0, 2500, .08, .35, .2); L.tone(.08, 300, 2400, .3, .5, .05, 'sin'); } },
   // Longbow sniper: supersonic snap, cannon body, long rolling tail
   sniper: { dur: 1.4, verb: .6, echo: .55, vol: 1.2, fn: L => { L.noise(0, 'hp', 9000, 5000, .005, .7, .006, 1.2); L.noise(0, 'bp', 900, 260, .1, .7, .18, 1.1); L.tone(0, 130, 28, .08, .35, 1.3, 'sin', 3); L.noise(.004, 'lp', 400, 80, .4, .7, .5, .5); } },
+  // BR-6 Obelisk (owner pick 2026-11-10, option E): a real recorded sample, assets/audio/guns/obelisk_fire.ogg|mp3 (credits: assets/audio/CREDITS.md),
+  // decoded in the menu (loadGunSamples); until it is decoded the Longbow voice plays. vol: -14.2 LUFS sample -> about -13 LUFS in game, level with
+  // the other heavy guns (Judge -12.3, Breacher -13.5) and ~6.5 dB over the Longbow (-19.7). Its own long outdoor tail: less game reverb than the Longbow.
+  obelisk: { dur: 1.4, verb: .3, echo: .25, vol: 1.15, sample: 'assets/audio/guns/obelisk_fire', fn: L => GUN_VOICE.sniper.fn(L) },
   // Nova launcher: hollow "foomp" + rocket hiss
   launch: { dur: 1.2, verb: .5, echo: .35, vol: 1.1, fn: L => { L.tone(0, 260, 60, .05, .14, 1.1, 'sin', 2.5); L.noise(0, 'lp', 700, 200, .1, 1.2, .1, .8); L.noise(.03, 'bp', 1800, 3200, .4, .8, .45, .35, .05); L.noise(.05, 'hp', 4000, 4000, 1, .7, .4, .15, .1); } },
   // M-2 pistol: tight snap
@@ -3200,8 +3204,16 @@ function gunVoice(name, pos, vol = 1, delay = 0) {
 }
 // warm every buffer in idle time after audio starts, so the first shot of each gun never stalls a frame
 function warmGunVoices() { if (!AU.ctx) return; const ks = Object.keys(GUN_VOICE).filter(k => !GSND[k]); if (!ks.length) return; GSND[ks[0]] = gsBuild(GUN_VOICE[ks[0]].dur, GUN_VOICE[ks[0]].fn); setTimeout(warmGunVoices, 30); }
+// recorded gun samples (GUN_VOICE[k].sample): fetched + decoded once in the menu; GSND[k] then holds the recording for your own gun, bots,
+// other online players and the killcam alike (all of them play GSND[k]). ogg where the browser plays it (Chrome/Firefox), else mp3 (Safari)
+function loadGunSamples() {
+  if (!AU.ctx || AU.samplesAsked) return; AU.samplesAsked = true; let ext = 'mp3'; try { if (new Audio().canPlayType('audio/ogg; codecs="vorbis"')) ext = 'ogg'; } catch (e) {}
+  for (const k in GUN_VOICE) { const v = GUN_VOICE[k]; if (!v.sample) continue;
+    fetch(v.sample + '.' + ext).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); }).then(b => AU.ctx.decodeAudioData(b)).then(buf => { GSND[k] = buf; v.loaded = true; })
+      .catch(e => console.warn('[sound] gun sample ' + k + ' not loaded (the synthesized voice stays):', e && e.message || e)); }
+}
 for (const k in GUN_VOICE) { const old = sfx[k]; sfx[k] = function (...a) { if (!gunVoice(k, a[0] && a[0].isVector3 ? a[0] : null)) old && old.apply(sfx, a); }; }   // (given a position = someone else's gun, placed in 3D)
-{ const oldBot = sfx.botShot, BOTV = { sniper: 'sniper', obelisk: 'sniper', helix: 'rail', breacher: 'shotgun', wasp: 'smg', pistol: 'pistol', carbine: 'shot', triad: 'burst', judge: 'judge', titan: 'minigun', arc: 'arc', inferno: 'flame', cryo: 'cryo', void: 'voidfire', nova: 'launch', stinger: 'crossbow', ricochet: 'disc', seeker: 'seeker' };
+{ const oldBot = sfx.botShot, BOTV = { sniper: 'sniper', obelisk: 'obelisk', helix: 'rail', breacher: 'shotgun', wasp: 'smg', pistol: 'pistol', carbine: 'shot', triad: 'burst', judge: 'judge', titan: 'minigun', arc: 'arc', inferno: 'flame', cryo: 'cryo', void: 'voidfire', nova: 'launch', stinger: 'crossbow', ricochet: 'disc', seeker: 'seeker' };
   // every weapon has its own voice: the table above, else the weapon's own sound (add-on guns register theirs in GUN_VOICE)
   sfx.botShot = function (pos, kind, delay, atMe) { const k = kind === true ? 'sniper' : kind, s = BOTV[k] || (WEAPONS[k] && GUN_VOICE[WEAPONS[k].sound] ? WEAPONS[k].sound : null);
     if (!s || !AU.ctx) return oldBot.call(sfx, pos, kind); if (!voice('bot', pos, atMe)) return false; return gunVoice(s, pos, .8, delay || 0); }; }   // false = refused (busy far-sound budget)
@@ -4021,7 +4033,7 @@ const WEAPONS = {
   // while you still hold aim, CS2 style); kills with a head, body or arm shot, a leg leaves ~18 HP; strongest zoom in the game.
   // 2026-11-09 (AWP feel): scopeSnap = the scope opens / closes on the same frame at the final zoom (no FOV tween, no sway: quick-scope);
   // armK = arm hits count as body (only legs are 'limb' damage); draw = 0.4 s deploy, and a weapon switch cancels the bolt (quick-switch).
-  obelisk:  { name: 'BR-6 Obelisk', cls: 'Bolt-action sniper', mag: 5, reserve: 25, maxReserve: 35, rpm: 50, auto: false, dmg: 110, head: 2, bolt: 1.2, armK: 1, draw: .4, scopeSnap: true, pierce: true, scope: true, hip: .07, ads: 0, adsFov: 8, adsSpeed: 30, reload: 2.6, reloadEmpty: 2.6, falloff: null, kick: 5, move: .97, heat: 0, skin: 'sniper', glow: [.35, .85, 1], shape: [1, 1, 1], sound: 'sniper', tracer: [3, 6, 8],
+  obelisk:  { name: 'BR-6 Obelisk', cls: 'Bolt-action sniper', mag: 5, reserve: 25, maxReserve: 35, rpm: 50, auto: false, dmg: 110, head: 2, bolt: 1.2, armK: 1, draw: .4, scopeSnap: true, pierce: true, scope: true, hip: .07, ads: 0, adsFov: 8, adsSpeed: 30, reload: 2.6, reloadEmpty: 2.6, falloff: null, kick: 5, move: .97, heat: 0, skin: 'sniper', glow: [.35, .85, 1], shape: [1, 1, 1], sound: 'obelisk', tracer: [3, 6, 8],
     stats: [100, 12, 100, 50], desc: 'Bolt-action. Head, body or arm shot kills, a leg shot leaves them on a sliver. Instant scope, 1.2 s bolt (switch weapons to skip it).' },
   nova:     { name: 'Nova', cls: 'Plasma launcher', mag: 2, reserve: 10, maxReserve: 14, rpm: 55, auto: false, projectile: true, hip: .01, ads: .004, adsFov: 55, adsSpeed: 12, reload: 2.6, reloadEmpty: 2.6, kick: 3.5, move: .92, heat: 0, skin: 'nova', glow: [3, 1.2, .3], shape: [1.15, 1.15, .95], sound: 'launch',
     stats: [92, 12, 60, 40], desc: 'Fires plasma rockets that explode on impact. Splash damage.' },

@@ -1,0 +1,94 @@
+Sonniss #GameAudioGDC Bundle - Licensing Agreement (verbatim copy)
+
+Source: License.pdf shipped with the bundle, downloaded 2026-11-07 from the official Sonniss mirror
+https://ftpmirror.your.org/pub/misc/sonniss2019/License.pdf (identical file in sonniss2018/).
+Bundle page: https://sonniss.com/gameaudiogdc  - full terms: https://sonniss.com/gdc-bundle-license/
+The sonniss.com page (checked 2026-11-07) also states: "These sound effects are licensed for media production
+(games, film, TV, interactive projects) only. Use for AI/ML training is strictly prohibited under our license terms."
+
+Summary for Sector Nine: royalty-free, commercial use allowed, no attribution required, editing/layering allowed,
+may ship inside the game; must NOT sell or redistribute the raw sound files on their own, or claim authorship of them,
+or use them for AI/ML training.
+
+Source libraries used in tools/review/gunsfx (all from the GDC 2015-2019 bundles): see tools/review/gunsfx/sources.json (exact source file + bundle part for every layer)
+
+----------------------------------------------------------------------
+
+THE SONNISS #GAMEAUDIOGDC 
+BUNDLE LICENSING AGREEMENT 
+This EULA is a legal agreement between yourself (the Licensee) and Sonniss, 
+the Licensor. In this Agreement, the party who is granting the right to use the 
+licensed sound effects will be referred to as “Licensor” or “Sonniss”, and the 
+party who is receiving the right to use the licensed sound effects will be 
+referred to as “Licensee”. Before downloading any of the sound effects, you 
+will be asked to agree to these Terms. If you refuse to accept these Terms, you 
+will be kindly asked not to use any of the sound effects.  
+GRANT OF LICENSE 
+Up on downloading this sound effects collection, the Licensor grants the Licensee, 
+a worldwide, non­exclusive, royalty­free license to use all or any of the sound 
+effects in accordance with the terms and conditions laid out in this Agreement. 
+RIGHTS GRANTED 
+a) Licensee may use the licensed sound effects on an unlimited number of 
+projects for the entirety of their life time. 
+b) Licensee may use the licensed sound effects for personal and 
+commercial projects without attribution to the original creator. 
+c) Licensee may use the licensed sound effects for the purposes of 
+synchronization with audio and visual projects the Licensee is involved 
+with, which includes but is not limited to: games, films, television & 
+interactive projects. 
+d) Licensee may transfer the licensed sound effects to as many hard 
+drives, computers and friends as they see fit. 
+e) Licensee may distribute and publicly perform a reproduction of 
+anything contained within the sound effects collection over any form of 
+public or private medium. 
+f) Licensee may re­record, edit, duplicate and release the licensed sound 
+effects as part of yours or your clients’ production in whatever medium 
+you choose. 
+COPYRIGHT 
+ 
+Other than the license rights granted in this agreement, all right, title and interest in 
+the sound effects contained within this collection, is and shall always remain the 
+property of their respective copyright holders. 
+INDEMNITY 
+ 
+Licensee and Licensor hereby agree to indemnify each other from, and against any 
+and all claims, demands, suits, actions, causes of action, damages, liabilities, 
+charges and expenses, including attorneys fees incurred by each party with respect 
+to any matter that arises as a result of any claim that the Licensed sound effects 
+infringe or violate any rights of any third party or any breach of this agreement. 
+WARRANTY 
+ 
+Sonniss LTD warrants that it has full authority to license and distribute all of the 
+sound effects under the terms of this agreement and that our products do not 
+infringe on the rights of any third party. 
+ 
+ 
+RESTRICTIONS 
+a)  Licensee may not modify any of the sound effects with intent to claim authorship. 
+b) Licensee may not sell any of the sound effects (as is) for the purposes of commercial 
+gain. (Although the sound effects may be sold as incorporated into licensee project). 
+c) Licensee may not re­record or change the licensed sound effects in any way not 
+authorized under this Agreement without the written consent of Licensor. 
+LIABILITY 
+Licensor shall not be liable for any loss of business or business profits, business interruption, 
+or any other form of direct or indirect loss resulting directly or indirectly from the use of any of 
+the licensed sound effects. 
+TERMINATION 
+The Licensee’s right to use any of the sound effects from Licensor will automatically 
+terminate in the event of any breach by Licensee of the terms of this Agreement and upon 
+written demand from Licensor, Licensee agrees that Licensee shall immediately destroy all 
+copies of the sound effects in Licensor’s possession or control. 
+JURISDICTION 
+These Terms are to be governed by and interpreted according to English law. This means a 
+Contract for the purchase of sound effects through Sonniss, and any dispute or claim arising 
+out of or in connection with it or these Terms will be governed by English law. All disputes 
+arising under them will be subject to the exclusive jurisdiction of the English courts. 
+This is a binding legal agreement between you (the Licensee), and us (the Licensor). By 
+downloading and using any of the sound effects from the #GameAudioGDC bundle 
+constitutes the acceptance of these terms. Each of the paragraphs of these Terms operates 
+separately. If any court or relevant authority decides that any of them are unlawful, the 
+remaining paragraphs will remain in full force and effect. 
+Anyone found breaching this agreement will be subject to criminal and civil 
+penalties and liable for monetary damages. Please respect the work of our 
+suppliers.  
+ 
