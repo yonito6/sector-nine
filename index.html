@@ -3578,6 +3578,71 @@ function groundAt(px, pz, feet, r) {
   for (const b of world.colliders) if (px + q > b.min.x && px - q < b.max.x && pz + q > b.min.z && pz - q < b.max.z && b.max.y <= feet + STEP) g = Math.max(g, b.max.y);
   return g;
 }
+/* ================= solid characters (CS2 / Valorant style) ================= */
+// Every living character (you, bots, other online players, teammates too) is a solid upright cylinder: radius 0.4 m (the
+// walls' radius), 1.8 m tall standing, ~1.2 m crouched. Each mover resolves ITSELF against the others right after its own
+// wall-checked move: pushed back along the line between the two centres to exactly touching, and only the part of its
+// velocity that points into the other body is removed, so you slide along people instead of sticking (no impulse = no launch).
+// Overlap this step's own motion did not cause (two spawns on one spot, a late network correction) eases apart at a few m/s.
+// Feet at or above another body's head top = standing on it (their head is ground); off-centre you slowly slide off the rim.
+// Online: your own movement is predicted against the other players' interpolated positions; each client resolves only itself
+// (no server correction), so two players pushing into each other just stop: no rubber-banding. Bots blocked head-on by another
+// bot (a 1-wide corridor) pass through bots only for a moment (never through you or real players), so they never deadlock.
+const BODY = { r: .4, h: 1.8, ch: 1.2, bh: 1.25, rim: .45, sep: 3, netSep: 2, slideOff: 2.2, ghostAfter: .7, ghost: 1.2, giveUp: 1.4 };
+const bodyFeet = e => e.isPlayer ? P.pos : e.root.position;
+const bodyTop = e => e.isPlayer ? P.pos.y + lerp(BODY.h, BODY.ch, P.crouch) : e.root.position.y + lerp(BODY.h, e.remote ? BODY.ch : BODY.bh, e.crouch || 0);
+const bodySolid = e => e.isPlayer ? state === 'play' && !P.dead : !e.dead && e.root.visible && (!e.remote || !!(e.snaps && e.snaps.length));
+const bodyGhost = (a, b) => !a.isPlayer && !a.remote && !b.isPlayer && !b.remote && ((a.ghostT || 0) > 0 || (b.ghostT || 0) > 0);
+const bodyAt = i => i < 0 ? PLAYER_ENT : robots[i];
+// an online player is drawn ~0.1 s in the past: collide with them swept from where they are drawn to where they are heading
+// (their velocity x the playback delay), so you stop where they REALLY are and never see them inside you while both walk in
+const _bq = { x: 0, y: 0, z: 0 };
+function bodyLead(o, p) {
+  const q = o.root.position, lead = Math.min(.25, ((typeof o.target === 'number' ? o.target : 100) + (+o.ping || 60) / 2) / 1000), ex = o.vel.x * lead, ez = o.vel.z * lead, L2 = ex * ex + ez * ez;
+  const k = L2 > 1e-6 ? clamp(((p.x - q.x) * ex + (p.z - q.z) * ez) / L2, 0, 1) : 0;
+  _bq.x = q.x + ex * k; _bq.y = q.y; _bq.z = q.z + ez * k; return _bq;
+}
+// push `self` (feet p, height h, wall radius rad) out of every body it overlaps; moved = how far it moved this step -> bodies touched
+function bodyPush(self, p, h, rad, vel, moved, dt) {
+  let n = 0; const D = BODY.r * 2; self.bodyHit = null;
+  for (let i = -1; i < robots.length; i++) {
+    const o = bodyAt(i); if (o === self || !bodySolid(o) || bodyGhost(self, o)) continue;
+    const q = bodyFeet(o), top = bodyTop(o);
+    if (p.y >= top - .12 || p.y + h <= q.y + .12) continue;   // standing on them / they stand on you: no side push
+    if (o.remote && q.y > p.y + h * .5) continue;   // an online player landing on / dropping onto your head: their own client resolves it (you are not shoved from under them)
+    let dx = p.x - q.x, dz = p.z - q.z, d2 = dx * dx + dz * dz;
+    // (online: the distance to the nearest point of their swept body, pushed along the line to where they are drawn: the
+    // direction stays steady and symmetric, so two players walking straight into each other stop instead of sliding past)
+    if (o.remote) { const l = bodyLead(o, p), lx = p.x - l.x, lz = p.z - l.z; d2 = Math.min(d2, lx * lx + lz * lz); }
+    if (d2 >= D * D) continue;
+    const d = Math.sqrt(d2); { const n = Math.hypot(dx, dz); if (n > 1e-4) { dx /= n; dz /= n; } }
+    if (Math.hypot(dx, dz) < .5) { const a = ((self.name || 'p').length * 2.39996 + i * 1.7) % 6.283; dx = Math.cos(a); dz = Math.sin(a); }   // (same spot: a fixed direction per body)
+    const step = Math.min(D - d, moved + (o.remote || self.remote ? BODY.netSep : BODY.sep) * dt);
+    const nx = p.x + dx * step, nz = p.z + dz * step;
+    if (!blocked(nx, nz, p.y, rad, h)) { p.x = nx; p.z = nz; } else if (!blocked(nx, p.z, p.y, rad, h)) p.x = nx; else if (!blocked(p.x, nz, p.y, rad, h)) p.z = nz;
+    const vn = vel.x * dx + vel.z * dz; if (vn < 0) { vel.x -= dx * vn; vel.z -= dz * vn; }
+    n++; self.bodyHit = o;
+  }
+  return n;
+}
+// the highest head top under these feet that can carry them (feet were at/above it before this step, or already standing on it)
+function bodyGround(self, x, z, y0, vy) {
+  let g = -1e9, on = null; const D = BODY.r * 2;
+  if (vy <= .01) for (let i = -1; i < robots.length; i++) {
+    const o = bodyAt(i); if (o === self || !bodySolid(o)) continue;
+    const q = bodyFeet(o), dx = x - q.x, dz = z - q.z; if (dx * dx + dz * dz >= D * D) continue;
+    const top = bodyTop(o);
+    if ((top <= y0 + .13 || (self.onHead === o && top <= y0 + .7)) && top > g) { g = top; on = o; }
+  }
+  self.headO = on; return g;
+}
+// standing on a head: off-centre you slide off the rounded top, faster the further out (never a jump or a launch)
+function bodyRim(self, p, h, rad, dt) {
+  const o = self.onHead; if (!o || !bodySolid(o)) return;
+  const q = bodyFeet(o); let dx = p.x - q.x, dz = p.z - q.z; const d = Math.hypot(dx, dz); if (d <= BODY.rim) return;
+  dx /= d; dz /= d; const s = BODY.slideOff * dt * (.35 + .65 * (d - BODY.rim) / (BODY.r * 2 - BODY.rim));
+  if (!blocked(p.x + dx * s, p.z + dz * s, p.y, rad, h)) { p.x += dx * s; p.z += dz * s; }
+}
 const ray = new THREE.Raycaster();
 const _v1 = V3(), _v2 = V3(), _v3 = V3(), _losHits = [];
 function lineOfSight(from, to) {
@@ -6110,9 +6175,13 @@ function updatePlayer(dt, rdt) {
     if (P.onGround || G.time - P.lastGround < MOVE.coyoteTime) { P.vel.y = MOVE.jump; P.onGround = false; P.jumpQ = 0; P.airJumps = 0; P.crouchHold = false; P.slideT = 0; P.lastGround = -9; }
     else if (P.airJumps < 1) { P.vel.y = MOVE.doubleJump; P.airJumps = 1; P.jumpQ = 0; thrusterFx(_v1.set(P.pos.x, P.pos.y + .1, P.pos.z)); sfx.thrust(); springs.land.v += .9; }
   }
-  const h = lerp(MOVE.height, MOVE.crouchHeight, P.crouch);
+  const h = lerp(MOVE.height, MOVE.crouchHeight, P.crouch), px0 = P.pos.x, pz0 = P.pos.z;
   const nx = P.pos.x + P.vel.x * dt; if (!blocked(nx, P.pos.z, P.pos.y, MOVE.radius, h)) P.pos.x = nx; else P.vel.x = 0;
   const nz2 = P.pos.z + P.vel.z * dt; if (!blocked(P.pos.x, nz2, P.pos.y, MOVE.radius, h)) P.pos.z = nz2; else P.vel.z = 0;
+  // solid characters: stopped by bots / other players, sliding along them (bodyPush)
+  bodyPush(PLAYER_ENT, P.pos, h, MOVE.radius, P.vel, Math.hypot(P.pos.x - px0, P.pos.z - pz0), dt);
+  bodyRim(PLAYER_ENT, P.pos, h, MOVE.radius, dt);
+  const yPre = P.pos.y;
   P.vel.y -= (P.dashT > 0 ? MOVE.dashGravity : MOVE.gravity) * MM.g * dt;
   // head bump: jumping into a ceiling stops you under it (instead of ending up inside it and being pushed out somewhere else)
   { const y0 = P.pos.y; P.pos.y += P.vel.y * dt; if (P.vel.y > 0 && blocked(P.pos.x, P.pos.z, P.pos.y, .38, h) && !blocked(P.pos.x, P.pos.z, y0, .38, h)) { P.pos.y = y0; P.vel.y = 0; } }
@@ -6123,7 +6192,8 @@ function updatePlayer(dt, rdt) {
     if (!found) { const c = nearestOk(cellOf(P.pos.x, P.pos.z), 20); if (c >= 0) { P.pos.set(cellX(c), NAV.h[c], cellZ(c)); P.vel.set(0, 0, 0); } }
   }
   P.pos.x = clamp(P.pos.x, -HALF + .45, HALF - .45); P.pos.z = clamp(P.pos.z, -HALF + .45, HALF - .45);
-  const g = groundAt(P.pos.x, P.pos.z, P.pos.y, .4), wasAir = !P.onGround;
+  const hg = bodyGround(PLAYER_ENT, P.pos.x, P.pos.z, yPre, P.vel.y), g = Math.max(groundAt(P.pos.x, P.pos.z, P.pos.y, .4), hg), wasAir = !P.onGround;
+  PLAYER_ENT.onHead = PLAYER_ENT.headO && hg >= g && P.pos.y - g < .04 ? PLAYER_ENT.headO : null;
   if (P.pos.y <= g) {
     if (wasAir && P.vel.y < -4) { springs.land.v -= Math.min(2.2, -P.vel.y * .25); sfx.step(false, true); }
     P.pos.y = g; P.vel.y = 0; P.onGround = true; P.airJumps = 0;
@@ -6425,7 +6495,17 @@ function moveBot(r, dt) {
   for (const n of NADES) { const dx = p.x - n.m.position.x, dz = p.z - n.m.position.z, d = Math.hypot(dx, dz); if (d < 7 && n.t < 1.5) { wx += dx / (d || 1) * 2.2; wz += dz / (d || 1) * 2.2; speed = 6.2; } }
   // personal space
   for (const o of robots) if (o !== r && !o.dead) { const dx = p.x - o.root.position.x, dz = p.z - o.root.position.z, d = Math.hypot(dx, dz); if (d < 1 && d > .01) { wx += dx / d * (1 - d) * 1.2; wz += dz / d * (1 - d) * 1.2; } }
+  // walk around solid bodies ahead (you, other players, bots): steer to the side the body is not on; dead ahead = keep right,
+  // so two bots meeting head-on pass each other (each keeps to its own right). Not into a wall.
+  if (wx || wz) { const L = Math.hypot(wx, wz), ux = wx / L, uz = wz / L; let sx = 0, sz = 0;
+    for (let i = -1; i < robots.length; i++) { const o = bodyAt(i); if (o === r || !bodySolid(o) || bodyGhost(r, o)) continue;
+      const q = bodyFeet(o), dx = q.x - p.x, dz = q.z - p.z, d = Math.hypot(dx, dz); if (d > 1.7 || d < .01 || Math.abs(q.y - p.y) > 1.5) continue;
+      const ahead = (dx * ux + dz * uz) / d; if (ahead < .35) continue;
+      const side = dx * -uz + dz * ux, s = side > .05 ? 1 : side < -.05 ? -1 : 1, k = (1.7 - d) / 1.7 * ahead * 1.3;
+      sx -= -uz * s * k; sz -= ux * s * k; }
+    if ((sx || sz) && walkableAt(p.x + sx * .9, p.z + sz * .9)) { wx += sx; wz += sz; } }
   const wl = Math.hypot(wx, wz); if (wl > 1) { wx /= wl; wz /= wl; }
+  r.wx = wx; r.wz = wz;   // (what it wants to do: read by bots it bumps into)
   if (wl > .3 && r.mode !== 'fight') r.lookYaw = Math.atan2(wx, wz);
   if (r.stagger > 0) { r.stagger -= dt; speed *= .4; }
   if (r.chillT > 0) speed *= .55;
@@ -6435,18 +6515,30 @@ function moveBot(r, dt) {
   } else { const MMb = mapMods(p.x, p.z, _mmB); speed *= MMb.slow; const acc = (r.onGround ? (r.mode === 'fight' ? 11 : 9) : 2) * (r.onGround ? MMb.fric : 1); r.vel.x = damp(r.vel.x, wx * speed, acc, dt); r.vel.z = damp(r.vel.z, wz * speed, acc, dt); }
   r.crouch = damp(r.crouch, r.crouchWant && r.onGround && r.dashT <= 0 ? 1 : 0, 8, dt);
   const h = lerp(1.8, 1.25, r.crouch), nx = p.x + r.vel.x * dt, nz = p.z + r.vel.z * dt;
-  let moved = 0;
+  let moved = 0; const bx0 = p.x, bz0 = p.z;
   if (!blocked(nx, p.z, p.y, .4, h)) { moved += Math.abs(nx - p.x); p.x = nx; } else r.vel.x = 0;
   if (!blocked(p.x, nz, p.y, .4, h)) { moved += Math.abs(nz - p.z); p.z = nz; } else r.vel.z = 0;
+  // solid characters (bodyPush). Held up by a body (not a wall): another bot -> a short pass-through for bots only, the
+  // player / an online player -> pick a new plan; never the wall-stuck hop (that would jump onto your head)
+  r.ghostT = Math.max(0, (r.ghostT || 0) - dt);
+  if (bodyPush(r, p, h, .4, r.vel, Math.hypot(p.x - bx0, p.z - bz0), dt) && (wx || wz) && speed > 1 && Math.hypot(p.x - bx0, p.z - bz0) < speed * dt * .35) {
+    r.bodyT = (r.bodyT || 0) + dt; const o = r.bodyHit;
+    // head-on with a bot that wants through the other way (a narrow corridor): a short bots-only pass-through; a bot that just stands there: re-plan
+    if (o && !o.isPlayer && !o.remote && (o.wx || 0) * wx + (o.wz || 0) * wz < -.2) { if (r.bodyT > BODY.ghostAfter) { r.ghostT = BODY.ghost; r.bodyT = 0; } }
+    else if (r.bodyT > BODY.giveUp) { r.bodyT = 0; r.strafeDir *= -1; if (r.hasGoal && r.mode !== 'fight') { r.hasGoal = false; r.thinkT = 0; } }
+  } else r.bodyT = Math.max(0, (r.bodyT || 0) - dt * 2);
+  bodyRim(r, p, h, .4, dt);
   p.x = clamp(p.x, -HALF + .6, HALF - .6); p.z = clamp(p.z, -HALF + .6, HALF - .6);
   // gravity, jumps and the air double-jump
   r.vy -= 20 * mapMods(p.x, p.z, _mmB).g * dt;
   if (!r.onGround && r.wantDouble && r.vy < 1.5 && r.airJumps === 0) { r.vy = 6.4; r.airJumps = 1; r.wantDouble = false; thrusterFx(_a3.set(p.x, p.y + .2, p.z), r.color); }
+  const yPre = p.y;
   { const y0 = p.y; p.y += r.vy * dt; if (r.vy > 0 && blocked(p.x, p.z, p.y, .35, 1.8) && !blocked(p.x, p.z, y0, .35, 1.8)) { p.y = y0; r.vy = 0; } }
-  const g = groundAt(p.x, p.z, p.y, .4);
+  const hg = bodyGround(r, p.x, p.z, yPre, r.vy), g = Math.max(groundAt(p.x, p.z, p.y, .4), hg);
+  r.onHead = r.headO && hg >= g && p.y - g < .05 ? r.headO : null;
   if (p.y <= g) { p.y = g; r.vy = 0; r.onGround = true; r.airJumps = 0; } else r.onGround = p.y - g < .05 && r.vy <= 0;
   mapTriggers(r, dt);
-  // stuck: hop and re-plan
+  // stuck (walls): hop and re-plan. A body in the way is handled above (moved = the move before the body push-out)
   if ((wx || wz) && speed > 1 && moved < speed * dt * .15 && r.dashT <= 0) { r.stuckT += dt; if (r.stuckT > .6) { r.stuckT = 0; r.stuckN = (r.stuckN || 0) + 1; if (r.stuckN >= 3 && r.onGround) { r.vy = 6.9; r.onGround = false; r.stuckN = 0; } if (r.hasGoal) setGoal(r, r.goal.x, r.goal.z); else r.strafeDir *= -1; } } else { r.stuckT = 0; if (moved > speed * dt * .5) r.stuckN = 0; }
 }
 function thrusterFx(p, col) { for (let i = 0; i < 16; i++) FX.spawn(p, rand(-1.5, 1.5), rand(-4, -1), rand(-1.5, 1.5), col ? col.r * 3 : 1, col ? col.g * 3 : 2.4, col ? col.b * 3 : 4, rand(.05, .1), rand(.2, .4), -2, 3, 1); }
