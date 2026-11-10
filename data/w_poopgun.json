@@ -56,7 +56,7 @@
   "jitter": 0.006,
   "adsTighten": 0.15,
   "crouchTighten": 0.1,
-  "airJitter": 0.018
+  "airJitter": 0
  },
  "projectile": {
   "speed": 120,

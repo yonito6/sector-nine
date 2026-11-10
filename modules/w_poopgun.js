@@ -21,7 +21,7 @@
     weapon: { name: 'Gas Giant', cls: 'Critter shotgun', mode: 'poop', mag: 6, reserve: 30, maxReserve: 48, rpm: 72, auto: false, dmg: 15, pellets: 9, spreadP: .072, head: 1.5, limb: .75,
       hip: 0, ads: 0, adsFov: 64, adsSpeed: 15, reload: .8, reloadEmpty: .8, falloff: [7, 22, .35], kick: 2.4, move: 1.02, heat: 0, glow: [.9, 3, .6], tracer: [1.2, 4, .8], sound: 'poopFire',
       stats: [92, 18, 22, 76], desc: 'A hungry space critter. Feed it beans, point its rear end, squeeze: nine gooey blobs. Two-shots anyone up to 10 m, splashes on walls.' },
-    pattern: { inner: 3, innerR: .03, outer: 5, outerR: .072, jitter: .006, adsTighten: .15, crouchTighten: .1, airJitter: .018 },
+    pattern: { inner: 3, innerR: .03, outer: 5, outerR: .072, jitter: .006, adsTighten: .15, crouchTighten: .1, airJitter: 0 },   // airJitter 0: no airborne spread (owner 2026-11-09: mid-air shots as accurate as on the ground)
     projectile: { speed: 120, gravity: 6, life: 1.1, radius: .085, converge: .16 },
     splash: { dmg: 6, r: 1.0 },
     knockback: { perPellet: .45, max: 4, botPerPellet: .5 },

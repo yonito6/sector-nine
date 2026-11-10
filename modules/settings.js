@@ -511,7 +511,7 @@ function updateGameXH() {
   const s = S9(); if (!s || !s.P || !ensureGameXH()) return;
   const P = s.P, c = S.crosshair, W = s.WEAPONS && s.WEAPONS[P.weapon];
   let g = c.gap;
-  if (c.dynamic) g = (c.gap + Math.hypot(P.vel ? P.vel.x : 0, P.vel ? P.vel.z : 0) * 1.6 + (P.onGround ? 0 : 14) + (P.heat || 0) * 14) * (1 - (P.crouch || 0) * .3);
+  if (c.dynamic) g = (c.gap + Math.hypot(P.vel ? P.vel.x : 0, P.vel ? P.vel.z : 0) * 1.6 + (P.heat || 0) * 14) * (1 - (P.crouch || 0) * .3);
   const k = devicePixelRatio || 1;
   // the JSON key is only rebuilt when a crosshair field (flat object) or the pixel ratio changed: no string per frame
   let same = XH.key !== '' && XH.c === c && XH.k === k, nk = 0; if (same) for (const f in c) { nk++; if (c[f] !== XH.snap[f]) { same = false; break; } }

@@ -1,13 +1,15 @@
 /* Sector Nine add-on: BR-6 Obelisk, the bolt-action rail sniper (modules/w_obelisk.js)
    The numbers live in index.html WEAPONS.obelisk (so the server anti-cheat reads them like every core gun): one shot, then a
-   1.2 s bolt cycle (P.boltT), head or body shot kills, limbs leave ~18 HP, adsFov 8 (strongest zoom). This add-on brings:
+   1.2 s bolt cycle (P.boltT), head, body or arm shot kills, legs leave ~18 HP, adsFov 8 (strongest zoom). This add-on brings:
    - the model (Blender, render/weapons/obelisk/obelisk.py -> assets/models/weapons/obelisk/obelisk.js): registered as a
      "unique gun" (KIT g_obelisk / g_obelisk_sight + GMETA) so the game's own buildGunVM / rifleTP make the first-person
      viewmodel (hands, reticle, flash) and the third-person gun (bots, online players, drops);
    - the BOLT: a separate part animated through the cycle (lift, pull back, push, lock) in first person (from P.boltT) and in
      third person (bots: when they fire; online players: on their shot event, so everyone sees the same cycle);
-   - its own scope overlay (Cryzen / CS style: full black surround, thick posts, thin centre lines with mil ticks, small bright
-     centre dot; the scope drops while the bolt cycles and comes back if you still hold aim: index.html adsT);
+   - its own scope overlay (Cryzen / CS style: the lens fills the screen, black scope body only at the corners / far rim, thick posts,
+     thin centre lines with mil ticks, small bright centre dot). The scope snaps in / out on the same frame (WEAPONS.obelisk.scopeSnap,
+     no zoom tween, no sway), drops while the bolt cycles and comes back if you still hold aim (index.html adsT); a weapon switch
+     cancels the bolt (draw 0.4 s: quick-switch);
    - bots: half of the sniper bots carry the Obelisk (BOTW.obelisk in index.html).
    API: window.S9Obelisk = { ready, model, stats, boltPhase(u), tpBolts() }.  Hooks: buildGunVM, rifleTP, updateViewmodel,
    botShoot, netReceive, buildBot. Shaders compile at load (renderer.compile), never mid-match. */
@@ -113,14 +115,17 @@
 
   /* ---------- scope overlay (only while the Obelisk is out) ---------- */
   const css = document.createElement('style');
-  css.textContent = '#scope.ob{background:radial-gradient(circle at center,transparent 0 40.6vmin,rgba(0,0,0,.72) 41.2vmin,#05080a 42.4vmin,#000 43.2vmin)}' +
+  // the lens fills the real screen (2026-11-09, owner): a circle as wide as the screen's longer side, centred, so only the corners and
+  // a thin rim at the far edges are the black scope body; it is drawn at the game's own resolution (it IS the game camera at FOV 8)
+  css.textContent = '#scope.ob{background:none}#scope .oblens{display:none}' +
+    '#scope.ob .oblens{display:block;left:50%;top:50%;width:100vmax;height:100vmax;margin:-50vmax 0 0 -50vmax;border-radius:50%;background:radial-gradient(circle at center,transparent 0 45.5vmax,rgba(0,0,0,.5) 48.4vmax,#000 50vmax);box-shadow:0 0 0 100vmax #000}' +
     '#scope.ob .tl,#scope.ob .tr{width:calc(50% - 14vmin);height:6px;margin-top:-3px}#scope.ob .tb,#scope.ob .tt{height:calc(50% - 14vmin);width:6px;margin-left:-3px}' +
     '#scope .tt{display:none}#scope.ob .tt{display:block;top:0;left:50%}' +
     '#scope .obx,#scope .oby{display:none}#scope.ob .obx{display:block;left:calc(50% - 14vmin);width:28vmin;top:50%;height:9px;margin-top:-4.5px;background:repeating-linear-gradient(90deg,#000 0 1px,transparent 1px 2.8vmin);background-position:center;-webkit-mask:linear-gradient(90deg,#000 0 47%,transparent 47% 53%,#000 53%);mask:linear-gradient(90deg,#000 0 47%,transparent 47% 53%,#000 53%)}' +
     '#scope.ob .oby{display:block;top:calc(50% - 14vmin);height:28vmin;left:50%;width:9px;margin-left:-4.5px;background:repeating-linear-gradient(0deg,#000 0 1px,transparent 1px 2.8vmin);background-position:center;-webkit-mask:linear-gradient(0deg,#000 0 47%,transparent 47% 53%,#000 53%);mask:linear-gradient(0deg,#000 0 47%,transparent 47% 53%,#000 53%)}' +
     '#scope.ob .dot{width:3px;height:3px;margin:-1.5px 0 0 -1.5px;background:#d8fbff;box-shadow:0 0 5px #6fdcff}';
   document.head.appendChild(css);
-  { const sc = document.getElementById('scope'); if (sc) for (const c of ['tt', 'obx', 'oby']) { const i = document.createElement('i'); i.className = c; sc.appendChild(i); } }
+  { const sc = document.getElementById('scope'); if (sc) { const l = document.createElement('i'); l.className = 'oblens'; sc.prepend(l); for (const c of ['tt', 'obx', 'oby']) { const i = document.createElement('i'); i.className = c; sc.appendChild(i); } } }
   let scopeOn = null;
 
   /* ---------- per frame (once): first-person bolt, third-person cycles, scope style ---------- */

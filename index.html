@@ -2963,9 +2963,10 @@ const SOUND_MIX = { v: 1, window: .5, hardCap: 64, absCap: 192, categories: {
 const VOICE_CAT = { bot: 'shot', shot: 'shot', foestep: 'foestep', foley: 'foley', whiz: 'whiz', impact: 'impact', step: 'step', misc: 'misc' };
 const VOICES = {}; for (const k in VOICE_CAT) VOICES[k] = [0, 0, 0];   // per kind: [window start, far sounds in it, all sounds in it]
 const VOICE_ALL = [0, 0, 0, 0];   // [window start, sounds of prio 1, 2, 3]: a tier only sees itself and the tiers above it
-function voice(kind, pos) {
+function voice(kind, pos, must) {
   if (!AU.ctx) return false;
   const cat = SOUND_MIX.categories[VOICE_CAT[kind] || 'misc'], d = pos ? camera.position.distanceTo(pos) : 0;
+  if (must) { VOICES[kind] && VOICES[kind][2]++; VOICE_ALL[Math.min(3, Math.max(1, cat.prio | 0))]++; return true; }   // a shot that hits YOU: always (never thinned, see shotAtMe)
   if (d > cat.range) return false;
   const v = VOICES[kind] || VOICES.misc, now = AU.ctx.currentTime, W = SOUND_MIX.window;
   if (now - v[0] >= W) { v[0] = now; v[1] = 0; v[2] = 0; }
@@ -3202,8 +3203,13 @@ function warmGunVoices() { if (!AU.ctx) return; const ks = Object.keys(GUN_VOICE
 for (const k in GUN_VOICE) { const old = sfx[k]; sfx[k] = function (...a) { if (!gunVoice(k, a[0] && a[0].isVector3 ? a[0] : null)) old && old.apply(sfx, a); }; }   // (given a position = someone else's gun, placed in 3D)
 { const oldBot = sfx.botShot, BOTV = { sniper: 'sniper', obelisk: 'sniper', helix: 'rail', breacher: 'shotgun', wasp: 'smg', pistol: 'pistol', carbine: 'shot', triad: 'burst', judge: 'judge', titan: 'minigun', arc: 'arc', inferno: 'flame', cryo: 'cryo', void: 'voidfire', nova: 'launch', stinger: 'crossbow', ricochet: 'disc', seeker: 'seeker' };
   // every weapon has its own voice: the table above, else the weapon's own sound (add-on guns register theirs in GUN_VOICE)
-  sfx.botShot = function (pos, kind, delay) { const k = kind === true ? 'sniper' : kind, s = BOTV[k] || (WEAPONS[k] && GUN_VOICE[WEAPONS[k].sound] ? WEAPONS[k].sound : null);
-    if (!s || !AU.ctx) return oldBot.call(sfx, pos, kind); if (!voice('bot', pos)) return; gunVoice(s, pos, .8, delay || 0); }; }
+  sfx.botShot = function (pos, kind, delay, atMe) { const k = kind === true ? 'sniper' : kind, s = BOTV[k] || (WEAPONS[k] && GUN_VOICE[WEAPONS[k].sound] ? WEAPONS[k].sound : null);
+    if (!s || !AU.ctx) return oldBot.call(sfx, pos, kind); if (!voice('bot', pos, atMe)) return false; return gunVoice(s, pos, .8, delay || 0); }; }   // false = refused (busy far-sound budget)
+// The shot that hits / kills YOU is always heard (CoD / CS2: you always hear what killed you), wherever the shooter is: its voice
+// skips the far-sound budget (a far sniper in a busy fight was refused: the budget was full of other far gunfire) and is placed
+// at most 25 m away in the shooter's direction, so it stays clearly audible over your own death sound. Direction is unchanged.
+const SHOT_AT_ME_M = 25;
+function shotAtMe(p) { const c = camera.position, d = p.distanceTo(c); if (d > SHOT_AT_ME_M) p.sub(c).multiplyScalar(SHOT_AT_ME_M / d).add(c); return p; }
 // an enemy reloading near you (CS2: you hear the mag come out): mag out, mag in, a bolt for the sniper; placed in 3D
 sfx.foeReload = function (pos, kind) { if (!voice('foley', pos)) return; const t = AU.ctx.currentTime, c = SOUND_MIX.categories.foley, d = bus({ pos, ref: c.ref, roll: c.roll, vol: .9, verb: .06 });
   if (kind === 'sniper' || kind === 'obelisk') { nz(d, t + .1, .05, 'bandpass', 2600, 5, .35); osc(d, t + .14, .05, 'square', 1200, 600, .1); nz(d, t + .5, .08, 'bandpass', 3400, 6, .3); return; }
@@ -3450,9 +3456,9 @@ function buildBot(profile) {
   const B = { hips: bone('Hips'), spine: bone('Spine'), spine1: bone('Spine1'), spine2: bone('Spine2'), neck: bone('Neck'), head: bone('Head'), rhand: bone('RightHand') };
   model.updateMatrixWorld(true);
   const meshes = [];
-  const hit = (b, geo, zone, oy) => { if (!b) return; const s = b.getWorldScale(_v1).x || 1; const m = new THREE.Mesh(geo, HB.mat); m.visible = false; m.scale.setScalar(1 / s); m.position.set(0, oy / s, 0); m.userData.zone = zone; b.add(m); meshes.push(m); };
+  const hit = (b, geo, zone, oy, part) => { if (!b) return; const s = b.getWorldScale(_v1).x || 1; const m = new THREE.Mesh(geo, HB.mat); m.visible = false; m.scale.setScalar(1 / s); m.position.set(0, oy / s, 0); m.userData.zone = zone; if (part) m.userData.part = part; b.add(m); meshes.push(m); };
   hit(B.head, HB.head, 'head', .1); hit(B.spine1, HB.chest, 'body', .1); hit(B.hips, HB.pelvis, 'body', 0);
-  for (const s of ['Left', 'Right']) { hit(bone(s + 'UpLeg'), HB.thigh, 'limb', .22); hit(bone(s + 'Leg'), HB.shin, 'limb', .22); hit(bone(s + 'Arm'), HB.arm, 'limb', .14); hit(bone(s + 'ForeArm'), HB.arm, 'limb', .13); }
+  for (const s of ['Left', 'Right']) { hit(bone(s + 'UpLeg'), HB.thigh, 'limb', .22, 'leg'); hit(bone(s + 'Leg'), HB.shin, 'limb', .22, 'leg'); hit(bone(s + 'Arm'), HB.arm, 'limb', .14, 'arm'); hit(bone(s + 'ForeArm'), HB.arm, 'limb', .13, 'arm'); }
   const gun = new THREE.Group(), gunInner = rifleTP(profile.weapon); gun.add(gunInner); scene.add(gun);
   const muzzle = new THREE.Object3D(); muzzle.position.copy(gunInner.userData.muzzle || new THREE.Vector3(0, .12, .5)); gun.add(muzzle);
   const flash = new THREE.Sprite(HB.flashMat); flash.scale.setScalar(.2); flash.visible = false; muzzle.add(flash);
@@ -3946,9 +3952,11 @@ const WEAPONS = {
   sniper:   { name: 'R-90 Longbow', cls: 'Sniper rifle', mag: 10, reserve: 40, maxReserve: 60, rpm: 200, auto: false, dmg: 5000, head: 1, oneShot: true, pierce: true, scope: true, hip: .06, ads: 0, adsFov: 13, adsSpeed: 26, reload: 2.0, reloadEmpty: 2.0, falloff: null, kick: 4, move: .94, heat: 0, skin: 'sniper', glow: [.4, 1.8, 2.6], shape: [1, 1, 1], sound: 'sniper', tracer: [7, 5, 3],
     stats: [100, 30, 100, 45], desc: 'Scoped. Kills in one shot and passes through every body in line.' },
   // BR-6 Obelisk: bolt-action rail sniper (2026-11-08). One shot, then a visible 1.2 s bolt cycle (the scope drops out and comes back
-  // while you still hold aim, CS2 style); kills with a head or body shot, a limb leaves ~18 HP; strongest zoom in the game.
-  obelisk:  { name: 'BR-6 Obelisk', cls: 'Bolt-action sniper', mag: 5, reserve: 25, maxReserve: 35, rpm: 50, auto: false, dmg: 110, head: 2, bolt: 1.2, pierce: true, scope: true, hip: .07, ads: 0, adsFov: 8, adsSpeed: 30, reload: 2.6, reloadEmpty: 2.6, falloff: null, kick: 5, move: .97, heat: 0, skin: 'sniper', glow: [.35, .85, 1], shape: [1, 1, 1], sound: 'sniper', tracer: [3, 6, 8],
-    stats: [100, 12, 100, 50], desc: 'Bolt-action. Head or body shot kills, legs and arms leave them on a sliver. Strongest scope, 1.2 s bolt between shots.' },
+  // while you still hold aim, CS2 style); kills with a head, body or arm shot, a leg leaves ~18 HP; strongest zoom in the game.
+  // 2026-11-09 (AWP feel): scopeSnap = the scope opens / closes on the same frame at the final zoom (no FOV tween, no sway: quick-scope);
+  // armK = arm hits count as body (only legs are 'limb' damage); draw = 0.4 s deploy, and a weapon switch cancels the bolt (quick-switch).
+  obelisk:  { name: 'BR-6 Obelisk', cls: 'Bolt-action sniper', mag: 5, reserve: 25, maxReserve: 35, rpm: 50, auto: false, dmg: 110, head: 2, bolt: 1.2, armK: 1, draw: .4, scopeSnap: true, pierce: true, scope: true, hip: .07, ads: 0, adsFov: 8, adsSpeed: 30, reload: 2.6, reloadEmpty: 2.6, falloff: null, kick: 5, move: .97, heat: 0, skin: 'sniper', glow: [.35, .85, 1], shape: [1, 1, 1], sound: 'sniper', tracer: [3, 6, 8],
+    stats: [100, 12, 100, 50], desc: 'Bolt-action. Head, body or arm shot kills, a leg shot leaves them on a sliver. Instant scope, 1.2 s bolt (switch weapons to skip it).' },
   nova:     { name: 'Nova', cls: 'Plasma launcher', mag: 2, reserve: 10, maxReserve: 14, rpm: 55, auto: false, projectile: true, hip: .01, ads: .004, adsFov: 55, adsSpeed: 12, reload: 2.6, reloadEmpty: 2.6, kick: 3.5, move: .92, heat: 0, skin: 'nova', glow: [3, 1.2, .3], shape: [1.15, 1.15, .95], sound: 'launch',
     stats: [92, 12, 60, 40], desc: 'Fires plasma rockets that explode on impact. Splash damage.' },
   pistol:   { name: 'M-2 Pulse Pistol', cls: 'Sidearm', mag: 14, reserve: 98, maxReserve: 140, rpm: 400, auto: false, dmg: 30, head: 2.2, hip: .012, ads: .003, adsFov: 60, adsSpeed: 24, reload: 1.2, reloadEmpty: 1.4, falloff: [20, 50, .6], kick: 1.3, move: 1.06, heat: .05, skin: 'pistol', glow: [2.6, 1.9, .4], sound: 'pistol', tracer: [5, 4, 1.5],
@@ -4346,7 +4354,7 @@ function fireProj() {
   if (P.ammo <= 0) { if (P.fireCd <= 0) { sfx.dry(); P.fireCd = .25; } if (P.reserve > 0) startReload(); return; }
   P.ammo--; G.fired++; P.fireCd = 60 / w.rpm; P.shield = 0; noise(camera.position, 30, PLAYER_ENT);
   camera.getWorldDirection(shotDir); camRight.set(1, 0, 0).applyQuaternion(camera.quaternion); camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
-  const spread = lerp(w.hip, w.ads, P.ads) + (P.onGround ? 0 : .03), a = Math.random() * 6.283, m = Math.sqrt(Math.random()) * spread;
+  const spread = lerp(w.hip, w.ads, P.ads), a = Math.random() * 6.283, m = Math.sqrt(Math.random()) * spread;
   const d = shotDir.clone().addScaledVector(camRight, Math.cos(a) * m).addScaledVector(camUp, Math.sin(a) * m).normalize();
   const from = camera.position.clone().addScaledVector(d, .7).addScaledVector(camRight, .1 * (1 - P.ads)).addScaledVector(camUp, -.07);
   if (w.proj === 'bolt') { const v = d.clone().multiplyScalar(125); spawnProj('bolt', PLAYER_ENT, from, v, false); netProj('bolt', from, v); }
@@ -4709,11 +4717,16 @@ function setModel(name) {
   $('hWeapon').textContent = WEAPONS[name].label;
   pips.classList.toggle('big', WEAPONS[name].mag <= 10); cache.pip = -1;
 }
+// CS-style switching: a new switch may interrupt a draw (after a short .15 s debounce: one wheel flick is many events); every switch
+// restarts the full draw of the new weapon (w.draw, default .45 s) and nothing fires during it, so spamming switches never beats the draw.
+// Leaving or drawing a bolt gun cancels its bolt cycle (quick-switch, AWP style): the draw is then the only wait.
 function switchWeapon(name) {
-  if (P.weapon === name || P.switchT > 0 || state !== 'play') return;
+  if (P.weapon === name || state !== 'play' || !WEAPONS[name] || P.switchT > 0 && G.time - (P.switchAt || -9) < .15) return;
   P.store[P.weapon] = { ammo: P.ammo, reserve: P.reserve };
+  const bolt = WEAPONS[P.weapon].bolt || WEAPONS[name].bolt; P.lastW = P.weapon; P.switchAt = G.time;
   P.weapon = name; P.ammo = P.store[name].ammo; P.reserve = P.store[name].reserve; P.mag = WEAPONS[name].mag;
-  P.reload = 0; P.switchT = .45; P.boltT = 0; P.ads = Math.min(P.ads, .3);
+  P.reload = 0; P.switchT = P.switchDur = WEAPONS[name].draw || .45; P.boltT = 0; P.boltN = (P.boltN || 0) + 1; P.ads = Math.min(P.ads, .3); if (bolt) P.fireCd = 0;
+  if (typeof NET !== 'undefined' && NET.seq) NET.seq.draw = (NET.seq.draw | 0) + 1;
   setModel(name); sfx.equip(); updateHud(true);
 }
 function addAmmo(name, n) {
@@ -4796,7 +4809,7 @@ function fireShot() {
   const sm = P.shotMult || 1; P.shotMult = 1;
   if (G.time - P.lastShot > .25) P.shotIdx = 0; P.shotIdx++; P.lastShot = G.time;
   const hs = Math.hypot(P.vel.x, P.vel.z), ads = P.ads, scoped = w.scope ? clamp((ads - .7) / .3, 0, 1) : ads;
-  let spread = lerp(w.hip, w.ads, scoped) + (hs > 1 ? lerp(.022, w.scope ? .002 : .006, scoped) * (id === 'wasp' || id === 'pistol' ? .5 : 1) * (P.walk ? .5 : 1) : 0) + (P.onGround ? 0 : .05 * (id === 'wasp' || id === 'pistol' ? .4 : 1)) + P.heat * lerp(.02, .006, scoped);
+  let spread = lerp(w.hip, w.ads, scoped) + (hs > 1 ? lerp(.022, w.scope ? .002 : .006, scoped) * (id === 'wasp' || id === 'pistol' ? .5 : 1) * (P.walk ? .5 : 1) : 0) + P.heat * lerp(.02, .006, scoped);   // no airborne penalty: a mid-air shot is as accurate as on the ground (owner 2026-11-09)
   spread *= 1 - P.crouch * .35; if (w.scope) P.nsT = scoped < .5 ? G.time : 0;   // kill feed: no-scope = fired this shot without the scope up
   P.heat = Math.min(1, P.heat + (w.heat || 0));
   camera.getWorldDirection(shotDir); camRight.set(1, 0, 0).applyQuaternion(camera.quaternion); camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
@@ -4829,7 +4842,7 @@ function fireShot() {
           if (through) { r.wbT = G.time; r.wbBy = PLAYER_ENT; }
           if (seen.has(r) || r.dead) continue; seen.add(r); P.collat = seen.size;
           const zone = h.object.userData.zone, crit = zone === 'head';
-          G.hits++; damageBot(r, w.oneShot && mult > .5 ? Math.max(r.hp + 1, 101) : (w.oneShot ? 100 : w.dmg) * sm * mult * (crit ? w.head : zone === 'limb' ? .75 : 1) * (od ? 1.25 : 1), crit, h.point, shotDir.clone(), zone, PLAYER_ENT, id); if (w.status) applyStatus(r, w.status, PLAYER_ENT);
+          G.hits++; damageBot(r, w.oneShot && mult > .5 ? Math.max(r.hp + 1, 101) : (w.oneShot ? 100 : w.dmg) * sm * mult * (crit ? w.head : zone === 'limb' ? (w.armK && h.object.userData.part === 'arm' ? w.armK : .75) : 1) * (od ? 1.25 : 1), crit, h.point, shotDir.clone(), zone, PLAYER_ENT, id); if (w.status) applyStatus(r, w.status, PLAYER_ENT);
         }
       } else if (hits.length) {
         let mult = 1, through = 0, skipTo = -1;
@@ -4870,7 +4883,7 @@ function fireShot() {
   if (id === 'sniper' || w.bolt) {
     P.pitch += .028 + rand(0, .008); P.yaw += rand(-.008, .008); P.recoilAcc += .028;
     springs.kickZ.v += 4; springs.kickRot.v += 7; springs.camKick.v += 2.4; P.trauma = Math.min(1, P.trauma + .3);
-    if (w.bolt) { P.boltT = w.bolt; P.boltDur = w.bolt; const k = w.bolt; setTimeout(() => { if (P.weapon === id && P.boltT > 0) sfx.bolt(); }, k * 200); setTimeout(() => { if (P.weapon === id && P.boltT > 0) ejectCasing(); }, k * 400); setTimeout(() => { if (P.weapon === id && P.boltT > 0) sfx.bolt(); }, k * 700); }
+    if (w.bolt) { P.boltT = w.bolt; P.boltDur = w.bolt; const k = w.bolt, bn = P.boltN = (P.boltN || 0) + 1, live = () => P.weapon === id && P.boltT > 0 && P.boltN === bn; setTimeout(() => { if (live()) sfx.bolt(); }, k * 200); setTimeout(() => { if (live()) ejectCasing(); }, k * 400); setTimeout(() => { if (live()) sfx.bolt(); }, k * 700); }
     else { P.boltT = .3; P.boltDur = .3; setTimeout(() => { if (P.weapon === 'sniper') { sfx.bolt(); ejectCasing(); } }, 110); }
   } else {
     const kick = lerp(1, .55, ads) * (1 - P.crouch * .25) * w.kick;
@@ -5120,11 +5133,12 @@ function botShoot(r, aimPoint) {
   if (t && t.isPlayer && P.odT > 0) err *= 1.15;
   const up = Math.abs(d.y) > .95 ? _b3.set(1, 0, 0) : _b3.set(0, 1, 0), sx = _b4.crossVectors(d, up).normalize(), sy = up.crossVectors(sx, d).normalize();
   const a = rand(0, 6.283), m = Math.sqrt(Math.random()) * err; d.addScaledVector(sx, Math.cos(a) * m).addScaledVector(sy, Math.sin(a) * m).normalize();
-  const pellets = w.pellets || 1, base = d.clone(); let res;
+  const pellets = w.pellets || 1, base = d.clone(); let res, hitMe = false;
   r.muzzle.getWorldPosition(_v3); const mz = _v3.clone();
   for (let pi = 0; pi < pellets; pi++) {
     if (pellets > 1) { const a2 = rand(0, 6.283), m2 = Math.sqrt(Math.random()) * w.spreadP; d.copy(base).addScaledVector(sx, Math.cos(a2) * m2).addScaledVector(sy, Math.sin(a2) * m2).normalize(); }
     res = traceShot(eye, d, r, 150);
+    if (res.ent === PLAYER_ENT) hitMe = true;
     if (pi < 3) tracer(mz, res.point, sniper ? new THREE.Color(5, 6, 9) : new THREE.Color(r.color.r * 4 + 1, r.color.g * 4 + 1, r.color.b * 4 + 1), sniper ? .035 : .022, sniper ? .14 : .06);
     if (pellets > 1 && res.ent) { const z = res.zone, k = falloffK(WEAPONS[r.weapon] || {}, res.dist); damageEntity(res.ent, w.dmg * k * (z === 'head' ? w.head : z === 'limb' ? w.limb : 1), z === 'head', res.point, d.clone(), z, r, r.weapon); }
   }
@@ -5132,7 +5146,8 @@ function botShoot(r, aimPoint) {
   // metres away: the shot then counted as a FAR sound and the busy budget could refuse it) -> from the bot's chest instead
   _v3.copy(mz); { const q = r.root.position; if (Math.hypot(_v3.x - q.x, _v3.y - q.y - 1.3, _v3.z - q.z) > 2.5) _v3.set(q.x, q.y + 1.3, q.z); }
   const audible = state === 'play' || state === 'dead';
-  if (audible && camera.position.distanceTo(_v3) < SOUND_MIX.categories.shot.range) sfx.botShot(_v3.clone(), r.weapon);
+  if (audible && hitMe) sfx.botShot(shotAtMe(_v3.clone()), r.weapon, 0, true);   // it hit you (maybe killed you, this very frame): always heard
+  else if (audible && camera.position.distanceTo(_v3) < SOUND_MIX.categories.shot.range) sfx.botShot(_v3.clone(), r.weapon);
   if (camera.position.distanceTo(_v3) < 16) lightFlash(_v3, 0xffaa55, 2.5, 7);
   noise(_v3, 42, r);
   if (res.ent) {
@@ -5642,16 +5657,21 @@ function netReceive(E, pr) {
     const nShots = Math.min(6, (pr.sh | 0) - L.shot);   // a late / bundled packet can carry several shots: you hear each one (up to 6)
     L.shot = pr.sh | 0; r.flashT = .05; r.shotKick = 1; r.firedT = 1.4;
     const a = _v1.set(+pr.sx[0], +pr.sx[1], +pr.sx[2]), b = _v2.set(+pr.sx[3], +pr.sx[4], +pr.sx[5]);
-    const wid = NET_W[pr.w | 0], ww = WEAPONS[wid] || WEAPONS.carbine;
+    const wid = w, ww = WEAPONS[wid] || WEAPONS.carbine;   // (the exact weapon id: NET_W's order can differ between clients)
+    // one of these shots hits ME (its hit rides in this same packet, handled below): always heard, even if it kills me now
+    const atMe = Array.isArray(pr.hl) && pr.hl.some(h => h && (h.s | 0) > L.hit && (!h.t || h.t === NET.room.myId)) && state === 'play' && !P.dead;
     if (wid === 'arc') zap(a.clone(), b.clone(), new THREE.Color(...ww.glow).multiplyScalar(1.4));
     else if (wid === 'inferno') { const dir = _v3.subVectors(b, a).normalize(); for (let k = 0; k < 14; k++) { const sp = rand(9, 14); FX.spawn(a, dir.x * sp + rand(-1.2, 1.2), dir.y * sp + rand(-.6, 1.2), dir.z * sp + rand(-1.2, 1.2), 3, rand(.8, 1.4), .2, rand(.08, .16), rand(.45, .7), -1.5, 1.4, .45); } lightFlash(a, 0xff7a2a, 3, 8); }
     else tracer(a, b, new THREE.Color(...(ww.tracer || [5, 3.6, 2.2])), ww.beam ? .07 : ww.oneShot ? .035 : .022, ww.beam ? .3 : ww.oneShot ? .14 : .06);
-    for (let i = 0; i < nShots; i++) sfx.botShot(a.clone(), wid, i * 60 / Math.max(60, ww.rpm || 600));
+    for (let i = 0; i < nShots; i++) { const last = i === nShots - 1 && atMe; if (sfx.botShot(last ? shotAtMe(a.clone()) : a.clone(), wid, i * 60 / Math.max(60, ww.rpm || 600), last) !== false) r.shotHeardT = now; }
+    r.shotT = now; r.shotFrom = [a.x, a.y, a.z];
     for (let i = 0; i < 3; i++) FX.spawn(b, rand(-2, 2), rand(0, 3), rand(-2, 2), 6, 3.2, 1.2, .03, .2, 14, 1);
   }
   // their hits on you (they aimed at you on their screen: shooter-side hit detection)
   if (Array.isArray(pr.hl)) for (const h of pr.hl) {
     if (!h || (h.s | 0) <= L.hit) continue; L.hit = h.s | 0; if (h.t && h.t !== NET.room.myId) continue;   // a hit on someone else
+    // its shot rode in an EARLIER packet and was not heard (refused by the busy far-sound budget): play it now, before the damage
+    if (state === 'play' && !P.dead && now - (r.shotT || -1e9) < 1000 && !(now - (r.shotHeardT || -1e9) < 350) && r.shotFrom) { sfx.botShot(shotAtMe(new THREE.Vector3(...r.shotFrom)), w, 0, true); r.shotHeardT = now; }
     if (state === 'play' && !P.dead) { if (h.wb) { PLAYER_ENT.wbT = G.time; PLAYER_ENT.wbBy = r; } hurtPlayer(clamp(+h.a || 0, 0, 250), r.root.position, r, !!h.h, NET_W[h.w | 0] || 'carbine'); if (h.st) applyStatus(PLAYER_ENT, h.st === 1 ? 'chill' : 'burn', r); }
   }
   if ((pr.ns | 0) > L.nade && Array.isArray(pr.nv)) { L.nade = pr.ns | 0; const f = new THREE.Vector3(+pr.nv[0], +pr.nv[1], +pr.nv[2]), v = new THREE.Vector3(+pr.nv[3], +pr.nv[4], +pr.nv[5]); if (pr.nv[6]) launchRocket(r, f, v.normalize()); else throwNade(r, f, v); }
@@ -5679,7 +5699,7 @@ function netSend(dt) {
   const st = {
     v: 1, lob: NET.inMatch ? 0 : 1, mp: CUR_MAP, jt: NET.joinT, n: NET.nick, c: NET.color | 0, x: [R2(P.pos.x), R2(P.pos.y), R2(P.pos.z)], yw: R2(P.yaw + Math.PI), pt: R2(P.pitch), cr: R2(P.crouch), wk: P.walk ? 1 : 0, g: P.onGround ? 1 : 0,
     w: Math.max(0, NET_W.indexOf(P.weapon)), wid: P.weapon, rl: P.reload > 0 ? 1 : 0, hp: Math.round(P.hp), sd: R2(P.shield), dd: P.dead ? 1 : 0, D: PLAYER_ENT.deaths, K: PLAYER_ENT.kills,
-    kb: P.killer ? (P.killer.netId || 's') : 's', kw: NET.killW | 0, kh: NET.killH ? 1 : 0, kwb: NET.killWB ? 1 : 0, pj: NET.proj || null, sF: G.fired | 0, sH: G.hits | 0, sHH: G.headHits | 0, sh: NET.seq.shot, sx: NET.shot || null, hs: NET.seq.hit, hl: NET.hits, ns: NET.seq.nade, nv: NET.nade || null };
+    kb: P.killer ? (P.killer.netId || 's') : 's', kw: NET.killW | 0, kh: NET.killH ? 1 : 0, kwb: NET.killWB ? 1 : 0, pj: NET.proj || null, sF: G.fired | 0, sH: G.hits | 0, sHH: G.headHits | 0, sh: NET.seq.shot, dw: NET.seq.draw | 0, sx: NET.shot || null, hs: NET.seq.hit, hl: NET.hits, ns: NET.seq.nade, nv: NET.nade || null };
   NET.room.presence(st).catch(() => {});
 }
 function netShot(from, to) { if (!NET.on) return; NET.seq.shot++; const R2 = v => Math.round(v * 100) / 100; NET.shot = [R2(from.x), R2(from.y), R2(from.z), R2(to.x), R2(to.y), R2(to.z)]; }
@@ -6114,7 +6134,7 @@ function updatePlayer(dt, rdt) {
   // ADS
   // a bolt gun drops out of the scope while the bolt cycles and comes back by itself if you still hold aim (CS2 style)
   const adsT = adsHeld && P.reload <= 0 && !sprint && P.switchT <= 0 && P.weapon !== 'knife' && P.weapon !== 'boomerang' && !(W().bolt && P.boltT > 0) ? 1 : 0;
-  P.ads = damp(P.ads, adsT, W().adsSpeed, rdt);
+  { const a0 = P.ads; P.ads = W().scopeSnap ? adsT : damp(P.ads, adsT, W().adsSpeed, rdt); if (W().scopeSnap && P.ads !== a0) P.fovSnap = true; }   // scopeSnap: in / out on this very frame (the camera FOV follows below)
   P.switchT = Math.max(0, P.switchT - dt); P.boltT = Math.max(0, P.boltT - dt);
   updateStation(dt);
   // weapon state
@@ -6198,9 +6218,9 @@ function updateCamera(dt, rdt) {
   camera.position.set(P.pos.x, P.smoothY + Math.sin(P.bob * 2) * .04 * bobAmt + land * .12 * FEEL.land, P.pos.z);
   camera.rotation.set(P.pitch + kick * .05 + sh * .03 * Math.sin(t * 37), P.yaw + sh * .03 * Math.sin(t * 29 + 1.3), Math.sin(P.bob) * .008 * bobAmt + sh * .04 * Math.sin(t * 23 + 2.1) - P.crouch * .02);
   const scopedK = W().scope ? clamp((P.ads - .75) / .25, 0, 1) : 0;
-  if (scopedK > 0) { const sw = (1 - P.crouch * .6) * .0022 * scopedK; camera.rotation.x += Math.sin(t * .9) * sw; camera.rotation.y += Math.sin(t * .63 + 1) * sw * 1.3; }
+  if (scopedK > 0 && !W().scopeSnap) { const sw = (1 - P.crouch * .6) * .0022 * scopedK; camera.rotation.x += Math.sin(t * .9) * sw; camera.rotation.y += Math.sin(t * .63 + 1) * sw * 1.3; }
   const fovT = lerp(P.sprint ? 84 : 78, W().adsFov, P.ads);
-  P.fov = damp(P.fov, fovT, 12, rdt);
+  if (W().scopeSnap && (P.ads > 0 || P.fovSnap)) { P.fov = fovT; P.fovSnap = false; } else P.fov = damp(P.fov, fovT, 12, rdt);   // the snap scope has no zoom tween (in or out)
   if (Math.abs(camera.fov - P.fov) > .01) { camera.fov = P.fov; camera.updateProjectionMatrix(); }
   const gf = lerp(60, 50, P.ads); if (Math.abs(gunCam.fov - gf) > .01) { gunCam.fov = gf; gunCam.updateProjectionMatrix(); }
 }
@@ -6213,7 +6233,7 @@ function updateViewmodel(dt) {
     P.vmLean = damp(P.vmLean || 0, reduceMotion ? 0 : clamp(lat, -1.2, 1.2) * FEEL.sway * (1 - ads * .8), 10, dt); }
   const sp = damp(P.spPose || 0, P.sprint ? 1 : 0, 9, dt); P.spPose = sp;
   let rl = 0, magDrop = 0, tilt = 0;
-  const sw = P.switchT > 0 ? Math.sin(Math.PI * (P.switchT / .45)) : 0, bd = P.boltDur || .3, bolt = P.boltT > 0 ? Math.sin(Math.PI * clamp((bd - P.boltT) / bd, 0, 1)) * (bd > .5 ? .35 : 1) : 0;
+  const sw = P.switchT > 0 ? Math.sin(Math.PI * Math.min(1, P.switchT / (P.switchDur || .45))) : 0, bd = P.boltDur || .3, bolt = P.boltT > 0 ? Math.sin(Math.PI * clamp((bd - P.boltT) / bd, 0, 1)) * (bd > .5 ? .35 : 1) : 0;
   if (P.reload > 0) {
     const t = 1 - P.reload / P.reloadDur; tilt = Math.sin(Math.PI * clamp(t * 1.05, 0, 1));
     magDrop = P.weapon === 'sniper' ? 0 : t < .14 ? 0 : t < .34 ? (t - .14) / .2 : t < .52 ? 1 : t < .66 ? 1 - (t - .52) / .14 : 0;
@@ -6689,7 +6709,7 @@ async function openRoom(create, code) {
   }
   for (const b of document.querySelectorAll('#onlinePanel button')) b.disabled = false;
   if (!room || room.error) { onlineMsg(room ? room.error : 'Could not reach the matchmaking server.', true); return false; }
-  NET.room = room; NET.on = true; NET.code = room.code; NET.inMatch = false; NET.peers.clear(); NET.hits = []; NET.seq = { shot: 0, hit: 0, nade: 0 }; NET.joinT = Date.now();
+  NET.room = room; NET.on = true; NET.code = room.code; NET.inMatch = false; NET.peers.clear(); NET.hits = []; NET.seq = { shot: 0, hit: 0, nade: 0, draw: 0 }; NET.joinT = Date.now();
   room.onPeers(ch => { if (NET.room !== room) return; for (const p of ch.left) dropPeer(p.peer, true); onNetPeers(); });
   room.onMeta = m => { if (NET.room !== room) return; const was = room.wasStarted; room.wasStarted = !!m.started; renderRoom(m);
     if (m.started && !NET.inMatch && !NET.starting && (!was || !room.stepOut)) beginRoomMatch(m);
@@ -6817,7 +6837,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Digit2') switchWeapon(SLOTS()[1]);
   if (e.code === 'KeyX' && !e.repeat) pickNearDrop();
   if (e.code === 'Digit3') switchWeapon('knife');
-  if (e.code === 'KeyQ') { const S = SLOTS(); switchWeapon(P.weapon === S[0] ? S[1] : S[0]); }
+  if (e.code === 'KeyQ') { const S = SLOTS(), L = P.lastW; switchWeapon(L && L !== P.weapon && (S.includes(L) || L === 'knife') ? L : P.weapon === S[0] ? S[1] : S[0]); }   // last weapon (CS)
   if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
   if (e.code === 'Escape' && (noLock || !document.pointerLockElement)) { if (state === 'play') setState('paused'); else if (state === 'dead') P.pauseOnRespawn = true; }
 });
@@ -6993,7 +7013,7 @@ function frame(now) {
     dirT -= rdt; setStyle($('dmgdir'), 'opacity', String(clamp(dirT, 0, 1).toFixed(2)));
     calloutT -= rdt; const co = $('callout'); setStyle(co, 'opacity', String(clamp(calloutT * 2, 0, 1).toFixed(2))); setStyle(co, 'transform', `scale(${1 + Math.max(0, calloutT - 1.1) * 1.5})`);
     if (bannerT > 0) { bannerT -= rdt; if (bannerT <= 0) $('banner').style.opacity = 0; }
-    const gap = (5 + Math.hypot(P.vel.x, P.vel.z) * 1.6 + (P.onGround ? 0 : 14) + P.heat * 14) * (1 - P.crouch * .3);
+    const gap = (5 + Math.hypot(P.vel.x, P.vel.z) * 1.6 + P.heat * 14) * (1 - P.crouch * .3);
     setStyle(xh.u, 'top', `${(-gap - 9).toFixed(1)}px`); setStyle(xh.d, 'top', `${gap.toFixed(1)}px`); setStyle(xh.l, 'left', `${(-gap - 9).toFixed(1)}px`); setStyle(xh.r, 'left', `${gap.toFixed(1)}px`);
     setStyle($('xh'), 'opacity', P.ads > .4 || P.sprint ? '0' : '1');
     { const sw = WEAPONS[P.weapon], pl = sw && sw.pellets > 1 && sw.spreadP, ring = $('spreadRing');   // shotgun: ring = the real pellet cone (tan(cone)/tan(fov/2) of half the screen height)
