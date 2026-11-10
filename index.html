@@ -3209,6 +3209,7 @@ for (const k in GUN_VOICE) { const old = sfx[k]; sfx[k] = function (...a) { if (
 // skips the far-sound budget (a far sniper in a busy fight was refused: the budget was full of other far gunfire) and is placed
 // at most 25 m away in the shooter's direction, so it stays clearly audible over your own death sound. Direction is unchanged.
 const SHOT_AT_ME_M = 25;
+const SILENT_HIT_W = new Set(['knife', 'nade', 'stinger', 'ricochet', 'seeker', 'boomerang', 'nova', 'poopgun', 'flytrap', 'ftspit', 'ftpoison', 'lava', 'acid', 'laser']);   // hits that are not a gunshot (own sounds)
 function shotAtMe(p) { const c = camera.position, d = p.distanceTo(c); if (d > SHOT_AT_ME_M) p.sub(c).multiplyScalar(SHOT_AT_ME_M / d).add(c); return p; }
 // an enemy reloading near you (CS2: you hear the mag come out): mag out, mag in, a bolt for the sniper; placed in 3D
 sfx.foeReload = function (pos, kind) { if (!voice('foley', pos)) return; const t = AU.ctx.currentTime, c = SOUND_MIX.categories.foley, d = bus({ pos, ref: c.ref, roll: c.roll, vol: .9, verb: .06 });
@@ -5663,15 +5664,19 @@ function netReceive(E, pr) {
     if (wid === 'arc') zap(a.clone(), b.clone(), new THREE.Color(...ww.glow).multiplyScalar(1.4));
     else if (wid === 'inferno') { const dir = _v3.subVectors(b, a).normalize(); for (let k = 0; k < 14; k++) { const sp = rand(9, 14); FX.spawn(a, dir.x * sp + rand(-1.2, 1.2), dir.y * sp + rand(-.6, 1.2), dir.z * sp + rand(-1.2, 1.2), 3, rand(.8, 1.4), .2, rand(.08, .16), rand(.45, .7), -1.5, 1.4, .45); } lightFlash(a, 0xff7a2a, 3, 8); }
     else tracer(a, b, new THREE.Color(...(ww.tracer || [5, 3.6, 2.2])), ww.beam ? .07 : ww.oneShot ? .035 : .022, ww.beam ? .3 : ww.oneShot ? .14 : .06);
-    for (let i = 0; i < nShots; i++) { const last = i === nShots - 1 && atMe; if (sfx.botShot(last ? shotAtMe(a.clone()) : a.clone(), wid, i * 60 / Math.max(60, ww.rpm || 600), last) !== false) r.shotHeardT = now; }
-    r.shotT = now; r.shotFrom = [a.x, a.y, a.z];
+    for (let i = 0; i < nShots; i++) { if (r.preShots > 0 && now - r.preShotT < 800) { r.preShots--; r.shotHeardT = now; continue; }   // already played when its hit arrived first (below)
+      const last = i === nShots - 1 && atMe; if (sfx.botShot(last ? shotAtMe(a.clone()) : a.clone(), wid, i * 60 / Math.max(60, ww.rpm || 600), last) !== false) r.shotHeardT = now; }
+    r.shotT = now;
     for (let i = 0; i < 3; i++) FX.spawn(b, rand(-2, 2), rand(0, 3), rand(-2, 2), 6, 3.2, 1.2, .03, .2, 14, 1);
   }
   // their hits on you (they aimed at you on their screen: shooter-side hit detection)
   if (Array.isArray(pr.hl)) for (const h of pr.hl) {
     if (!h || (h.s | 0) <= L.hit) continue; L.hit = h.s | 0; if (h.t && h.t !== NET.room.myId) continue;   // a hit on someone else
-    // its shot rode in an EARLIER packet and was not heard (refused by the busy far-sound budget): play it now, before the damage
-    if (state === 'play' && !P.dead && now - (r.shotT || -1e9) < 1000 && !(now - (r.shotHeardT || -1e9) < 350) && r.shotFrom) { sfx.botShot(shotAtMe(new THREE.Vector3(...r.shotFrom)), w, 0, true); r.shotHeardT = now; }
+    // a hit on ME whose shot has not been heard: the hit can arrive a packet BEFORE its shot (the server relays hits and states
+    // separately), or the shot was refused earlier. Play the shot now, before the damage, so you hear what kills you; the late
+    // shot packet then skips one sound (preShots). Hitscan guns only (projectiles / grenades / melee have their own sounds).
+    if (state === 'play' && !P.dead && (!h.t || h.t === NET.room.myId) && !(now - (r.shotHeardT || -1e9) < 350)) { const hn = typeof h.wn === 'string' && WEAPONS[h.wn] ? h.wn : NET_W[h.w | 0], hw = WEAPONS[w] ? w : hn, HW = WEAPONS[hw];   // voice = the exact gun they hold (a hit's index can differ between clients)
+      if (HW && !HW.projectile && !SILENT_HIT_W.has(hw) && !SILENT_HIT_W.has(hn)) { sfx.botShot(shotAtMe(new THREE.Vector3(r.root.position.x, r.root.position.y + 1.5, r.root.position.z)), hw, 0, true); r.shotHeardT = now; r.preShots = (r.preShots || 0) + 1; r.preShotT = now; } }
     if (state === 'play' && !P.dead) { if (h.wb) { PLAYER_ENT.wbT = G.time; PLAYER_ENT.wbBy = r; } hurtPlayer(clamp(+h.a || 0, 0, 250), r.root.position, r, !!h.h, NET_W[h.w | 0] || 'carbine'); if (h.st) applyStatus(PLAYER_ENT, h.st === 1 ? 'chill' : 'burn', r); }
   }
   if ((pr.ns | 0) > L.nade && Array.isArray(pr.nv)) { L.nade = pr.ns | 0; const f = new THREE.Vector3(+pr.nv[0], +pr.nv[1], +pr.nv[2]), v = new THREE.Vector3(+pr.nv[3], +pr.nv[4], +pr.nv[5]); if (pr.nv[6]) launchRocket(r, f, v.normalize()); else throwNade(r, f, v); }
