@@ -24,7 +24,7 @@ const DEFAULTS = {
   },
   mouse: { sens: 1, adsMult: 1, invertY: false },
   crosshair: { style: 'crossdot', color: '#ece6d8', length: 9, thickness: 2, gap: 5, outline: true, outlineThickness: 1, outlineOpacity: .5, dot: 2, opacity: 1, dynamic: true, adsShow: false },
-  video: { fov: 72, quality: 'medium', autoRes: 'auto', fps: true, fpsMode: 'simple', fpsCap: 'off', shake: 1, brightness: 1, gamma: 1, viewBob: 'full', gunSway: true, hitFlinch: true },
+  video: { fov: 68, quality: 'medium', autoRes: 'auto', fps: true, fpsMode: 'simple', fpsCap: 'off', shake: 1, brightness: 1, gamma: 1, viewBob: 'full', gunSway: true, hitFlinch: true },
   audio: { master: .8, effects: 1, ambience: 1, footsteps: 1, voice: 1, muteUnfocused: false }
 };
 // number limits and allowed values (used to clean anything loaded from storage, the server or a share code)
@@ -114,7 +114,7 @@ function sanitize(src) {
     }
   }
   if (typeof src.updatedAt === 'number' && isFinite(src.updatedAt)) out.updatedAt = src.updatedAt;
-  if (src.fovV === 2) out.fovV = 2;
+  if (src.fovV === 2 || src.fovV === 3) out.fovV = src.fovV;
   return out;
 }
 
@@ -125,14 +125,17 @@ try {
   const raw = localStorage.getItem(LS_KEY);
   if (raw) { firstRun = false; let parsed = null; try { parsed = JSON.parse(raw); } catch (e) { loadNote = 'Your saved settings were damaged, so the defaults were loaded.'; } S = sanitize(parsed); }
 } catch (e) {}
-// default field of view 78 -> 72 (2026-11-09, owner: enemies looked too small; 78 vertical = ~110 horizontal, wider than CS2 / Valorant).
-// Once per settings copy (the mark travels with account sync): still on the old default 78 -> 72; a player's own choice is kept.
-function fovMigrate(o) { if (!o || !o.video || o.fovV === 2) return false; const ch = o.video.fov === 78; if (ch) o.video.fov = 72; o.fovV = 2; return ch; }
+// default field of view 78 -> 72 (r21, 2026-11-09) -> 68 (2026-11-11). Owner: enemies look too small. Measured at 1920x1080: Cryzen = 70 vertical,
+// 1.80 m characters; ours 1.81 m, so at 72 an enemy at 10 m was 134 px vs Cryzen's 139 px; at 68 it is 145 px (+4 % over Cryzen, +8 % over 72).
+// Once per settings copy (fovV mark travels with account sync), only a value that is a previous DEFAULT for that copy moves to 68:
+//   no mark (before r21, default 78): 78 -> 68;  mark 2 (r21, default 72): 72 -> 68.  Any other value is the player's own choice and stays.
+const FOV_V = 3;
+function fovMigrate(o) { if (!o || !o.video || o.fovV === FOV_V) return false; const old = o.fovV === 2 ? 72 : 78, ch = o.video.fov === old; if (ch) o.video.fov = DEFAULTS.video.fov; o.fovV = FOV_V; return ch; }
 let fovMigrated = fovMigrate(S); if (!firstRun) { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {} }
 
 let saveT = 0, syncT = 0, syncState = '';
 function save() {
-  S.updatedAt = Date.now(); S.fovV = 2;   // a fov saved from now on is the player's own choice (never migrated)
+  S.updatedAt = Date.now(); S.fovV = FOV_V;   // a fov saved from now on is the player's own choice (never migrated)
   try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {}
   clearTimeout(syncT); syncT = setTimeout(syncRemote, 1200);
   clearTimeout(saveT); setStatus('Saved');
@@ -747,7 +750,7 @@ const NOTE = () => `<div class="s9s-note live"${loadNote ? '' : ' hidden'}><span
 // sensitivity equivalents: the game turns .0021 rad per mouse count at 1.0
 const cm360 = s => (2 * Math.PI / (.0021 * s)) / 800 * 2.54;
 const sensExtra = () => `≈ ${cm360(S.mouse.sens).toFixed(1)} cm per 360° at 800 DPI · same feel as CS2 ${(S.mouse.sens * .0021 * 180 / Math.PI / .022).toFixed(2)} · Valorant ${(S.mouse.sens * .0021 * 180 / Math.PI / .07).toFixed(3)}`;
-const fovExtra = () => `${S.video.fov}° vertical ≈ ${Math.round(360 / Math.PI * Math.atan(Math.tan(S.video.fov * Math.PI / 360) * 16 / 9))}° horizontal on a 16:9 screen. Default 72.`;
+const fovExtra = () => `${S.video.fov}° vertical ≈ ${Math.round(360 / Math.PI * Math.atan(Math.tan(S.video.fov * Math.PI / 360) * 16 / 9))}° horizontal on a 16:9 screen. Default 68.`;
 
 function tabHTML(t) {
   if (t === 'gameplay') return NOTE() + sec('Feedback', rToggle('gameplay.damageNumbers', 'Damage numbers', 'Numbers that pop out of an enemy when you hit them.') +

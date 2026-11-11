@@ -13,6 +13,6 @@
   },
   "mouse": { "sens": 1, "adsMult": 1, "invertY": false },
   "crosshair": { "style": "crossdot", "color": "#ece6d8", "length": 9, "thickness": 2, "gap": 5, "outline": true, "outlineThickness": 1, "outlineOpacity": 0.5, "dot": 2, "opacity": 1, "dynamic": true, "adsShow": false },
-  "video": { "fov": 72, "quality": "medium", "autoRes": "auto", "fps": true, "fpsMode": "simple", "fpsCap": "off", "shake": 1, "brightness": 1, "gamma": 1, "viewBob": "full", "gunSway": true, "hitFlinch": true },
+  "video": { "fov": 68, "quality": "medium", "autoRes": "auto", "fps": true, "fpsMode": "simple", "fpsCap": "off", "shake": 1, "brightness": 1, "gamma": 1, "viewBob": "full", "gunSway": true, "hitFlinch": true },
   "audio": { "master": 0.8, "effects": 1, "ambience": 1, "footsteps": 1, "voice": 1, "muteUnfocused": false }
 }
