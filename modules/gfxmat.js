@@ -619,7 +619,24 @@ void main(){
     } catch (e) { M.err = 'loadMap ' + e.message; }
     return r;
   };
-  if (typeof warmShaders === 'function') { const _ws = warmShaders; warmShaders = function () { const r = _ws.apply(this, arguments); warmMine(); return r; }; }
+  // the post chain's LAST enabled pass draws to the screen, every other pass into a buffer: three.js builds a separate program for each
+  // (output encoding sRGB vs linear). Which pass is last depends on the tier (Ultra adds CAS after the grade, High may add SMAA) and on
+  // the scope pass (guns2026): a mid-match tier switch or the first scope-in built the grade/CAS/SMAA/scope shader for its new role (2
+  // compiles = a hitch; gfxlook gate 'no shader built after the match started'). Every full-screen pass from the grade on is compiled
+  // here for BOTH roles; three.js keeps both programs per material, so later role changes never compile.
+  function warmPost() {
+    try {
+      if (typeof composer === 'undefined' || !composer || !composer.passes) return;
+      const gi = typeof grade !== 'undefined' ? composer.passes.indexOf(grade) : -1, mats = new Set();
+      for (const p of composer.passes.slice(Math.max(0, gi))) { if (!p) continue; for (const v of Object.values(p)) if (v && v.isMaterial) mats.add(v); if (p.fsQuad && p.fsQuad.material) mats.add(p.fsQuad.material); }
+      if (!mats.size) return;
+      const sc = new T.Scene(), cam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1), geo = new T.PlaneGeometry(2, 2), prev = renderer.getRenderTarget();
+      for (const m of mats) { const q = new T.Mesh(geo, m); q.frustumCulled = false; sc.add(q); }
+      for (const tgt of [null, composer.renderTarget1 || composer.readBuffer || null]) { try { renderer.setRenderTarget(tgt); renderer.compile(sc, cam); } catch (e) {} }
+      renderer.setRenderTarget(prev); geo.dispose(); M.postWarm = mats.size;
+    } catch (e) { M.err = 'warmPost ' + e.message; }
+  }
+  if (typeof warmShaders === 'function') { const _ws = warmShaders; warmShaders = function () { const r = _ws.apply(this, arguments); warmMine(); warmPost(); return r; }; }
   if (typeof buildBot === 'function') { const _bb = buildBot; buildBot = function () { const r = _bb.apply(this, arguments); if (M.level > 0) attachRim(r); return r; }; }
   if (typeof newRoster === 'function') { const _nr = newRoster; newRoster = function () { for (const r of Array.from(RIMS)) dropRim(r); const x = _nr.apply(this, arguments); try { if (M.level > 0) for (const r of robots) attachRim(r); } catch (e) {} return x; }; }
   if (typeof decal === 'function') { const _d = decal; decal = function (p, n, s, kind) { const r = _d.apply(this, arguments); try { if (M.level > 0) placeDecal(p, n, s || 1, kind || 'hole'); } catch (e) {} return r; }; }

@@ -1426,17 +1426,32 @@ function watch() {
 }
 
 /* ======================================================================================= preview stage (one shared WebGL renderer for every preview) */
-let PV = null, SIL_MAT = null;
+let PV = null, SIL_MAT = null, PV_OWN = null;
+// the game's shared off-screen preview renderer (index.html previewGL: ONE WebGL context for every UI preview, released when idle,
+// replaced after a context loss); an older core without it gets one renderer of our own
+function pvRenderer() {
+  const s = window.__s9; if (s && typeof s.previewGL === 'function') return s.previewGL();
+  if (!PV_OWN) { PV_OWN = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' }); PV_OWN.setPixelRatio(1); }
+  return PV_OWN;
+}
 function stage() {
-  if (PV) return PV;
+  const renderer = pvRenderer(); if (!renderer) return null;
+  if (PV && PV.renderer === renderer) return PV;
+  if (!PV) buildStage();
+  if (!PV) return null;
+  // renderer-bound part: the studio environment map lives in THIS renderer's GPU memory; the stage shows this renderer's canvas
+  const old = PV.renderer; PV.renderer = renderer; renderer.setPixelRatio(1);
+  renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = PV.exposure;
+  const pm = new T.PMREMGenerator(renderer); if (PV.envRT) PV.envRT.dispose(); PV.envRT = pm.fromScene(PV.env, .02); PV.scene.environment = PV.envRT.texture; pm.dispose();
+  if (old && old !== renderer && old.domElement.parentNode) old.domElement.replaceWith(renderer.domElement);
+  return PV;
+}
+function buildStage() {
   const base = baseInit(); const A = gv('ASSET'); if (!base || !A || !A.soldier) return null;
-  const renderer = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
-  renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = .95; renderer.setPixelRatio(1);
   const scene = new T.Scene();
   // studio environment: soft grey room + two coloured rim panels (matches the game's sci-fi env)
   const env = new T.Scene(); env.add(new T.Mesh(new T.SphereGeometry(20, 24, 12), new T.MeshBasicMaterial({ color: new T.Color(.16, .17, .2), side: T.BackSide })));
   for (const [p, c] of [[[0, 9, 10], [3, 3, 3.2]], [[-12, 5, -6], [.5, 1.8, 2.6]], [[12, 6, -6], [2.6, 1, .5]], [[0, -8, 0], [.2, .2, .22]]]) { const m = new T.Mesh(new T.PlaneGeometry(9, 5), new T.MeshBasicMaterial({ color: new T.Color(...c), side: T.DoubleSide })); m.position.set(...p); m.lookAt(0, 0, 0); env.add(m); }
-  const pm = new T.PMREMGenerator(renderer); scene.environment = pm.fromScene(env, .02).texture; pm.dispose();
   const key = new T.DirectionalLight(0xfff1e0, 1.35); key.position.set(2.5, 4, 3); scene.add(key);
   const rim = new T.DirectionalLight(0x7fd8ff, 1.0); rim.position.set(-3, 2.5, -3); scene.add(rim);
   scene.add(new T.HemisphereLight(0xbfd4ff, 0x1a1410, .55));
@@ -1446,11 +1461,11 @@ function stage() {
   const model = T.SkeletonUtils.clone(A.soldier.scene); model.rotation.y = Math.PI; root.add(model);
   model.traverse(o => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = false; } });
   const mixer = new T.AnimationMixer(model); let action = null;
-  PV = { renderer, scene, cam, root, model, mixer, floor, look: null, clip: null,
+  PV = { renderer: null, env, envRT: null, exposure: .95, scene, cam, root, model, mixer, floor, look: null, clip: null,
     pose(name, t) { const C = gv('CLIPS'); if (!C || !C[name]) return; if (PV.clip !== name) { mixer.stopAllAction(); action = mixer.clipAction(C[name].full); action.play(); PV.clip = name; } action.time = t % action.getClip().duration; mixer.update(0); },
     setLook(l) { const n = normLook(l); const k = lookCode(n) + (n.team || ''); if (PV.look !== k) { apply(model, n.skin, n); PV.look = k; } },
-    frame(w, h, yaw, dist = 4.6, ty = .95, fov = 30) { renderer.setSize(w, h, false); cam.aspect = w / h; cam.fov = fov; cam.updateProjectionMatrix(); root.rotation.y = yaw; cam.position.set(0, ty + .25, dist); cam.lookAt(0, ty, 0); },
-    render() { model.traverse(o => { if (o.onBeforeRender && o.isSkinnedMesh) o.onBeforeRender(); }); renderer.render(scene, cam); return renderer.domElement; } };
+    frame(w, h, yaw, dist = 4.6, ty = .95, fov = 30) { PV.renderer.setSize(w, h, false); cam.aspect = w / h; cam.fov = fov; cam.updateProjectionMatrix(); root.rotation.y = yaw; cam.position.set(0, ty + .25, dist); cam.lookAt(0, ty, 0); },
+    render() { const r = PV.renderer; r.outputEncoding = T.sRGBEncoding; r.toneMapping = T.ACESFilmicToneMapping; r.toneMappingExposure = PV.exposure; model.traverse(o => { if (o.onBeforeRender && o.isSkinnedMesh) o.onBeforeRender(); }); r.render(scene, cam); return r.domElement; } };
   PV.pose('Idle_Loop', .3);
   return PV;
 }
@@ -1466,7 +1481,7 @@ function preview(el, look, opts = {}) {
       const l = look && typeof look === 'object' && !look.skin && look.look ? look.look : look;
       const n = typeof l === 'object' && l && ('color' in l || 'emblem' in l || 'gunSkins' in l || /-/.test(String(l.skin || ''))) ? (fromAccount(l) || normLook('std')) : normLook(l || state.look);
       pv.setLook(n); pv.pose(opts.clip || 'Idle_Loop', opts.t ?? .3); pv.frame(w, h, opts.yaw ?? -.45, opts.dist ?? 4.6, opts.ty ?? .95);
-      const lightK = opts.dark ? .18 : 1; pv.scene.traverse(o => { if (o.isLight) { if (o.userData.i0 === undefined) o.userData.i0 = o.intensity; o.intensity = o.userData.i0 * lightK; } }); pv.renderer.toneMappingExposure = opts.dark ? .75 : .95;
+      const lightK = opts.dark ? .18 : 1; pv.scene.traverse(o => { if (o.isLight) { if (o.userData.i0 === undefined) o.userData.i0 = o.intensity; o.intensity = o.userData.i0 * lightK; } }); pv.exposure = opts.dark ? .75 : .95;
       if (opts.silhouette) pv.scene.overrideMaterial = SIL_MAT || (SIL_MAT = new T.MeshBasicMaterial({ color: 0x000000 }));
       const fl = pv.floor.visible; if (opts.silhouette) pv.floor.visible = false;
       const src = pv.render(); pv.scene.overrideMaterial = null; pv.floor.visible = fl; cv.width = w; cv.height = h; const g = cv.getContext('2d'); g.clearRect(0, 0, w, h); g.drawImage(src, 0, 0, w, h); res(cv);
@@ -1696,10 +1711,11 @@ const isOpen = () => !!(UI && !UI.root.hidden);
 function shownLook() { const s = UI.sel || state.look.skin; if (s === state.look.skin) return state.look; const per = state.per[s] || {}; return normLook(Object.assign({ skin: s, emb: state.look.emb }, per)); }
 function loop(t) {
   if (!isOpen()) return; UI.raf = requestAnimationFrame(loop);
-  const dt = Math.min(.05, (t - UI.last) / 1000); UI.last = t; const pv = PV; if (!pv) return;
-  if (UI.tab === 'weapons') return;
+  const dt = Math.min(.05, (t - UI.last) / 1000); UI.last = t; if (UI.tab === 'weapons') return;
+  const pv = stage(); if (!pv) return;   // (re-acquired every frame: the shared preview renderer may have been released / replaced)
   if (UI.auto) UI.yaw += dt * .35;
   const stg = UI.root.querySelector('.stage'), r = stg.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1), w = Math.max(2, Math.round(r.width * dpr)), h = Math.max(2, Math.round(r.height * dpr));
+  if (pv.renderer.domElement.parentNode !== stg) stg.prepend(pv.renderer.domElement);
   pv.setLook(shownLook()); if (pv.clip !== 'Idle_Loop') pv.pose('Idle_Loop', 0); pv.mixer.update(dt);
   const z = UI.zoom, aspect = w / h, fit = aspect < .8 ? 1.25 / aspect : 1;
   pv.renderer.setPixelRatio(1); pv.frame(w, h, UI.yaw, lerp(4.4 * fit, 1.6, z), lerp(.95, 1.55, z), 30);

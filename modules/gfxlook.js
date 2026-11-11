@@ -248,7 +248,8 @@ if (s9lkOn > 0.5) { iblIrradiance *= mix(1.0, s9LkEnv, s9LkK); radiance *= mix(1
   function extTier(on) { for (const e of EXTS) if (e.tier && e.__built) { try { e.tier(on, tierNow()); } catch (er) { L.notes.push('ext ' + e.name + ' tier: ' + er.message); } } }
   // dev loader: specialists' modules load without manifest edits (404-tolerant; the integrator may move them into manifest.json later)
   const DEV_MODS = ['lookprops', 'looksurf', 'lookworld', 'lookair'];
-  const devHost = (() => { try { return /^(localhost|127\.0\.0\.1)$/.test(location.hostname) || localStorage.getItem('sector9-lookdev') === '1'; } catch (e) { return false; } })();
+  // (release / pre-check / full gates set window.__S9_NO_DEV_MODS: they test exactly the live add-on set, never these unshipped ones)
+  const devHost = (() => { try { if (window.__S9_NO_DEV_MODS) return false; return /^(localhost|127\.0\.0\.1)$/.test(location.hostname) || localStorage.getItem('sector9-lookdev') === '1'; } catch (e) { return false; } })();
   const devLoad = Promise.all((devHost ? DEV_MODS : []).map(n => new Promise(res => {
     try { if (document.querySelector('script[data-s9look="' + n + '"]') || (window.S9LOOK_EXT || []).some(e => e && e.module === n)) return res();
       const sc = document.createElement('script'); sc.src = 'modules/' + n + '.js?t=' + Date.now(); sc.async = false; sc.dataset.s9look = n;

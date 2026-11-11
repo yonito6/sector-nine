@@ -577,21 +577,32 @@ function warm() {
 }
 
 /* ======================================================================================= preview stage (one shared renderer, created on first use) */
-let PV = null;
+let PV = null, PV_OWN = null;
+// the game's shared off-screen preview renderer (index.html previewGL: ONE WebGL context for every UI preview, released when idle,
+// replaced after a context loss); an older core without it gets one renderer of our own
+function pvRenderer() {
+  const s = window.__s9; if (s && typeof s.previewGL === 'function') return s.previewGL();
+  if (!PV_OWN) { PV_OWN = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' }); PV_OWN.setPixelRatio(1); }
+  return PV_OWN;
+}
+function pvPrep(r) { r.outputEncoding = T.sRGBEncoding; r.toneMapping = T.ACESFilmicToneMapping; r.toneMappingExposure = 1.1; r.setPixelRatio(1); return r; }
 function stage() {
-  if (PV) return PV;
-  const renderer = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
-  renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1; renderer.setPixelRatio(1);
-  const scene = new T.Scene();
-  const env = new T.Scene(); env.add(new T.Mesh(new T.SphereGeometry(20, 24, 12), new T.MeshBasicMaterial({ color: new T.Color(.12, .13, .16), side: T.BackSide })));
-  for (const [p, c, s] of [[[0, 10, 6], [4, 4, 4.2], [12, 4]], [[-12, 4, -6], [.6, 1.6, 2.6], [8, 5]], [[12, 5, -4], [2.6, 1.2, .6], [8, 5]], [[0, 2, 14], [1.6, 1.6, 1.7], [14, 3]], [[0, -9, 0], [.15, .15, .17], [20, 20]]]) { const m = new T.Mesh(new T.PlaneGeometry(...s), new T.MeshBasicMaterial({ color: new T.Color(...c), side: T.DoubleSide })); m.position.set(...p); m.lookAt(0, 0, 0); env.add(m); }
-  const pm = new T.PMREMGenerator(renderer); scene.environment = pm.fromScene(env, .02).texture; pm.dispose();
-  const key = new T.DirectionalLight(0xfff1e0, 1.6); key.position.set(1.5, 3, 2.5); scene.add(key);
-  const rim = new T.DirectionalLight(0x8fc8ff, 1.2); rim.position.set(-2.5, 1.5, -2.5); scene.add(rim);
-  scene.add(new T.HemisphereLight(0xc8d8ff, 0x201810, .5));
-  const cam = new T.PerspectiveCamera(24, 1, .01, 50);
-  const holder = new T.Group(); scene.add(holder);
-  PV = { renderer, scene, cam, holder, guns: new Map() };
+  const renderer = pvRenderer(); if (!renderer) return null;
+  if (PV && PV.renderer === renderer) return PV;
+  if (!PV) {
+    const scene = new T.Scene();
+    const env = new T.Scene(); env.add(new T.Mesh(new T.SphereGeometry(20, 24, 12), new T.MeshBasicMaterial({ color: new T.Color(.12, .13, .16), side: T.BackSide })));
+    for (const [p, c, s] of [[[0, 10, 6], [4, 4, 4.2], [12, 4]], [[-12, 4, -6], [.6, 1.6, 2.6], [8, 5]], [[12, 5, -4], [2.6, 1.2, .6], [8, 5]], [[0, 2, 14], [1.6, 1.6, 1.7], [14, 3]], [[0, -9, 0], [.15, .15, .17], [20, 20]]]) { const m = new T.Mesh(new T.PlaneGeometry(...s), new T.MeshBasicMaterial({ color: new T.Color(...c), side: T.DoubleSide })); m.position.set(...p); m.lookAt(0, 0, 0); env.add(m); }
+    const key = new T.DirectionalLight(0xfff1e0, 1.6); key.position.set(1.5, 3, 2.5); scene.add(key);
+    const rim = new T.DirectionalLight(0x8fc8ff, 1.2); rim.position.set(-2.5, 1.5, -2.5); scene.add(rim);
+    scene.add(new T.HemisphereLight(0xc8d8ff, 0x201810, .5));
+    const cam = new T.PerspectiveCamera(24, 1, .01, 50);
+    const holder = new T.Group(); scene.add(holder);
+    PV = { renderer: null, env, envRT: null, scene, cam, holder, guns: new Map() };
+  }
+  // renderer-bound part: the studio environment map lives in THIS renderer's GPU memory
+  PV.renderer = pvPrep(renderer);
+  const pm = new T.PMREMGenerator(renderer); if (PV.envRT) PV.envRT.dispose(); PV.envRT = pm.fromScene(PV.env, .02); PV.scene.environment = PV.envRT.texture; pm.dispose();
   return PV;
 }
 function pvGun(weapon) {
@@ -631,6 +642,7 @@ function preview(canvas, weapon, skinId, opts = {}) {
       const waits = [texReady(s)]; if (s.look && s.look.fx) waits.push(loadAccents(weapon).then(() => apply(weapon, s.id, g.userData.inner)));
       return Promise.all(waits).then(() => {
         const cv = canvas instanceof HTMLCanvasElement ? canvas : null; if (!cv) throw new Error('no canvas');
+        const pv = stage(); pvPrep(pv.renderer);   // (re-acquired after the waits: the shared preview renderer may have been released / replaced meanwhile)
         const w = opts.w || cv.width || 512, h = opts.h || cv.height || 288;
         pv.holder.children.slice().forEach(c => pv.holder.remove(c)); pv.holder.add(g);
         const v = opts.view || 'threeQ', size = g.userData.size || .6;

@@ -415,6 +415,8 @@ void main(){
 
   /* ---------- map reflection probe (captured once per map load; never during play) ---------- */
   let probeCube = null, probeRT = null;
+  // (a restored WebGL context comes back with an empty probe: capture it again, once, when the core says the context is back)
+  addEventListener('s9glrestored', () => { if (S.applied) try { captureProbe(); } catch (e) {} });
   function captureProbe() {
     S.probe = false; U.s9Probe.value = blank2D; ACT.probe = 0; S.capturing = true;
     if (!WEBGL2 || !has('scene') || !has('MAPROOT')) return;
@@ -519,8 +521,12 @@ void main(){
   if (has('warmShaders')) { const _ws = warmShaders; warmShaders = function () { patchWorld(false); const r = _ws.apply(this, arguments); try { RO.warmed = RO.warm(); } catch (e) {} warmExtra(); return r; }; }
 
   /* ---------- GPU timing + smarter auto-quality ---------- */
-  const tq = WEBGL2 ? gl.getExtension('EXT_disjoint_timer_query_webgl2') : null;
+  let tq = WEBGL2 ? gl.getExtension('EXT_disjoint_timer_query_webgl2') : null;
   const pend = [], gpuWin = [], cpuWin = []; let qN = 0;
+  // a lost WebGL context takes its query objects and extension objects with it: drop the pending queries at once (polling them
+  // on the restored context floods the console with INVALID_OPERATION) and ask for the extension again once the context is back
+  addEventListener('s9gllost', () => { pend.length = 0; tq = null; });
+  addEventListener('s9glrestored', () => { pend.length = 0; tq = WEBGL2 ? gl.getExtension('EXT_disjoint_timer_query_webgl2') : null; });
   const _render = composer.render.bind(composer);
   composer.render = function (d) {
     const q = tq && (++qN % 3 === 0) && pend.length < 6 && !gl.getQuery(tq.TIME_ELAPSED_EXT, gl.CURRENT_QUERY) ? gl.createQuery() : null;   // every 3rd frame is plenty

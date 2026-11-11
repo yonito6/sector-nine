@@ -488,6 +488,69 @@ renderer.autoClear = false;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
 host.appendChild(renderer.domElement);
+/* ================= WebGL robustness (tracker #131: "reading 'trim'" crash; black / frozen screens after a GPU reset) =================
+   1. three r147 reads gl.getProgramInfoLog(program).trim() right after linking a shader. When the browser has just lost the WebGL
+      context (GPU driver reset, GPU process crash, out of video memory) those calls return null, and the frame throws
+      "Cannot read properties of null (reading 'trim')" before the lost-context event has even been delivered. glGuard makes
+      the logs '' instead: three sees no error, the event arrives, and three skips drawing until the context is back.
+   2. webglcontextlost / webglcontextrestored on the game canvas: the game keeps simulating, tells the player, and after the restore
+      rebuilds what lives only in GPU memory (the baked sky + environment map: metals and visors are black without it; the static
+      shadow map; warm shaders), then tells the add-ons ('s9glrestored'). 10 s without a restore = a reload hint.
+   3. previewGL(): ONE off-screen renderer shared by every UI preview (soldier skins, gun finishes, shop, podium portraits) instead
+      of a WebGL context per add-on, released after 8 s without a draw: a page never holds more than 2 WebGL contexts and a match
+      runs on the game's context alone. A lost preview context is thrown away and a fresh one made on the next draw. */
+function glGuard(gl) {
+  if (!gl || gl.__s9guard) return gl; gl.__s9guard = true;
+  for (const k of ['getProgramInfoLog', 'getShaderInfoLog']) { const f = gl[k]; gl[k] = function () { const r = f.apply(this, arguments); return r == null ? '' : r; }; }
+  // after a restore, three's old dispose listeners still delete buffers / VAOs / textures of the DEAD context (INVALID_OPERATION
+  // "object does not belong to this context", hundreds of lines): a delete of an object this context does not know is skipped
+  for (const [del, is] of [['deleteBuffer', 'isBuffer'], ['deleteVertexArray', 'isVertexArray'], ['deleteTexture', 'isTexture'], ['deleteFramebuffer', 'isFramebuffer'], ['deleteRenderbuffer', 'isRenderbuffer'], ['deleteQuery', 'isQuery'], ['deleteProgram', 'isProgram'], ['deleteShader', 'isShader']]) {
+    const f = gl[del], g = gl[is]; if (typeof f !== 'function' || typeof g !== 'function') continue;
+    gl[del] = function (o) { if (o && !g.call(this, o)) return; return f.call(this, o); };
+  }
+  return gl;
+}
+glGuard(renderer.getContext());
+const GL = { lost: false, lostAt: 0, losses: 0, restores: 0, rebakes: 0, reason: '', hinted: false, previewGens: 0, previewReleases: 0 };
+let SKY_REBAKE = null;   // re-bakes the current map's sky + environment map (set by whichever path baked it): run after a context restore
+renderer.domElement.addEventListener('webglcontextlost', e => {
+  e.preventDefault(); GL.lost = true; GL.lostAt = performance.now(); GL.losses++; GL.hinted = false; GL.reason = String(e.statusMessage || '');
+  console.warn('S9: WebGL context lost' + (GL.reason ? ' (' + GL.reason + ')' : ''));
+  try { feed('Graphics device reset. Recovering...'); } catch (e2) {}
+  try { window.dispatchEvent(new CustomEvent('s9gllost', { detail: { reason: GL.reason } })); } catch (e2) {}
+});
+renderer.domElement.addEventListener('webglcontextrestored', () => { GL.lost = false; GL.restores++; console.warn('S9: WebGL context restored'); glRestore(); });
+function glRestore() {
+  try { glGuard(renderer.getContext()); } catch (e) {}
+  // what three uploads itself (textures, geometry, programs) comes back on its own; what was RENDERED into GPU memory does not
+  const t0 = performance.now();
+  try { if (SKY_REBAKE) { SKY_REBAKE(); GL.rebakes++; } } catch (e) { console.warn('glRestore sky', e); }
+  try { if (sun && sun.shadow && sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } renderer.shadowMap.needsUpdate = true; } catch (e) {}
+  // no warm-up here: the next frame compiles exactly the materials it draws (a full compile of every scene material took ~3 s on a laptop)
+  GL.restoreMs = Math.round(performance.now() - t0);
+  try { feed('Graphics restored'); } catch (e) {}
+  try { window.dispatchEvent(new CustomEvent('s9glrestored')); } catch (e) {}
+}
+const PVGL = { r: null, lastUse: 0, gen: 0 };
+function previewGL() {
+  PVGL.lastUse = performance.now();
+  let r = PVGL.r;
+  if (r && r.__s9lost) { previewGLRelease(); r = null; }
+  if (!r) {
+    r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+    r.setPixelRatio(1); glGuard(r.getContext()); r.__s9gen = ++PVGL.gen; GL.previewGens = PVGL.gen;
+    r.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); r.__s9lost = true; });
+    PVGL.r = r;
+  }
+  return r;
+}
+function previewGLRelease() {
+  const r = PVGL.r; if (!r) return; PVGL.r = null; GL.previewReleases++;
+  try { if (r.domElement.parentNode) r.domElement.remove(); } catch (e) {}
+  try { r.dispose(); } catch (e) {}
+  try { if (!r.__s9lost) r.forceContextLoss(); } catch (e) {}
+}
+setInterval(() => { if (PVGL.r && performance.now() - PVGL.lastUse > 8000) previewGLRelease(); }, 2000);
 let PR = Math.min(devicePixelRatio, QUALITY[CFG.q].maxPR);
 
 const scene = new THREE.Scene();
@@ -1202,19 +1265,22 @@ function addBox(x, y, z, w, h, d, material, opts = {}) {
   return m;
 }
 function buildWorld(layout = true) {
-  // sky + environment reflections
+  // sky + environment reflections (a function: run again after a WebGL context restore, which empties both render targets)
   // the alien sky is expensive per pixel, so it is rendered once into a cube map and reused every frame
-  { const skyScene = new THREE.Scene(); skyScene.add(new THREE.Mesh(new THREE.SphereGeometry(500, 64, 32), skyMaterial()));
-    const cubeRT = new THREE.WebGLCubeRenderTarget(1024, { type: THREE.HalfFloatType, generateMipmaps: false });
-    new THREE.CubeCamera(1, 1200, cubeRT).update(renderer, skyScene); scene.background = cubeRT.texture; }
-  const envScene = new THREE.Scene();
-  envScene.add(new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), skyMaterial()));
-  const pan = new THREE.Mesh(new THREE.PlaneGeometry(8, 3), new THREE.MeshBasicMaterial({ color: new THREE.Color(.6, 2.4, 3), side: THREE.DoubleSide }));
-  pan.position.set(0, 14, 20); pan.lookAt(0, 0, 0); envScene.add(pan);
-  const pan2 = new THREE.Mesh(pan.geometry, new THREE.MeshBasicMaterial({ color: new THREE.Color(3, .6, 2.4), side: THREE.DoubleSide })); pan2.position.set(-20, 12, -10); pan2.lookAt(0, 0, 0); envScene.add(pan2);
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  envRT = pmrem.fromScene(envScene, .02);
-  scene.environment = envRT.texture; gunScene.environment = envRT.texture;
+  const bakeYardSky = () => {
+    { const skyScene = new THREE.Scene(); skyScene.add(new THREE.Mesh(new THREE.SphereGeometry(500, 64, 32), skyMaterial()));
+      if (skyRT) skyRT.dispose(); skyRT = new THREE.WebGLCubeRenderTarget(1024, { type: THREE.HalfFloatType, generateMipmaps: false });
+      new THREE.CubeCamera(1, 1200, skyRT).update(renderer, skyScene); scene.background = skyRT.texture; }
+    const envScene = new THREE.Scene();
+    envScene.add(new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), skyMaterial()));
+    const pan = new THREE.Mesh(new THREE.PlaneGeometry(8, 3), new THREE.MeshBasicMaterial({ color: new THREE.Color(.6, 2.4, 3), side: THREE.DoubleSide }));
+    pan.position.set(0, 14, 20); pan.lookAt(0, 0, 0); envScene.add(pan);
+    const pan2 = new THREE.Mesh(pan.geometry, new THREE.MeshBasicMaterial({ color: new THREE.Color(3, .6, 2.4), side: THREE.DoubleSide })); pan2.position.set(-20, 12, -10); pan2.lookAt(0, 0, 0); envScene.add(pan2);
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    if (envRT) envRT.dispose(); envRT = pmrem.fromScene(envScene, .02); pmrem.dispose();
+    scene.environment = envRT.texture; gunScene.environment = envRT.texture;
+  };
+  bakeYardSky(); SKY_REBAKE = bakeYardSky;
 
   // materials
   MAT.floor = sciMat(T.sci.floor, 16, 16, { envMapIntensity: 1, emissiveIntensity: .7 });
@@ -1686,6 +1752,7 @@ function skyMaterial2(k) {
   });
 }
 function bakeSky(skyMat, accents) {
+  SKY_REBAKE = () => bakeSky(skyMat, accents);   // (baked again after a WebGL context restore: render-target contents do not survive one)
   const skyScene = new THREE.Scene(); skyScene.add(new THREE.Mesh(new THREE.SphereGeometry(500, 64, 32), skyMat));
   if (skyRT) skyRT.dispose(); skyRT = new THREE.WebGLCubeRenderTarget(1024, { type: THREE.HalfFloatType, generateMipmaps: false });
   new THREE.CubeCamera(1, 1200, skyRT).update(renderer, skyScene); scene.background = skyRT.texture;
@@ -2931,6 +2998,11 @@ function initAudio() {
     AU.master = c.createGain(); AU.master.gain.value = CFG.vol; AU.master.connect(comp);
     AU.dry = c.createGain(); AU.dry.connect(AU.master); AU.dry0 = AU.dry;
     AU.foe = c.createGain(); AU.foe.connect(AU.master);   // enemy / remote sounds placed in 3D (see bus)
+    // enemy gunfire / reloads / near misses / grenades / footsteps are placed with HRTF (front-back + height, like CS2), and EVERY
+    // 3D sound gets its own PannerNode: Chromium cross-fades a reused HRTF panner from its OLD direction for ~45 ms, so a reused one
+    // plays each new sound's onset from the previous place (footsteps had this; qa/probe_hrtf_reuse.js). One HRTF panner made now
+    // so the browser loads its HRTF data in the menu, not on the first enemy shot (until then HRTF plays unplaced).
+    try { const w = c.createPanner(); w.panningModel = 'HRTF'; AU.hrtfWarm = w; } catch (e) {}
     const ir = (dur, decay) => { const len = c.sampleRate * dur, b = c.createBuffer(2, len, c.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); } return b; };
     AU.verb = c.createConvolver(); AU.verb.buffer = ir(2.6, 3); const vg = c.createGain(); vg.gain.value = .3; AU.verb.connect(vg); vg.connect(AU.master);
     AU.echo = c.createDelay(1); AU.echo.delayTime.value = .27; const fb = c.createGain(); fb.gain.value = .28; const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
@@ -2978,13 +3050,18 @@ function voice(kind, pos, must) {
   } else { if (v[1] >= cat.budget) return false; v[1]++; }   // far: a small shared budget (far noise thins out first)
   v[2]++; VOICE_ALL[pr]++; return true;
 }
-function bus({ pos = null, verb = 0, echo = 0, ref = 4, vol = 1, hrtf = false, roll = 1.1 } = {}) {
+// (hrtf: a positional sound the player localises: enemy shots, reloads, whiz, grenades, steps. Impacts / spawns / deaths stay equalpower: many per second, no front-back need.)
+// occl: behind a wall / floor / corner the sound is muffled by what is in the way and played from the opening it comes round (occlude())
+function bus({ pos = null, verb = 0, echo = 0, ref = 4, vol = 1, hrtf = false, roll = 1.1, occl = false, feet = false } = {}) {
   AU.count = (AU.count || 0) + 1;
-  const c = AU.ctx, g = c.createGain(); g.gain.value = vol; let out = g;
+  const c = AU.ctx, g = c.createGain(); let out = g, at = pos, oc = null;
+  if (pos && occl && typeof occlude === 'function') { oc = occlude(pos, _obus, feet);
+    if (oc.dB < 0) { vol *= Math.pow(10, oc.dB / 20); const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = oc.lp; f.Q.value = .5; g.connect(f); out = f; if (oc.via) at = oc.via; } }
+  g.gain.value = vol; AU.lastOcc = oc ? { kind: oc.kind, dB: oc.dB, lp: oc.lp, mat: oc.mat, thick: oc.thick, via: oc.via ? [oc.via.x, oc.via.y, oc.via.z] : null } : null;
   if (pos) {
     const p = c.createPanner(); p.panningModel = hrtf ? 'HRTF' : 'equalpower'; p.distanceModel = 'inverse'; p.refDistance = ref; p.rolloffFactor = roll; p.maxDistance = 120;
-    if (p.positionX) { p.positionX.value = pos.x; p.positionY.value = pos.y; p.positionZ.value = pos.z; } else p.setPosition(pos.x, pos.y, pos.z);
-    g.connect(p); out = p;
+    if (p.positionX) { p.positionX.value = at.x; p.positionY.value = at.y; p.positionZ.value = at.z; } else p.setPosition(at.x, at.y, at.z);
+    out.connect(p); out = p;
   }
   // positional sounds go to AU.foe (your hit-confirm ducks AU.dry, never enemy gunfire); while an add-on has swapped AU.dry
   // for its own bus (killcam replay, footsteps volume) they follow that swap
@@ -3061,7 +3138,7 @@ const sfx = {
   enemyShot(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, verb: .35, echo: .25, ref: 5 });
     osc(d, t, .12, 'sawtooth', 1300, 260, .35); nz(d, t, .1, 'bandpass', 1800, 2, .6); osc(d, t, .08, 'sine', 180, 60, .5); },
   charge(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 4 }); osc(d, t, .45, 'sine', 500, 1500, .12, .3); },
-  whiz(pos) { if (!voice('whiz', pos)) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 2 }); nz(d, t, .18, 'bandpass', 3200, 4, .6, .03, 900); },
+  whiz(pos) { if (!voice('whiz', pos)) return; const t = AU.ctx.currentTime, d = bus({ pos, hrtf: true, occl: true, ref: 2 }); nz(d, t, .18, 'bandpass', 3200, 4, .6, .03, 900); },
   impact(pos, metal) { if (!voice('impact', pos)) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 3, vol: .55 });
     if (metal) { osc(d, t, .12, 'square', rand(1800, 2600), 1400, .06); nz(d, t, .06, 'bandpass', 3500, 5, .3); } else nz(d, t, .08, 'bandpass', 900, 1.2, .35); },
   hurt() { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, .16, 'lowpass', 420, 1, .7); osc(AU.dry, t, .18, 'sine', 110, 55, .5); nz(AU.dry, t, .05, 'bandpass', 3000, 3, .2); },
@@ -3092,8 +3169,8 @@ const sfx = {
   thrust() { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, .32, 'bandpass', 900, .8, .55, .01, 2600); osc(AU.dry, t, .25, 'sine', 90, 160, .35); },
   dash() { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, .28, 'bandpass', 1800, .9, .7, .005, 500); osc(AU.dry, t, .18, 'sawtooth', 220, 70, .12); },
   slide() { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, .7, 'bandpass', 1400, .6, .4, .02, 500); nz(AU.dry, t, .6, 'lowpass', 300, .8, .4, .02); },
-  nadeThrow(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 3 }); nz(d, t, .15, 'bandpass', 1200, 1, .3, .03, 600); osc(d, t, .08, 'square', 1700, 1500, .05); },
-  nadeBounce(pos) { if (!voice('misc', pos)) return; const t = AU.ctx.currentTime, d = bus({ pos, ref: 3, vol: .6 }); osc(d, t, .08, 'square', rand(1500, 2100), 1300, .07); nz(d, t, .05, 'bandpass', 3000, 4, .25); },
+  nadeThrow(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, hrtf: true, occl: true, ref: 3 }); nz(d, t, .15, 'bandpass', 1200, 1, .3, .03, 600); osc(d, t, .08, 'square', 1700, 1500, .05); },
+  nadeBounce(pos) { if (!voice('misc', pos)) return; const t = AU.ctx.currentTime, d = bus({ pos, hrtf: true, occl: true, ref: 3, vol: .6 }); osc(d, t, .08, 'square', rand(1500, 2100), 1300, .07); nz(d, t, .05, 'bandpass', 3000, 4, .25); },
   explode(pos) { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ pos, verb: .7, echo: .5, ref: 8, vol: 1.3 });
     nz(d, t, .04, 'highpass', 2500, .7, 1); nz(d, t, 1.4, 'lowpass', 1100, .7, 1.4, .003, 90); osc(d, t, .9, 'sine', 70, 24, 1.6); osc(d, t, .4, 'sawtooth', 300, 40, .25); nz(d, t + .05, .5, 'bandpass', 3200, 1, .35, .01, 900); },
   overdrive() { if (!AU.ctx) return; const t = AU.ctx.currentTime, d = bus({ verb: .5 }); osc(d, t, .9, 'sawtooth', 110, 440, .16, .05); osc(d, t, .9, 'sawtooth', 111, 445, .16, .05); nz(d, t, .5, 'highpass', 2000, 1, .3, .2); },
@@ -3198,7 +3275,7 @@ function gunVoice(name, pos, vol = 1, delay = 0) {
   const v = GUN_VOICE[name]; if (!v || !AU.ctx) return false;
   if (!GSND[name]) GSND[name] = gsBuild(v.dur, v.fn);
   const c = AU.ctx, src = c.createBufferSource(); src.buffer = GSND[name]; src.playbackRate.value = rand(.96, 1.04);
-  const d = bus({ pos: pos || null, verb: pos ? v.verb * .7 : v.verb, echo: v.echo, ref: SOUND_MIX.categories.shot.ref, roll: SOUND_MIX.categories.shot.roll, vol: v.vol * vol });
+  const d = bus({ pos: pos || null, hrtf: !!pos, occl: !!pos, verb: pos ? v.verb * .7 : v.verb, echo: v.echo, ref: SOUND_MIX.categories.shot.ref, roll: SOUND_MIX.categories.shot.roll, vol: v.vol * vol });
   if (pos) { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = clamp(16000 - camera.position.distanceTo(pos) * 220, 1800, 16000); src.connect(f); f.connect(d); } else src.connect(d);
   src.start(delay > 0 ? c.currentTime + delay : 0); return true;
 }
@@ -3224,7 +3301,7 @@ const SHOT_AT_ME_M = 25;
 const SILENT_HIT_W = new Set(['knife', 'nade', 'stinger', 'ricochet', 'seeker', 'boomerang', 'nova', 'poopgun', 'flytrap', 'ftspit', 'ftpoison', 'lava', 'acid', 'laser']);   // hits that are not a gunshot (own sounds)
 function shotAtMe(p) { const c = camera.position, d = p.distanceTo(c); if (d > SHOT_AT_ME_M) p.sub(c).multiplyScalar(SHOT_AT_ME_M / d).add(c); return p; }
 // an enemy reloading near you (CS2: you hear the mag come out): mag out, mag in, a bolt for the sniper; placed in 3D
-sfx.foeReload = function (pos, kind) { if (!voice('foley', pos)) return; const t = AU.ctx.currentTime, c = SOUND_MIX.categories.foley, d = bus({ pos, ref: c.ref, roll: c.roll, vol: .9, verb: .06 });
+sfx.foeReload = function (pos, kind) { if (!voice('foley', pos)) return; const t = AU.ctx.currentTime, c = SOUND_MIX.categories.foley, d = bus({ pos, hrtf: true, occl: true, ref: c.ref, roll: c.roll, vol: .9, verb: .06 });
   if (kind === 'sniper' || kind === 'obelisk') { nz(d, t + .1, .05, 'bandpass', 2600, 5, .35); osc(d, t + .14, .05, 'square', 1200, 600, .1); nz(d, t + .5, .08, 'bandpass', 3400, 6, .3); return; }
   osc(d, t + .1, .02, 'square', 900, 700, .08); nz(d, t + .12, .14, 'bandpass', 2200, 3, .22, .01, 900);
   nz(d, t + .62, .06, 'bandpass', 1600, 4, .4); osc(d, t + .62, .04, 'square', 420, 260, .12); nz(d, t + .67, .04, 'highpass', 3000, 1, .2); };
@@ -3657,6 +3734,75 @@ function bodyRim(self, p, h, rad, dt) {
 }
 const ray = new THREE.Raycaster();
 const _v1 = V3(), _v2 = V3(), _v3 = V3(), _losHits = [];
+// ---- sound occlusion: footsteps, enemy gunfire, reloads, near misses and grenades behind a wall, a floor or a corner ----
+// One rule for every 3D sound (CS2 / Valorant conventions). A ray from your ears to the source: a solid in the way = muffled by
+// that solid's material and thickness (concrete -14 dB / low-pass 700 Hz ... glass -6 dB / 2.5 kHz, see OCC.mat). When a short
+// walking route exists round a corner or through a doorway, the sound is played from that OPENING (the first corner of the route
+// you can see), only mildly filtered, so you hear where they will come from. A floor or roof between you with no route stays
+// muffled from the true direction; a waist-high crate between you only takes the top off. Cheap: one ray when the way is clear;
+// answers cached per 0.5 m source cell for `ttl` s; at most `budget` rays / route searches per frame (beyond that: the last
+// cached answer, else open). Numbers mirrored in data/sound_occlusion.json. Tests: qa/gate.d/footsteps_dir.js (occlusion scenes).
+const OCC = { on: true, ttl: .12, cell: .5, maxDist: 60, diffractDist: 30, maxExtra: 14,
+  mat: { default: [-13, 800], concrete: [-14, 700], stone: [-14, 700], rock: [-14, 700], metal: [-12, 900], sheet: [-11, 1100], wood: [-10, 1300], crate: [-10, 1300], drywall: [-10, 1400], glass: [-7, 2200], grate: [-3, 5000], ice: [-9, 1600], crystal: [-8, 2000] },
+  thick: { ref: .3, perM: -4, max: -6 }, around: { dB: -4, perM: -.6, lp: 3500, lpFar: 1500 }, over: { dB: -2, lp: 5000 },
+  budget: { rays: 12, paths: 1 }, used: { f: -1, rays: 0, paths: 0 }, cache: new Map(), stats: { calls: 0, cached: 0, blocked: 0, around: 0, over: 0, starved: 0, ms: 0, max: 0 } };
+const _oh = [], _ov = V3(), _oq = V3(), _ow = V3(), _obus = {};
+// the nearest collision mesh on the segment from -> to (ears to source), or null when the way is clear
+function losHit(from, to) {
+  _ov.subVectors(to, from); const dist = _ov.length(); if (dist < 1e-4) return null; _ov.divideScalar(dist);
+  ray.set(from, _ov); ray.far = dist - .25; const M = world.meshes; let best = null;
+  for (let i = 0; i < M.length; i++) { const m = M[i]; if (!m.layers.test(ray.layers)) continue; _oh.length = 0; m.raycast(ray, _oh);
+    for (const h of _oh) if (!best || h.distance < best.distance) best = h;
+    if (best) ray.far = best.distance; }
+  _oh.length = 0; ray.far = Infinity; return best;
+}
+function occMat(m) { const u = m.userData || {}; if (u.occMat) return u.occMat; if (u.wallbang) return penMatOf(u.wallbang); if (u.penBoxes && u.penBoxes[0] && u.penBoxes[0].pen) return penMatOf(u.penBoxes[0].pen); return u.surface || 'default'; }
+// metres of solid behind the hit point along the ray (the box of the mesh; a merged kit mesh = unknown -> the reference thickness)
+function occBox(m) { const u = m.userData; return u.occBox || (u.occBox = new THREE.Box3().setFromObject(m)); }
+function occThick(h) {
+  const m = h.object, pb = m.userData.penBoxes; if (pb) { const q = penHit(h, _ov); if (q) return q.t; }
+  const b = occBox(m), sz = Math.max(b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z); if (sz > 14) return OCC.thick.ref;
+  let t = Infinity; for (const ax of ['x', 'y', 'z']) { const d = _ov[ax]; if (Math.abs(d) < 1e-5) continue; const e = ((d > 0 ? b.max[ax] : b.min[ax]) - h.point[ax]) / d; if (e >= 0) t = Math.min(t, e); }
+  return isFinite(t) ? Math.min(2.5, Math.max(.02, t)) : OCC.thick.ref;
+}
+const _occStore = (key, o, t) => { OCC.cache.set(key, { t, dB: o.dB, lp: o.lp, via: o.via ? o.via.clone() : null, kind: o.kind, mat: o.mat, thick: o.thick, extra: o.extra }); if (OCC.cache.size > 400) OCC.cache.delete(OCC.cache.keys().next().value); };
+const _occCopy = (e, o) => { o.dB = e.dB; o.lp = e.lp; o.via = e.via; o.kind = e.kind; o.mat = e.mat; o.thick = e.thick; o.extra = e.extra; return o; };
+// out: { dB (<= 0), lp (Hz), via (Vector3 | null: play it from here instead), kind: open | blocked | around | over, mat, thick, extra }
+function occlude(src, out, feet) {
+  out = out || {}; out.dB = 0; out.lp = 24000; out.via = null; out.kind = 'open'; out.mat = ''; out.thick = 0; out.extra = 0;
+  if (!OCC.on || !NAV.ok || !world.meshes.length) return out;
+  const L = camera.position, dist = L.distanceTo(src); if (dist < .6 || dist > OCC.maxDist) return out;
+  OCC.stats.calls++;
+  const key = Math.round(src.x / OCC.cell) + ',' + Math.round(src.y / OCC.cell) + ',' + Math.round(src.z / OCC.cell) + '|' + cellOf(L.x, L.z) + ',' + Math.round(L.y);
+  const now = performance.now(), e = OCC.cache.get(key);
+  if (e && now - e.t < OCC.ttl * 1000) { OCC.stats.cached++; return _occCopy(e, out); }
+  if (OCC.used.f !== frames) { OCC.used.f = frames; OCC.used.rays = 0; OCC.used.paths = 0; }
+  if (OCC.used.rays >= OCC.budget.rays) { OCC.stats.starved++; return e ? _occCopy(e, out) : out; }   // (a stale answer rather than none)
+  const t0 = performance.now();
+  _ow.set(src.x, src.y + (feet ? .4 : 0), src.z); OCC.used.rays++;
+  const h = losHit(L, _ow);
+  if (!h) { _occStore(key, out, now); return out; }
+  // blocked: by what, how thick
+  const m = h.object, mat = occMat(m), tb = OCC.mat[mat] || OCC.mat.default, th = occThick(h), over = Math.max(0, th - OCC.thick.ref);
+  out.mat = mat; out.thick = th; out.kind = 'blocked'; out.dB = tb[0] + Math.max(OCC.thick.max, OCC.thick.perM * over); out.lp = tb[1] * Math.max(.6, 1 - over * .5);
+  const top = occBox(m).max.y;
+  if (top < L.y - .25 && top < src.y + 1.6) {   // a low obstacle (crate, barrier) between your eyes and their feet: the sound comes over its top
+    out.kind = 'over'; out.dB = OCC.over.dB; out.lp = OCC.over.lp; out.via = new THREE.Vector3(h.point.x, top + .25, h.point.z); OCC.stats.over++;
+  } else if (dist <= OCC.diffractDist && OCC.used.paths < OCC.budget.paths) {
+    // round a corner / through a doorway / up the stairs: the walking route from you to them; its first corner you can see is where the sound comes from
+    OCC.used.paths++; const path = findPath(L.x, L.z, src.x, src.z);
+    if (path && path.length >= 2) {
+      let len = 0, px = L.x, pz = L.z; for (const q of path) { len += Math.hypot(q.x - px, q.z - pz); px = q.x; pz = q.z; } const extra = len - Math.hypot(src.x - L.x, src.z - L.z);
+      if (extra <= OCC.maxExtra) for (let i = 0; i < Math.min(2, path.length - 1) && OCC.used.rays < OCC.budget.rays; i++) { const q = path[i]; _oq.set(q.x, q.y + 1.2, q.z); OCC.used.rays++;
+        if (!losHit(L, _oq)) { const k = Math.min(1, Math.max(0, extra) / OCC.maxExtra); out.kind = 'around'; out.extra = extra; out.dB = OCC.around.dB + OCC.around.perM * Math.max(0, extra); out.lp = OCC.around.lp + (OCC.around.lpFar - OCC.around.lp) * k; out.via = new THREE.Vector3(q.x, q.y + 1.0, q.z);
+          // played from the opening, which is nearer than they are: keep the level of the whole route (inverse falloff, ref 4 m), not of the opening
+          const fall = d => 4 / (4 + Math.max(0, d - 4)), dv = Math.max(.5, L.distanceTo(out.via)); out.dB += 20 * Math.log10(fall(len) / fall(dv)); OCC.stats.around++; break; } }
+    }
+  }
+  if (out.kind === 'blocked') OCC.stats.blocked++;
+  const d = performance.now() - t0; OCC.stats.ms += d; if (d > OCC.stats.max) OCC.stats.max = d;
+  _occStore(key, out, now); return out;
+}
 function lineOfSight(from, to) {
   _v1.subVectors(to, from); const dist = _v1.length(); _v1.divideScalar(dist);
   ray.set(from, _v1); ray.far = dist - .3;
@@ -3706,7 +3852,6 @@ for (let i = 0; i < 10; i++) hpsegs.appendChild(document.createElement('i'));
 for (let i = 0; i < 42; i++) pips.appendChild(document.createElement('i'));
 function updateHud(force) {
   if (!P.pos) return;
-  if (NET.on && NET.code) try { localStorage.setItem('sector9-room', JSON.stringify({ nick: NET.nick, code: NET.code, t: Date.now(), k: PLAYER_ENT.kills, d: PLAYER_ENT.deaths })); } catch (e) {}
   const st = standings(), place = st.indexOf(PLAYER_ENT) + 1;
   setHTML('hPlace', `${place}<small>${ord(place).slice(String(place).length).toUpperCase()}</small>`);
   setText('hKD', `${PLAYER_ENT.kills} kills · ${PLAYER_ENT.deaths} deaths`);
@@ -3884,7 +4029,7 @@ async function startMatch(mapId) {
   $('feed').innerHTML = ''; $('kfeed').innerHTML = ''; updateHud(true);
   banner((MAPS.find(m => m.id === CUR_MAP) || MAPS[0]).name.toUpperCase(), `Free for all · ${BOT_COUNT + 1} players · first to ${KILL_LIMIT} kills`); sfx.wave();
   setTimeout(() => { for (const r of robots.slice(0, 3)) if (state === 'play') kfeedText(`${r.name} joined the match`); }, 900);
-  warmShaders(); prewarmView();
+  warmShaders(); perf.warmQ = CFG.q; perf.warmMap = CUR_MAP; prewarmView();
 }
 // The first second of a match: draw the real spawn view (gun included) while the menu still covers the screen, so the texture
 // uploads, shadow-map shaders and the graphics driver's first-draw work for what the player sees happen during loading, not as
@@ -5320,7 +5465,7 @@ function fakeRoom() {
   bc.onmessage = e => { const m = e.data; if (m.t === 'p') { const isNew = !peersMap.has(m.peer); const p = { peer: m.peer, isMe: false, sameTab: false, kind: 'viewer', guest: false, by: null, presence: m.p, updatedAt: Date.now() }; peersMap.set(m.peer, p); fire(isNew ? [p] : [], []); } if (m.t === 'bye') { const p = peersMap.get(m.peer); peersMap.delete(m.peer); if (p) fire([], [p]); } };
   addEventListener('beforeunload', () => bc.postMessage({ t: 'bye', peer: me }));
   let pending = null;
-  const api = { name: 'fake', presence(patch) { pres = Object.assign({}, pres, patch); if (!pending) pending = setTimeout(() => { pending = null; bc.postMessage({ t: 'p', peer: me, p: pres }); }, 33); return Promise.resolve(); },
+  const api = { name: 'fake', presence(patch) { pres = Object.assign({}, pres, patch); pres.ts = Math.round(performance.now()); if (!pending) pending = setTimeout(() => { pending = null; bc.postMessage({ t: 'p', peer: me, p: pres }); }, 33); return Promise.resolve(); },
     peers: snapshot, onPeers(h) { handler = h; setTimeout(() => fire(snapshot(), []), 0); return () => { handler = null; }; }, connected: () => true, leave() { bc.postMessage({ t: 'bye', peer: me }); bc.close(); return Promise.resolve(); } };
   return api;
 }
@@ -5559,14 +5704,14 @@ function serverTransport(code, create) {
       send(o) { srvSend(o); },
       get isHost() { return !!(api.meta && myId && api.meta.hostId === myId); }, get myId() { return myId; },
       ping: () => SRV.rtt === null ? 0 : Math.round(SRV.rtt), jitter: () => Math.round(SRV.jit), pingTo: k => { const p = remotes.get(k); return p && p.pg ? p.pg | 0 : null; }, direct: () => false,
-      presence(patch) { pres = Object.assign({}, pres, patch); if (!pending) pending = setTimeout(sendState, Math.max(0, (SRV.nd ? 15 : 33) - (performance.now() - lastSend))); return Promise.resolve(); },
+      presence(patch) { pres = Object.assign({}, pres, patch); pres.ts = Math.round(performance.now()); if (!pending) pending = setTimeout(sendState, Math.max(0, (SRV.nd ? 15 : 33) - (performance.now() - lastSend))); return Promise.resolve(); },   // ts = when this position was sampled (the receiver orders and times states by it)
       peers: peersList, onPeers(h) { handler = h; setTimeout(() => fire(), 0); return () => { handler = null; }; }, connected: srvOn,
       setMeta(patch) { if (!api.isHost) return; Object.assign(api.meta, patch); srvSend({ k: 'meta', m: patch }); },
       leave() { if (!closed) srvSend({ k: 'leave' }); stop(); clearTimeout(pending); return Promise.resolve(); }
     };
     // net v3 (server said nd): 60 Hz, and only the fields that changed since the last send ({k:'sd'}); a full state ({k:'st'})
     // every second, after (re)joining and on a new connection, so the server and newcomers always have a complete picture
-    function sendState() { pending = null; if (closed) return; lastSend = performance.now(); pres.q = ++seq; pres.ts = Math.round(lastSend); pres.pg = api.ping();
+    function sendState() { pending = null; if (closed) return; lastSend = performance.now(); pres.q = ++seq; if (!pres.ts) pres.ts = Math.round(lastSend); pres.pg = api.ping();   // (ts = when the position was sampled, set in presence(): a stamp taken here was 0-15 ms late, varying = timeline jitter)
       if (!SRV.nd) { sent = null; srvSend({ k: 'st', p: pres }); return; }
       if (!sent || sentWs !== SRV.ws || lastSend - keyT >= 1000) { sent = {}; for (const k in pres) sent[k] = JSON.stringify(pres[k]); keyT = lastSend; sentWs = SRV.ws; srvSend({ k: 'st', p: pres }); return; }
       const dl = {}; for (const k in pres) { const v = JSON.stringify(pres[k]); if (sent[k] !== v) { sent[k] = v; dl[k] = pres[k]; } }
@@ -5690,7 +5835,8 @@ function peerEntry(id, pr) {
   E = { id, r, last: { shot: pr.sh | 0, hit: pr.hs | 0, nade: pr.ns | 0, proj: Array.isArray(pr.pj) ? pr.pj[0] : 0 }, pres: null };
   r.dead = !!pr.dd; targetsDirty = true; NET.peers.set(id, E);
   if (state === 'play' || state === 'dead') { kfeedText(`${nick} joined the match`); sfx.wave(); }
-  if (NET.peers.size === 1) setTimeout(warmShaders, 0);   // prepare the look of players (and their dissolving deaths) once
+  // (the shader warm-up used to run here on every 0 -> 1 peer transition, i.e. at the first state of a match AND on every rejoin /
+  // wifi blip of the other player: a 100-500 ms freeze in play. It runs once per map + quality in startOnlineMatch now.)
   updateHud(); return E;
 }
 function dropPeer(id, announce) {
@@ -5708,20 +5854,93 @@ function pingOf(e) { if (!NET.on || !NET.room || !NET.room.ping) return null; if
 function pingTxt(e) { if (!e.isPlayer && !e.remote) return 'BOT'; const v = pingOf(e); if (v === null || v === undefined) return NET.on ? '…' : '—'; const j = e.isPlayer && NET.room.jitter ? NET.room.jitter() : 0; return v + ' ms' + (j >= 10 ? ' ±' + j : ''); }
 function pingCls(e) { const v = pingOf(e); return v === null || v === undefined ? '' : v < 60 ? 'pg-good' : v < 120 ? 'pg-ok' : 'pg-bad'; }
 function remoteById(id) { const E = NET.peers.get(id); return E ? E.r : null; }
+/* ---------- remote-player playback (NETPLAY). Pure math: qa/netsmooth_sim.js extracts the code between the NETPLAY-BEGIN /
+   NETPLAY-END markers and runs the very same lines in Node against synthetic links (jitter, bunching, stalls, frame hitches).
+   Uses only clamp, lerp, wrapPi and NP.ground (set in updateRemote). ---------- */
+// NETPLAY-BEGIN
+// How the other players are drawn (Source / Overwatch style):
+//  - every state carries the SENDER's clock (ts); we play the states back on a clock of our own (r.rt, in sender time) that
+//    runs a fixed distance behind the newest state: r.npTg = max(100 ms, 2 send intervals + 1.25 x the 90th-percentile
+//    arrival jitter of the last 3 s + 10). It rises at once when the link gets worse and relaxes over ~10 s.
+//  - the playback clock advances by the REAL elapsed time, also across a frame hitch: after a 200 ms hitch everyone is
+//    200 ms further on, like your own view (before: it moved at most 50 ms and then ran 35% fast for half a second to catch
+//    up, a visible "drift"). It is kept at the target distance by a gentle time dilation (<= 8%, from a smoothed buffer
+//    error), never by rate swings, and re-timed only after a seconds-long freeze (tab hidden).
+//  - no state for the moment yet (a late / bunched packet, or the sender's own frame hitch, during which its simulation stands
+//    still): the path is continued at its last velocity easing to a stop over ~80 ms (with gravity in the air, landing on the
+//    ground). Never a spike.
+//  - when the ideal pose jumps for a reason of OURS (new data after such a gap, a re-time, an anti-cheat fix in the data under
+//    2 m) the drawn pose keeps its continuity and glides onto the ideal path (time constant 80 ms, at most 9 m/s); jumps of
+//    2 m and more (respawn, teleporter) are drawn at once.
+const NP = { FLOOR: 100, MAXT: 350, EXTRAP: .08, SNAP: 400, RATE: .08, TAU: .08, VMAX: 9, CMAX: 2, JUMPV: 30, GRAV: 20, ground: null };
+function npReceive(E, r, pr, now) {   // link timing of one received state -> the sender-time stamp to store it under
+  if (!pr.ts) return now;
+  const d = now - pr.ts;
+  if (E.base === undefined || d < E.base) E.base = d; else E.base += (d - E.base) * .0005;   // smallest one-way delay (+ clock offset); creeps up over ~1 min (route change)
+  const J = d - E.base, W = E.jw || (E.jw = []); W.push(now, J); while (W.length > 2 && W[0] < now - 3000) W.splice(0, 2);
+  if (!E.jq || now - E.jq > 100) { E.jq = now; const v = []; for (let i = 1; i < W.length; i += 2) v.push(W[i]); v.sort((x, y) => x - y); E.jit = v[Math.min(v.length - 1, Math.floor(v.length * .9))]; }
+  if (E.lts) { const iv = pr.ts - E.lts; if (iv > 0 && iv < 500) E.iv = E.iv === undefined ? iv : E.iv + (iv - E.iv) * .1; } E.lts = pr.ts;
+  const want = clamp((E.iv || 16.7) * 2 + (E.jit || 0) * 1.25 + 10, NP.FLOOR, NP.MAXT);
+  r.npTg = r.npTg === undefined || want > r.npTg ? want : r.npTg + (want - r.npTg) * .01;   // up at once, down over ~10 s at 60 Hz
+  return pr.ts;
+}
+function npPush(r, st, pr) {   // store one state (newest wins; a jump in the data itself is marked: anti-cheat fix, teleporter, respawn)
+  const S = r.snaps, last = S[S.length - 1]; if (last && st <= last.t) return;
+  const s = { t: st, x: +pr.x[0], y: +pr.x[1], z: +pr.x[2], yaw: +pr.yw, pitch: +pr.pt, g: !!pr.g, j: false };
+  if (last) { const dd = Math.hypot(s.x - last.x, s.y - last.y, s.z - last.z); if (dd > NP.JUMPV * (st - last.t) / 1000 + .3) s.j = true; }
+  S.push(s); if (S.length > 64) S.shift();
+}
+function npStep(r, dt) {   // dt = REAL seconds since the last call -> false while nothing can be drawn; else r.np = the drawn pose
+  const S = r.snaps; if (!S || !S.length) return false;
+  const n = S.length, last = S[n - 1], latest = last.t, tg = r.npTg || NP.FLOOR;
+  const first = !r.np, o = r.np || (r.np = { x: last.x, y: last.y, z: last.z, yaw: last.yaw, pitch: last.pitch, g: last.g, cx: 0, cy: 0, cz: 0, ix: last.x, iy: last.y, iz: last.z, vx: 0, vy: 0, vz: 0, over: 0, lt: latest, es: 0, snaps: 0, glides: 0 });
+  let retime = false;
+  if (r.rt === undefined) { r.rt = latest - tg; retime = true; }
+  else {
+    r.rt += dt * 1000;
+    const e = latest - r.rt - tg;                    // + = more buffer than wanted (we fell behind), - = less
+    if (e > NP.SNAP) { r.rt = latest - tg; o.es = 0; retime = true; }   // the tab was hidden / a seconds-long freeze: jump ahead
+    else { o.es += (e - o.es) * Math.min(1, dt * 4); r.rt += dt * 1000 * clamp(o.es / 1500, -NP.RATE, NP.RATE); }
+  }
+  const t = r.rt;
+  // the ideal pose at t: between the two states around it; past the newest state: continued at its velocity, then held
+  let x, y, z, yaw, pitch, vx, vy, vz, g, over = 0;
+  if (t >= latest) {
+    over = t - latest; let a = last; for (let i = n - 2; i >= 0; i--) { a = S[i]; if (last.t - a.t >= 24) break; }   // velocity over >= 24 ms (1 cm rounding noise)
+    const span = last.t - a.t;
+    if (span > 0 && !last.j) { vx = (last.x - a.x) / span * 1000; vy = (last.y - a.y) / span * 1000; vz = (last.z - a.z) / span * 1000; } else vx = vy = vz = 0;
+    const ex = NP.EXTRAP * (1 - Math.exp(-over / 1000 / NP.EXTRAP)), vs = Math.exp(-over / 1000 / NP.EXTRAP);   // eased continuation: at most 80 ms worth of motion (a hitching sender's own simulation stands still; a late packet's player keeps going a little)
+    x = last.x + vx * ex; z = last.z + vz * ex; yaw = last.yaw; pitch = last.pitch; g = last.g;
+    if (last.g || vy < -30) { y = last.y; vy = 0; }
+    else { const gr = NP.GRAV * (r.npGrav || 1); y = last.y + vy * ex - .5 * gr * ex * ex; vy -= gr * ex; if (NP.ground) { const gy = NP.ground(x, z, last.y); if (y < gy) { y = gy; vy = 0; g = true; } } }
+    vx *= vs; vy *= vs; vz *= vs;
+  } else {
+    let i = Math.max(0, n - 2); while (i > 0 && S[i].t > t) i--; const a = S[i], b = S[Math.min(n - 1, i + 1)];   // (one state only / t before the oldest: held at it)
+    const span = b.t - a.t, k = span > 0 ? clamp((t - a.t) / span, 0, 1) : 1;
+    x = lerp(a.x, b.x, k); y = lerp(a.y, b.y, k); z = lerp(a.z, b.z, k); yaw = a.yaw + wrapPi(b.yaw - a.yaw) * k; pitch = lerp(a.pitch, b.pitch, k); g = a.g && b.g;   // (grounded only between two grounded states: a take-off segment is air, so the stair smoothing never touches a jump)
+    if (span > 0 && !b.j) { vx = (b.x - a.x) / span * 1000; vy = (b.y - a.y) / span * 1000; vz = (b.z - a.z) / span * 1000; } else vx = vy = vz = 0;
+  }
+  // continuity: the ideal pose jumped for a reason of ours -> the drawn pose keeps going and glides onto the new path
+  if (!retime && dt > 0) {
+    const dx = x - o.ix, dy = y - o.iy, dz = z - o.iz, step = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const dataJump = step > NP.JUMPV * dt + .25, resumed = o.over > 0 && (over === 0 || latest !== o.lt);   // (new data after a gap: also while still past the newest state)
+    if (resumed || dataJump) {
+      if (step >= NP.CMAX) { o.cx = o.cy = o.cz = 0; o.snaps++; }   // a real teleport (respawn, pad): drawn at once
+      else { o.cx = o.x + o.vx * dt - x; o.cy = o.y + o.vy * dt - y; o.cz = o.z + o.vz * dt - z; o.glides++; }   // where the old path was heading - the new pose
+    }
+  } else if (retime) { o.cx = o.cy = o.cz = 0; if (!first) o.snaps++; }
+  { const L = Math.sqrt(o.cx * o.cx + o.cy * o.cy + o.cz * o.cz);
+    if (L > 1e-4) { const cut = Math.min(L * (1 - Math.exp(-dt / NP.TAU)), NP.VMAX * dt), f = Math.max(0, L - cut) / L; o.cx *= f; o.cy *= f; o.cz *= f; } else o.cx = o.cy = o.cz = 0; }
+  o.ix = x; o.iy = y; o.iz = z; o.vx = vx; o.vy = vy; o.vz = vz; o.over = over; o.lt = latest; o.g = g;
+  o.x = x + o.cx; o.y = y + o.cy; o.z = z + o.cz; o.yaw = yaw; o.pitch = pitch;
+  return true;
+}
+// NETPLAY-END
 function netReceive(E, pr) {
   const r = E.r, L = E.last; if (!Array.isArray(pr.x)) return;
   const now = performance.now();
-  // place each state on the sender's own clock (mapped to ours), so uneven packet arrival doesn't make them stutter
-  let st = now;
-  // states are kept on the SENDER's clock; updateRemote plays them back on a steady clock of its own (see there)
-  if (pr.ts) { st = pr.ts; const d = now - pr.ts; if (E.base === undefined || d < E.base) E.base = d; else E.base += (d - E.base) * .002;
-    // jitter = 60th percentile of the extra delay over the last 2 s (per player; chosen by qa/net_bench.js). A TCP retransmit stall is ridden out
-    // by easing past the newest state and gliding back (updateRemote), instead of keeping everyone 300+ ms in the past.
-    const J = d - E.base, W = E.jw || (E.jw = []); W.push(now, J); while (W.length > 2 && W[0] < now - 2000) W.splice(0, 2);
-    if (!E.jq || now - E.jq > 100) { E.jq = now; const v = []; for (let i = 1; i < W.length; i += 2) v.push(W[i]); v.sort((x, y) => x - y); E.jit = v[Math.min(v.length - 1, Math.floor(v.length * .6))]; }
-    if (E.lts) { const iv = pr.ts - E.lts; if (iv > 0 && iv < 500) E.iv = E.iv === undefined ? iv : E.iv + (iv - E.iv) * .1; } E.lts = pr.ts;
-    r.target = clamp((E.iv || 33) * 2 + (E.jit || 0) * 1.25 + 6, 34, 350); }   // 2 send intervals + jitter: ~45 ms on a clean 60 Hz link (CS2 / Overwatch: ~2 ticks)
-  if (!r.snaps.length || st > r.snaps[r.snaps.length - 1].t) { r.snaps.push({ t: st, x: +pr.x[0], y: +pr.x[1], z: +pr.x[2], yaw: +pr.yw, pitch: +pr.pt }); if (r.snaps.length > 30) r.snaps.shift(); }
+  // states are kept on the SENDER's clock; updateRemote plays them back on a steady clock of its own (npStep)
+  npPush(r, npReceive(E, r, pr, now), pr);
   r.ping = pr.pg | 0;
   if ((pr.K | 0) >= KILL_LIMIT && !G.ended && NET.inMatch) setTimeout(() => endMatch(r), 1200);
   if (pr.rl && !r.reload && !r.dead) sfx.foeReload(r.root.position, NET_W[pr.w | 0]);
@@ -5729,7 +5948,7 @@ function netReceive(E, pr) {
   // the exact weapon id (wid) first: NET_W's order depends on which add-ons each client loaded (a mid-release session, a module
   // that failed to load), and an index from a different list draws the wrong gun in their hands
   const w = typeof pr.wid === 'string' && Object.prototype.hasOwnProperty.call(WEAPONS, pr.wid) ? pr.wid : NET_W[pr.w | 0] || 'carbine';
-  if (r.netW !== w) { r.netW = w; if (w !== 'knife') { r.gun.remove(r.gunInner); r.gunInner = rifleTP(w); r.gun.add(r.gunInner); r.muzzle.position.copy(r.gunInner.userData.muzzle || r.muzzle.position); } }
+  if (r.netW !== w) { r.netW = w; if (w !== 'knife') { const C = r.gunTP || (r.gunTP = {}); r.gun.remove(r.gunInner); r.gunInner = C[w] || (C[w] = rifleTP(w)); r.gun.add(r.gunInner); r.muzzle.position.copy(r.gunInner.userData.muzzle || r.muzzle.position); } }   // one third-person model per weapon per player, built once (a new model per switch was 2-15 ms, 30-150 ms with a shader, every time they switched)
   // their shots: tracer, muzzle flash and sound
   if ((pr.sh | 0) > L.shot && Array.isArray(pr.sx)) {
     const nShots = Math.min(6, (pr.sh | 0) - L.shot);   // a late / bundled packet can carry several shots: you hear each one (up to 6)
@@ -5770,13 +5989,13 @@ function netReceive(E, pr) {
     if (PLAYER_ENT.kills >= KILL_LIMIT) setTimeout(() => endMatch(PLAYER_ENT), 1200);
     updateHud();
   } else if (!pr.dd && r.dead) {
-    r.dead = false; r.root.visible = true; r.gun.visible = true; r.hp = 100; r.visor.emissive.copy(r.color); for (const m of [r.body, r.visor]) { m.opacity = 1; m.transparent = false; m.depthWrite = true; m.needsUpdate = true; } r.body.emissive.setRGB(0, 0, 0); r.act.death.stop(); r.act.death.w = 0; r.act.death.setEffectiveWeight(0); resetDeathFx(r); r.snaps = []; r.lastN = null; r.rt = undefined; targetsDirty = true;
+    r.dead = false; r.root.visible = true; r.gun.visible = true; r.hp = 100; r.visor.emissive.copy(r.color); for (const m of [r.body, r.visor]) { m.opacity = 1; m.transparent = false; m.depthWrite = true; m.needsUpdate = true; } r.body.emissive.setRGB(0, 0, 0); r.act.death.stop(); r.act.death.w = 0; r.act.death.setEffectiveWeight(0); resetDeathFx(r); r.snaps = []; r.np = null; r.rt = undefined; r.npT = undefined; targetsDirty = true;
   }
 }
 // what the other player needs to draw you: absolute state, every frame (the platform coalesces to ~30 Hz)
 function netSend(dt) {
   if (!NET.on || !NET.room) return;
-  NET.saveT = (NET.saveT || 0) - dt; if (NET.saveT <= 0 && NET.inMatch) { NET.saveT = 2; try { localStorage.setItem('sector9-room', JSON.stringify({ nick: NET.nick, code: NET.code, t: Date.now() })); } catch (e) {} }
+  NET.saveT = (NET.saveT || 0) - dt; if (NET.saveT <= 0 && NET.inMatch) { NET.saveT = 2; try { localStorage.setItem('sector9-room', JSON.stringify({ nick: NET.nick, code: NET.code, t: Date.now(), k: PLAYER_ENT.kills, d: PLAYER_ENT.deaths })); } catch (e) {} }   // (was also written by updateHud on every shot / hit / regen tick: 10-20 synchronous writes a second online)
   const R2 = v => Math.round(v * 100) / 100;
   const st = {
     v: 1, lob: NET.inMatch ? 0 : 1, mp: CUR_MAP, jt: NET.joinT, n: NET.nick, c: NET.color | 0, x: [R2(P.pos.x), R2(P.pos.y), R2(P.pos.z)], yw: R2(P.yaw + Math.PI), pt: R2(P.pitch), cr: R2(P.crouch), wk: P.walk ? 1 : 0, g: P.onGround ? 1 : 0,
@@ -5789,36 +6008,17 @@ function netHit(dmg, crit, weapon, target, wb) { NET.seq.hit++; NET.hits.push({ 
 function netNade(from, v, rocket) { if (!NET.on) return; NET.seq.nade++; const R2 = x => Math.round(x * 100) / 100; NET.nade = [R2(from.x), R2(from.y), R2(from.z), R2(v.x), R2(v.y), R2(v.z), rocket ? 1 : 0]; }
 // draw the opponent ~100 ms in the past, interpolated between received states: smooth motion despite network jitter
 function updateRemote(r, dt) {
-  // a steady playback clock (like Source / Valorant): it runs a safe distance behind the newest state and speeds up or
-  // slows down by at most 35% to keep that distance. A lag spike makes the player slow down a little, never freeze or pop.
-  const S = r.snaps || [];
-  if (S.length) {
-    const latest = S[S.length - 1].t, tg = r.target || 100;
-    if (r.rt === undefined || latest - r.rt > tg + 1500 || latest - r.rt < -2500) r.rt = latest - tg;
-    r.rt += dt * 1000 * (1 + clamp((latest - r.rt - tg) / 400, -.35, .35));
-    const t = r.rt;
-    let a = S[0], b = S[S.length - 1];
-    for (let i = 0; i < S.length - 1; i++) if (S[i].t <= t && S[i + 1].t >= t) { a = S[i]; b = S[i + 1]; break; }
-        if (t > b.t && S.length > 1) a = S[S.length - 2];
-    // past the newest state they keep going but ease to a stop (no hard freeze, no sudden halt) when someone's connection stalls
-    const span = Math.max(20, b.t - a.t), over = t - b.t;
-    const k = b.t > a.t ? (over > 0 ? 1 + 150 * (1 - Math.exp(-over / 150)) / span : clamp((t - a.t) / span, 0, 1)) : 1, p = r.root.position;
-    let nx = lerp(a.x, b.x, k), ny = lerp(a.y, b.y, k), nz = lerp(a.z, b.z, k);
-    // when late data corrects where they really are, glide there over ~0.15 s instead of popping (respawns/teleports still snap)
-    const C = r.corr || (r.corr = new THREE.Vector3());
-    // (a jump = this frame's step minus the step the current segment predicts, so fast but continuous moves like sprints and
-    // dashes never count, while a 0.1 m re-pick after a late packet is glided instead of popping)
-    if (r.lastN && p.distanceTo(_v1.set(nx, ny, nz)) < 6) { const f = b.t > a.t && r.prt !== undefined ? (t - r.prt) / span : 0;
-      const jx = nx - r.lastN.x - (b.x - a.x) * f, jy = ny - r.lastN.y - (b.y - a.y) * f, jz = nz - r.lastN.z - (b.z - a.z) * f, lim = 4 * dt + .03;
-      if (jx * jx + jy * jy + jz * jz > lim * lim) C.set(p.x - nx, p.y - ny, p.z - nz); } else C.set(0, 0, 0);
-    r.prt = t;
-    (r.lastN || (r.lastN = new THREE.Vector3())).set(nx, ny, nz);
-    { const L = C.length(); if (L < .002) C.set(0, 0, 0); else C.multiplyScalar(Math.max(0, L - Math.min(L * (1 - Math.exp(-dt * 8)), 6.5 * dt) - .001) / L); }
-    nx += C.x; ny += C.y; nz += C.z;
-    const vx = (nx - p.x) / Math.max(dt, 1e-3), vz = (nz - p.z) / Math.max(dt, 1e-3);
+  // playback (NETPLAY, npStep above): a steady clock behind the newest state, real elapsed time (the frame's rdt is capped at
+  // 50 ms, a hitch must not slow the clock), extrapolation with gravity for at most 150 ms, glided corrections
+  const nowR = performance.now(), rdt = r.npT === undefined ? dt : Math.min(1, Math.max(0, (nowR - r.npT) / 1000)); r.npT = nowR;
+  if (!NP.ground) NP.ground = (x, z, y) => groundAt(x, z, y + .6, .3);
+  if (npStep(r, rdt)) {
+    const o = r.np, p = r.root.position;
+    mapMods(o.x, o.z, _mmB); r.npGrav = _mmB.g;   // (low-gravity zones: the continued arc falls slower there)
+    const vx = (o.x - p.x) / Math.max(rdt, 1e-3), vz = (o.z - p.z) / Math.max(rdt, 1e-3);
     r.vel.x = damp(r.vel.x, vx, 12, dt); r.vel.z = damp(r.vel.z, vz, 12, dt);
-    p.set(nx, ny, nz); stepEase(r, p, dt);
-    r.aimYaw = a.yaw + wrapPi(b.yaw - a.yaw) * k; r.aimPitch = lerp(a.pitch, b.pitch, k);
+    p.set(o.x, o.y, o.z); r.netGround = o.g; stepEase(r, p, dt);   // (grounded as the DRAWN moment was, not as the newest packet says)
+    r.aimYaw = o.yaw; r.aimPitch = o.pitch;
   }
   if (r.dead) { fallDead(r.root.position, r, dt); if (r.preQ) [r.B.hips, r.B.spine, r.B.spine1, r.B.spine2, r.B.neck].forEach((b, i) => b && b.quaternion.copy(r.preQ[i])); r.preQ = null; if (r.dq) { for (const [b, q] of r.dq) b.quaternion.copy(q); r.dq = null; } r.deadT += dt; r.mixer.update(dt); r.gun.visible = false; if (!updateDeathFx(r, dt)) derez(r); return; }
   r.crouch = damp(r.crouch, r.netCrouch || 0, 12, dt); r.onGround = r.netGround !== false; r.targetVis = true; r.lastSeenT = G.time; r.mode = 'fight';
@@ -5838,7 +6038,9 @@ function startOnlineMatch() {
   NET.hits = []; NET.killW = 0; NET.killH = false;
   $('feed').innerHTML = ''; $('kfeed').innerHTML = ''; updateHud(true);
   banner('FREE FOR ALL', `${(NET.room && NET.room.meta && NET.room.meta.name) || 'Online'} · first to ${KILL_LIMIT}`);
-  onNetPeers(); prewarmView();
+  onNetPeers();
+  if (perf.warmQ !== CFG.q || perf.warmMap !== CUR_MAP) { warmShaders(); perf.warmQ = CFG.q; perf.warmMap = CUR_MAP; }   // every gun / body / effect shader built now, behind the start banner, never in play
+  prewarmView();
 }
 
 /* ================= knife: plasma-edged combat blade (key 3) ================= */
@@ -7013,8 +7215,10 @@ function simPresent(dt, rdt) {
 // in simRestore (hit tests / AI never see it); a remote player's drawn spot is re-made from its states every frame anyway.
 function stepEase(r, q, dt) {   // -> true when the drawn height was changed
   const y = q.y, s = r._sy;
-  if (s === undefined || r.dead || y <= s || y - s > .7 || r.onGround === false || Math.abs(q.x - r._sx) + Math.abs(q.z - r._sz) > 2) { r._sy = y; r._sx = q.x; r._sz = q.z; return false; }
-  if (dt > 0) r._sy = Math.min(y, s + Math.max((y - s) * (1 - Math.exp(-dt * 22)), 1.2 * dt));
+  const easing = s !== undefined && s < y - 1e-4;   // (a rise still being smoothed)
+  if (s === undefined || r.dead || y <= s || y - s > .7 || (r.onGround === false && !easing) || Math.abs(q.x - r._sx) + Math.abs(q.z - r._sz) > 2) { r._sy = y; r._sx = q.x; r._sz = q.z; return false; }
+  // a jump right after a step: the rest of the step is finished fast (~30 ms) instead of being snapped (a 0.3 m one-frame hop)
+  if (dt > 0) r._sy = Math.min(y, s + Math.max((y - s) * (1 - Math.exp(-dt * (r.onGround === false ? 70 : 22))), 1.2 * dt));
   r._sx = q.x; r._sz = q.z; if (r._sy >= y - 1e-4) { r._sy = y; return false; }
   q.y = r._sy; return true;
 }
@@ -7146,7 +7350,8 @@ function frame(now) {
   if (window.MODE_preRender) MODE_preRender(rdt);   // game modes: plant/defuse input, beeps, HUD, spectating
   const replaying = state === 'dead' && REC.on && P.dieT > DC.T && applyReplay();
   const kicked = viewKick(rdt);   // render-only camera offsets (hit flinch): never moves the aim
-  composer.render(rdt);
+  if (!GL.lost) composer.render(rdt);   // (context lost: the game keeps simulating; drawing resumes when the browser restores it)
+  else if (!GL.hinted && now - GL.lostAt > 10000) { GL.hinted = true; banner('GRAPHICS DEVICE LOST', 'Press F5 to reload the game'); }
   if (kicked) { camera.rotation.x -= kicked[0]; camera.rotation.z -= kicked[1]; camera.updateMatrixWorld(); }
   if (replaying) restoreReplay();
   simRestore();
@@ -7187,7 +7392,7 @@ async function boot() {
   $('loading').remove();
   requestAnimationFrame(t => { last = t; frame(t); });
   window.__snd = { GUN_VOICE, gsBuild, hitSample };
-  window.__s9 = { HUDFPS, SIM, FEEL, get world() { return world; }, menuScene, get scene() { return scene; }, get SPAWNS() { return SPAWNS; }, cellOf, cellX, cellZ, nearestOk, groundAt, PF, sfx, MKIT, MKMETA, MKLOG, MOVE, get WEAPONS() { return WEAPONS; }, get BOTW() { return BOTW; }, get MAPS() { return MAPS; }, SLOTS, get CAMPS() { return CAMPS; }, get HALF() { return HALF; }, gunCam, P, G, robots, hurtPlayer, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS, AU, initAudio, loadMap, MAPS, REC, GUN_IDS, get CUR_MAP() { return CUR_MAP; }, get SPAWNS() { return SPAWNS; }, get MAPFX() { return MAPFX; }, get MAPROOT() { return MAPROOT; }, killBot(r, crit) { damageBot(r, 999, !!crit, r.root.position.clone().setY(r.root.position.y + 1.2), new THREE.Vector3(0, 0, 1), 'body', PLAYER_ENT, P.weapon); }, DROPS, pickNearDrop, BOOM, RBOOMS, NET, openRoom, leaveOnline, boomRoute, lineOfSight, explode, damageEntity, scene, world };
+  window.__s9 = { GL, previewGL, previewGLRelease, glGuard, HUDFPS, SIM, FEEL, get world() { return world; }, menuScene, get scene() { return scene; }, get SPAWNS() { return SPAWNS; }, cellOf, cellX, cellZ, nearestOk, groundAt, PF, sfx, MKIT, MKMETA, MKLOG, MOVE, get WEAPONS() { return WEAPONS; }, get BOTW() { return BOTW; }, get MAPS() { return MAPS; }, SLOTS, get CAMPS() { return CAMPS; }, get HALF() { return HALF; }, gunCam, P, G, robots, hurtPlayer, get state() { return state; }, fire, THREE, setAds(v) { adsHeld = v; }, perf, renderer, startMatch, PLAYER_ENT, NAV, findPath, camera, get gun() { return gun; }, gunScene, WM, get hip() { return HIP_POS; }, keys, NET, get mouseDown() { return mouseDown; }, NADES, PLAYER_ENT, LOADOUT, applyLoadout, WEAPONS, AU, initAudio, loadMap, MAPS, REC, GUN_IDS, get CUR_MAP() { return CUR_MAP; }, get SPAWNS() { return SPAWNS; }, get MAPFX() { return MAPFX; }, get MAPROOT() { return MAPROOT; }, killBot(r, crit) { damageBot(r, 999, !!crit, r.root.position.clone().setY(r.root.position.y + 1.2), new THREE.Vector3(0, 0, 1), 'body', PLAYER_ENT, P.weapon); }, DROPS, pickNearDrop, BOOM, RBOOMS, NET, openRoom, leaveOnline, boomRoute, lineOfSight, explode, damageEntity, scene, world, occlude, OCC, losHit, get NAV() { return NAV; }, cellOf, findPath };
 }
 requestAnimationFrame(() => setTimeout(boot, 30));
 </script>

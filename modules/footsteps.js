@@ -3,8 +3,10 @@
      so finding what is under someone's feet at runtime is one array lookup (no rays, no allocations).
    - Each surface has its own sound (heel + toe roll, separate jump landings), 4 step + 3 landing variations,
      rendered once from the recipes in data/surfaces.json into small audio buffers.
-   - Replaces sfx.step (you) and sfx.foeStep (bots + online players, 3D HRTF, same distance rules) and adds
+   - Replaces sfx.step (you) and sfx.foeStep (bots + online players, 3D HRTF from a FRESH panner per step, see chains()) and adds
      steps to the killcam replay. Persistent voice chains + the old per-half-second budget: no cut-outs.
+   - Enemy-step mix (data/surfaces.json mix): louder than your own, presence EQ, soft falloff + air high-cut, little reverb,
+     ambience/own-step ducking, wall occlusion. One system, no switch.
    Works as a plain add-on (wraps window.__s9.sfx); the same file runs in Node to render the WAV files. */
 (function () {
   'use strict';
@@ -60,11 +62,35 @@
       strike(out, sr, rec, 0, 1, R, { tauK: 1, fK: 1, thumpK: 1 });
       strike(out, sr, rec, Math.round((rec.roll + (R() * 2 - 1) * .008) * sr), rec.toe, R, { tauK: .85, fK: 1.08, thumpK: .35 });
     }
-    // loudness: same RMS for every surface over the first 120 ms (so the recipe 'gain' is the only difference), peak-limited, faded out
-    let e = 0; const m = Math.min(N, Math.round(.12 * sr)); for (let i = 0; i < m; i++) e += out[i] * out[i];
-    let k = (cfg.targetRms || .16) / Math.max(1e-6, Math.sqrt(e / m)), pk = 0; for (let i = 0; i < N; i++) pk = Math.max(pk, Math.abs(out[i] * k)); if (pk > .97) k *= .97 / pk;
+    // loudness: the same AUDIBLE level for every surface = equal RMS above cfg.bandHz (400 Hz) over the first cfg.window s (150 ms, about the ear's loudness integration time). (A broadband
+    // RMS let the boom-heavy surfaces, carpet / dirt / rubber / concrete, come out 6-13 dB quieter than metal or water once the enemy
+    // EQ took their low end away.) When the boom alone would push the peak over the ceiling, a low shelf trims it, 1 dB at a time,
+    // until the sound fits: the part you hear keeps its level, only the thump gets lighter. Then faded out.
+    const m = Math.min(N, Math.round((cfg.window || .15) * sr)), band = cfg.bandHz || 400, target = cfg.targetBand || .066, ceil = cfg.peak || .97, tmp = new Float32Array(N);
+    // measured the way an enemy step reaches the ear: the enemy EQ (high-pass, low shelf, presence peak, walk low-pass: cfg.ear) and a
+    // 7 kHz roll-off (what a front HRTF keeps), then only the band above bandHz (12 dB/oct)
+    const EAR = cfg.ear || { hp: 170, shelfHz: 260, shelfDb: -4, pkHz: 3400, pkDb: 5, pkQ: .9, lp: 11000, roll: 7000 };
+    const run = c => { let x1 = 0, x2 = 0, y1 = 0, y2 = 0; for (let i = 0; i < N; i++) { const x = tmp[i], y = c[0] * x + c[1] * x1 + c[2] * x2 - c[3] * y1 - c[4] * y2; x2 = x1; x1 = x; y2 = y1; y1 = y; tmp[i] = y; } };
+    const bandRms = () => { tmp.set(out); run(biquad('hp', EAR.hp, .7, sr)); lowShelf(tmp, sr, EAR.shelfHz, EAR.shelfDb); peaking(tmp, sr, EAR.pkHz, EAR.pkDb, EAR.pkQ); run(biquad('lp', EAR.lp, .5, sr)); run(biquad('lp', EAR.roll, .707, sr));
+      run(biquad('hp', band, .707, sr)); let e = 0; for (let i = 0; i < m; i++) e += tmp[i] * tmp[i]; return Math.sqrt(e / m); };
+    const peak = () => { let pk = 0; for (let i = 0; i < N; i++) pk = Math.max(pk, Math.abs(out[i])); return pk; };
+    let cut = 0, k = target / Math.max(1e-6, bandRms());
+    while (peak() * k > ceil && cut < (cfg.maxShelfCut || 15)) { lowShelf(out, sr, band * .7, -1); cut += 1; k = target / Math.max(1e-6, bandRms()); }
+    if (peak() * k > ceil) k = ceil / peak();
+    renderSound.lastCut = cut;
     const fade = Math.round(.03 * sr); for (let i = 0; i < N; i++) out[i] *= k * (i > N - fade ? (N - i) / fade : 1);
     return out;
+  }
+  // RBJ peaking EQ (gain dB around f, width Q), run in place
+  function peaking(x, sr, f, dB, Q) {
+    const A = Math.pow(10, dB / 40), w = 2 * Math.PI * f / sr, cs = Math.cos(w), al = Math.sin(w) / (2 * Q), a0 = 1 + al / A, b0 = (1 + al * A) / a0, b1 = -2 * cs / a0, b2 = (1 - al * A) / a0, a1 = -2 * cs / a0, a2 = (1 - al / A) / a0;
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0; for (let i = 0; i < x.length; i++) { const v = x[i], y = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = v; y2 = y1; y1 = y; x[i] = y; }
+  }
+  // RBJ low shelf (gain dB below f), run in place
+  function lowShelf(x, sr, f, dB) {
+    const A = Math.pow(10, dB / 40), w = 2 * Math.PI * f / sr, cs = Math.cos(w), al = Math.sin(w) / 2 * Math.SQRT2, sa = 2 * Math.sqrt(A) * al;
+    const a0 = (A + 1) + (A - 1) * cs + sa, b0 = A * ((A + 1) - (A - 1) * cs + sa) / a0, b1 = 2 * A * ((A - 1) - (A + 1) * cs) / a0, b2 = A * ((A + 1) - (A - 1) * cs - sa) / a0, a1 = -2 * ((A - 1) + (A + 1) * cs) / a0, a2 = ((A + 1) + (A - 1) * cs - sa) / a0;
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0; for (let i = 0; i < x.length; i++) { const v = x[i], y = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = v; y2 = y1; y1 = y; x[i] = y; }
   }
   const SYNTH = { rng, hash, renderSound };
   if (typeof window === 'undefined') { if (typeof module !== 'undefined') module.exports = SYNTH; return; }
@@ -252,44 +278,50 @@
   function toBuf(ctx, data, sr) { const b = ctx.createBuffer(1, data.length, sr); b.copyToChannel ? b.copyToChannel(data, 0) : b.getChannelData(0).set(data); return b; }
   function warm(ctx) { if (!warmQ) warmQ = NAMES.slice(); const t = performance.now(); while (warmQ.length && performance.now() - t < 4) { const n = warmQ.shift(); try { bufferSet(ctx, n); } catch (e) { FS.errors++; FS.lastError = String(e); } } }
 
-  /* ---------- enemy footstep CLARITY mix (Cryzen / CS2 / Valorant conventions), OFF by default until the owner picks it ----------
-     data/surfaces.json mix.clarity (same numbers as the listening page tools/review/steps/clarity.json): enemy steps louder than
-     yours, a high-pass + low-shelf (no boom) and a presence peak (the heel click your ear places), softer distance falloff + a
-     distance high-cut (far sounds far, still audible), little reverb on close steps, ambience + your steps duck briefly when an
-     enemy steps near, occluded steps muffled but readable. on = mix.clarity.on, or localStorage 's9-steps-clarity' '1'/'0' (A/B). */
-  const CLD = { on: false, foe: { gain: 1.3, hp: 170, lowShelfHz: 260, lowShelfDb: -4, presenceHz: 3400, presenceDb: 5, presenceQ: .9 }, player: { gain: .6 }, panner: { ref: 4, rolloff: .85 },
-    air: { near: 8, far: 40, lpNear: 16000, lpFar: 4500 }, verb: { near: .04, far: .12, farAt: 30 }, duck: { range: 22, ambDb: -6, meDb: -5, attack: .02, release: .4 }, occlusion: { lp: 3000, db: -3 } };
-  const CLX = () => (D && D.mix && D.mix.clarity) || CLD;
-  function clarityOn() { let o = null; try { o = localStorage.getItem('s9-steps-clarity'); } catch (e) {} return o === '1' ? true : o === '0' ? false : CLX().on === true; }
-  FS.clarityOn = clarityOn; FS.clarityDefaults = CLD;
-  FS.setClarity = v => { try { if (v === null) localStorage.removeItem('s9-steps-clarity'); else localStorage.setItem('s9-steps-clarity', v ? '1' : '0'); } catch (e) {} FS.dropChains(); return clarityOn(); };
+  /* ---------- the enemy footstep mix (one system; CS2 / Valorant conventions) ----------
+     data/surfaces.json mix: enemy steps louder than yours, a high-pass + low-shelf (no boom) and a presence peak (the heel click
+     your ear places), soft distance falloff + a distance high-cut (far sounds far, still audible), little reverb on close steps,
+     ambience + your steps duck briefly when an enemy steps near, occluded steps muffled but readable. */
   const dBg = x => Math.pow(10, x / 20), clamp01 = x => Math.max(0, Math.min(1, x));
 
-  /* ---------- voice chains: created once, reused (only a buffer source per step is new) ---------- */
+  /* ---------- voice chains: created once, reused (per step: a buffer source, and for an enemy a fresh HRTF panner) ----------
+     Why a fresh PannerNode per enemy step: Chromium's HRTF panner cross-fades from its OLD direction to a new one over ~45 ms
+     (2048 frames), and that fade only advances while the node is processing sound. A reused panner therefore plays the ONSET
+     of every step (the 10-20 ms the ear localises) from where the previous step on that chain was, i.e. from another enemy or
+     from where this one stood ten steps ago. Measured: qa/gate.d/footsteps_dir.js (a right-side step read 0 dB / left-ear-first
+     through a reused panner, -12 dB / right-ear-first through a fresh one). Equalpower panning does not have the problem. */
   let CH = null, baseDry = null;
   FS.dropChains = () => { if (!CH) return; try { CH.meOut.disconnect(); CH.foeOut.disconnect(); } catch (e) {} CH = null; };
   function chains(AU) {
-    const cl = clarityOn();
-    if (CH && CH.ctx === AU.ctx && CH.cl === cl) return CH;
-    if (CH && CH.ctx === AU.ctx) FS.dropChains();
+    if (CH && CH.ctx === AU.ctx) return CH;
+    if (CH) FS.dropChains();
     // your steps go to the game's step bus; enemy steps to whatever bus the game routes enemy steps to (the settings
     // add-on swaps AU.dry for its "enemy footsteps boost" bus during sfx.foeStep). Chains are made from the frame loop,
     // never inside a wrapped call, so 'base' is the real step bus.
-    const c = AU.ctx, mx = D.mix, fp = mx.foePanner, base = baseDry || AU.dry, meOut = c.createGain(), foeOut = c.createGain(); meOut.connect(base); foeOut.connect(base);
-    CH = { ctx: c, me: [], foe: [], next: 0, nextF: 0, base, meOut, foeOut, foeDest: base, cl };
-    const X = CLX();
-    const mk = (pos) => { const g = c.createGain(), lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 12000; lp.Q.value = .5; let pan = null, head = g;
-      if (pos && cl) {   // clarity: g -> high-pass -> low-shelf -> presence peak -> low-pass (distance / occlusion) -> HRTF
-        const hp = c.createBiquadFilter(), ls = c.createBiquadFilter(), pk = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = X.foe.hp; hp.Q.value = .7;
-        ls.type = 'lowshelf'; ls.frequency.value = X.foe.lowShelfHz; ls.gain.value = X.foe.lowShelfDb; pk.type = 'peaking'; pk.frequency.value = X.foe.presenceHz; pk.gain.value = X.foe.presenceDb; pk.Q.value = X.foe.presenceQ;
+    const c = AU.ctx, mx = D.mix, base = baseDry || AU.dry, meOut = c.createGain(), foeOut = c.createGain(); meOut.connect(base); foeOut.connect(base);
+    CH = { ctx: c, me: [], foe: [], next: 0, nextF: 0, base, meOut, foeOut, foeDest: base };
+    // one HRTF panner made now so the browser loads its HRTF data in the menu, not on the first enemy step of the match
+    try { const warmPan = c.createPanner(); warmPan.panningModel = mx.foePanner.model || 'HRTF'; CH.warmPan = warmPan; } catch (e) {}
+    const mk = (foe) => { const g = c.createGain(), lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 12000; lp.Q.value = .5; let head = g;
+      if (foe) {   // enemy: g -> high-pass -> low-shelf -> presence peak -> low-pass (distance / occlusion) -> [per-step HRTF panner]
+        const F = mx.foe, hp = c.createBiquadFilter(), ls = c.createBiquadFilter(), pk = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = F.hp; hp.Q.value = .7;
+        ls.type = 'lowshelf'; ls.frequency.value = F.lowShelfHz; ls.gain.value = F.lowShelfDb; pk.type = 'peaking'; pk.frequency.value = F.presenceHz; pk.gain.value = F.presenceDb; pk.Q.value = F.presenceQ;
         g.connect(hp); hp.connect(ls); ls.connect(pk); head = pk; }
-      head.connect(lp); let out = lp;
-      if (pos) { pan = c.createPanner(); pan.panningModel = fp.model || 'HRTF'; pan.distanceModel = fp.distance || 'inverse'; pan.refDistance = cl ? X.panner.ref : fp.ref; pan.rolloffFactor = cl ? X.panner.rolloff : fp.rolloff; pan.maxDistance = fp.max; lp.connect(pan); out = pan; }
-      out.connect(pos ? foeOut : meOut); const vs = c.createGain(); vs.gain.value = pos ? fp.verb : mx.playerVerb; out.connect(vs); if (AU.verb) vs.connect(AU.verb);
-      return { g, lp, pan, vs, busy: 0 }; };
+      head.connect(lp);
+      const vs = c.createGain(); vs.gain.value = foe ? mx.verb.near : mx.player.verb; if (AU.verb) vs.connect(AU.verb);
+      if (!foe) { lp.connect(meOut); lp.connect(vs); }
+      return { g, lp, pan: null, vs, busy: 0 }; };
     for (let i = 0; i < 4; i++) CH.me.push(mk(false));
     for (let i = 0; i < 10; i++) CH.foe.push(mk(true));
     return CH;
+  }
+  // a fresh panner for this enemy step, placed at the enemy's feet; the previous step on this chain has finished (the chain was free)
+  function freshPanner(C, ch, pos) {
+    const c = C.ctx, fp = D.mix.foePanner, pan = c.createPanner();
+    pan.panningModel = fp.model || 'HRTF'; pan.distanceModel = fp.distance || 'inverse'; pan.refDistance = fp.ref; pan.rolloffFactor = fp.rolloff; pan.maxDistance = fp.max;
+    if (pan.positionX) { pan.positionX.value = pos.x; pan.positionY.value = pos.y; pan.positionZ.value = pos.z; } else pan.setPosition(pos.x, pos.y, pos.z);
+    if (ch.pan) { try { ch.lp.disconnect(ch.pan); ch.pan.disconnect(); } catch (e) {} }
+    ch.lp.connect(pan); pan.connect(C.foeOut); pan.connect(ch.vs); ch.pan = pan; return pan;
   }
   const budget = { t: 0, n: 0 };
   function pickChain(list, now, start) { for (let k = 0; k < list.length; k++) { const ch = list[(start + k) % list.length]; if (ch.busy <= now) return ch; } return null; }
@@ -302,7 +334,7 @@
     // its offline graph, without touching the live voice chains
     if ((CH && c !== CH.ctx) || (typeof OfflineAudioContext !== 'undefined' && c instanceof OfflineAudioContext)) {
       const set = bufferSet(c, NAMES[sid] || 'concrete'), m = mx[who === 'foe' ? 'foe' : 'player'], b = (mode === 'land' ? set.land : set.step)[0];
-      const g = c.createGain(); g.gain.value = (mode === 'land' ? m.land : mode === 'sprint' ? m.sprint : m.walk) * (mode === 'crouch' ? m.crouch : 1) * set.gain;
+      const g = c.createGain(); g.gain.value = (mode === 'land' ? m.land : mode === 'sprint' ? m.sprint : m.walk) * (mode === 'crouch' ? m.crouch : 1) * set.gain * m.gain;
       const sn = c.createBufferSource(); sn.buffer = b; sn.playbackRate.value = mx.rate[mode] || 1; sn.connect(g); g.connect(AU.dry); sn.start(0); return true; }
     if (who === 'foe') {
       if (s9.camera.position.distanceTo(pos) > mx.foePanner.maxDistance) { FS.stats.skipped++; return false; }
@@ -317,32 +349,36 @@
     const L = who === 'foe' ? C.foe : C.me, ch = pickChain(L, now, who === 'foe' ? C.nextF : C.next); if (!ch) { FS.stats.skipped++; return false; }
     if (who === 'foe') { C.nextF = (L.indexOf(ch) + 1) % L.length; } else C.next = (L.indexOf(ch) + 1) % L.length;
     const m = mx[who === 'foe' ? 'foe' : 'player'], crouch = mode === 'crouch', base = land ? m.land : mode === 'sprint' ? m.sprint : m.walk;
-    const vol = base * (crouch ? m.crouch : 1) * set.gain * (mx.calibration || 1) * R01(mx.random.vol[0], mx.random.vol[1]), rate = (mx.rate[mode] || 1) * R01(mx.random.rate[0], mx.random.rate[1]);
+    const vol = base * (crouch ? m.crouch : 1) * set.gain * m.gain * (mx.calibration || 1) * R01(mx.random.vol[0], mx.random.vol[1]), rate = (mx.rate[mode] || 1) * R01(mx.random.rate[0], mx.random.rate[1]);
     const buf = list[v], s = c.createBufferSource(); s.buffer = buf; s.playbackRate.value = rate; s.connect(ch.g);
     let gv = vol, lpf = mx.lp[mode] || 12000;
-    if (C.cl) { const X = CLX();
-      if (who === 'foe') { const cam = s9.camera.position, dist = cam.distanceTo(pos);
-        let occl = false; if (!FS.clarityTest || FS.clarityTest.occl !== false) try { const los = s9.lineOfSight || (typeof lineOfSight === 'function' ? lineOfSight : null); if (los && dist > 1.5) { _ce.x = pos.x; _ce.y = pos.y + .35; _ce.z = pos.z; occl = !los(cam, _ce); } } catch (e) {}
-        gv *= X.foe.gain * (occl ? dBg(X.occlusion.db) : 1);
-        lpf = Math.min(lpf * 1.6, Math.exp(Math.log(X.air.lpNear) + (Math.log(X.air.lpFar) - Math.log(X.air.lpNear)) * clamp01((dist - X.air.near) / (X.air.far - X.air.near)))); if (occl) lpf = Math.min(lpf, X.occlusion.lp);
-        ch.vs.gain.setValueAtTime(X.verb.near + (X.verb.far - X.verb.near) * clamp01(dist / X.verb.farAt), now);
-        if (dist < X.duck.range && !(FS.clarityTest && FS.clarityTest.duck === false)) duck(C, X, now); FS.lastFoe = { dist, occl, gain: gv, lp: lpf };
-      } else gv *= X.player.gain; }
+    if (who === 'foe') {
+      const cam = s9.camera.position, dist = cam.distanceTo(pos), X = mx;
+      // air: the high end goes first with distance (so far sounds far), the step stays audible to the panner's maxDistance
+      lpf = Math.min(lpf * 1.6, Math.exp(Math.log(X.air.lpNear) + (Math.log(X.air.lpFar) - Math.log(X.air.lpNear)) * clamp01((dist - X.air.near) / (X.air.far - X.air.near))));
+      // behind a wall / floor / corner: the game's occlusion (index.html occlude(): material + thickness, played from the opening it comes
+      // round); without it (older core) the old line-of-sight muffle. The panner is after the filter, so the direction stays.
+      let occl = false, via = null; if (!FS.clarityTest || FS.clarityTest.occl !== false) try {
+        if (s9.occlude) { const o = s9.occlude(pos, _oc, true); if (o.dB < 0) { occl = o.kind; gv *= dBg(o.dB); lpf = Math.min(lpf, o.lp); via = o.via; } }
+        else { const los = s9.lineOfSight || (typeof lineOfSight === 'function' ? lineOfSight : null); if (los && dist > 1.5) { _ce.x = pos.x; _ce.y = pos.y + .35; _ce.z = pos.z; occl = !los(cam, _ce); } if (occl) { gv *= dBg(X.occlusion.db); lpf = Math.min(lpf, X.occlusion.lp); } } } catch (e) {}
+      ch.vs.gain.setValueAtTime(X.verb.near + (X.verb.far - X.verb.near) * clamp01(dist / X.verb.farAt), now);
+      if (dist < X.duck.range && !(FS.clarityTest && FS.clarityTest.duck === false)) duck(C, X, now);
+      freshPanner(C, ch, via || pos); FS.lastFoe = { dist, occl, gain: gv, lp: lpf, via: via ? [via.x, via.y, via.z] : null };
+    }
     ch.g.gain.setValueAtTime(gv, now); ch.lp.frequency.setValueAtTime(lpf, now);
-    if (ch.pan) { if (ch.pan.positionX) { ch.pan.positionX.setValueAtTime(pos.x, now); ch.pan.positionY.setValueAtTime(pos.y, now); ch.pan.positionZ.setValueAtTime(pos.z, now); } else ch.pan.setPosition(pos.x, pos.y, pos.z); }
     s.start(now); ch.busy = now + buf.duration / rate + .03; AU.count = (AU.count || 0) + 1; FS.stats.plays++;
     FS.counts[name] = (FS.counts[name] || 0) + 1;
     if (FS.logOn) { const q = pos || at; FS.log.push({ who, mode, surface: name, x: q ? q.x : null, y: q ? q.y : null, z: q ? q.z : null, vol, rate, tag: tag || '', t: now, gt: ((S9() || {}).G || {}).time }); if (FS.log.length > 2000) FS.log.splice(0, 500); }
     return true;
   }
-  // clarity: an enemy step near you dips the ambience (wind / hum bus of the settings add-on) and your own steps for a moment
-  const _ce = { x: 0, y: 0, z: 0 };
+  // an enemy step near you dips the ambience (wind / hum bus of the settings add-on) and your own steps for a moment
+  const _ce = { x: 0, y: 0, z: 0 }, _oc = {};
   function duck(C, X, now) {
     const a = X.duck.attack / 3, r = X.duck.release / 3, B = window.S9Settings && S9Settings.bus && S9Settings.bus(), amb = B && B.amb, base = B && B.ambLevel;
     if (amb && base > 0) { amb.gain.cancelScheduledValues(now); amb.gain.setTargetAtTime(base * dBg(X.duck.ambDb), now, a); amb.gain.setTargetAtTime(base, now + .08, r); }
     C.meOut.gain.cancelScheduledValues(now); C.meOut.gain.setTargetAtTime(dBg(X.duck.meDb), now, a); C.meOut.gain.setTargetAtTime(1, now + .08, r); FS.ducks = (FS.ducks || 0) + 1;
   }
-  FS.play = play; FS.route = () => CH ? { foeOnOwnBus: CH.foeDest !== CH.base, clarity: !!CH.cl } : null;
+  FS.play = play; FS.route = () => CH ? { foeOnOwnBus: CH.foeDest !== CH.base } : null;
   // for other add-ons with their own audio bus (killcam v2 replay): the right footstep buffer for a spot, no playback
   FS.bufferAt = (x, y, z, mode) => { const AU = (S9() || {}).AU; if (!AU || !AU.ctx || !D) return null; const set = bufferSet(AU.ctx, NAMES[surfaceAt(x, y, z)] || 'concrete'), L = mode === 'land' ? set.land : set.step; return L[Math.floor(Math.random() * L.length)]; }; FS.warmed = () => !!warmQ && !warmQ.length;
 
