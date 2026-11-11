@@ -235,7 +235,11 @@
   function slotDrop() { if (!iCarry() || state !== 'play' || MX.holdAct) return false; send({ k: 'drop' }); return true; }
   window.MODE.slot = { equip: slotEquip, drop: slotDrop, carrying: iCarry, out: () => BS.out };
   // switching to any gun puts the charge away
-  { const _sw = switchWeapon; switchWeapon = function (name) { if (BS.out) { BS.out = false; P.switchT = .35; const w = $('hWeapon'); if (w) w.textContent = WEAPONS[P.weapon].label; try { sfx.equip(); } catch (e) {} } return _sw.apply(this, arguments); }; }
+  { const _sw = switchWeapon; switchWeapon = function (name) { if (BS.out) { BS.out = false; P.switchT = .35; const w = $('hWeapon'); if (w) w.textContent = WEAPONS[P.weapon].label; try { sfx.equip(); } catch (e) {}
+      // charge -> a bolt gun (4 then 1 / 2 / Q / wheel) is a weapon switch like any other: the bolt is cancelled, the gun's own draw is the
+      // wait, and the draw counter moves (the server's bolt-gap rule allows the quick-switch shot) - owner 2026-11-11: every switch method
+      const W0 = WEAPONS[P.weapon]; if (W0 && W0.bolt) { P.boltT = 0; P.boltN = (P.boltN || 0) + 1; P.fireCd = 0; P.switchT = W0.draw || .35; P.switchDur = P.switchT; P.switchAt = G.time; if (typeof NET !== 'undefined' && NET.seq) NET.seq.draw = (NET.seq.draw | 0) + 1; } }
+    return _sw.apply(this, arguments); }; }
   { const _f = fire; fire = function () { if (BS.out) return; return _f.apply(this, arguments); }; }
   { const _r = startReload; startReload = function () { if (BS.out) return; return _r.apply(this, arguments); }; }
   { const _k = knifeAttack; knifeAttack = function () { if (BS.out) return; return _k.apply(this, arguments); }; }

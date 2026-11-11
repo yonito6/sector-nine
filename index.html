@@ -1495,9 +1495,13 @@ const MKLOG = {};   // every placement per map, exported to data/maps/<id>.json 
 // real shape of the piece inside it (a railing, a lamp post, a tank) and only stops where it touches that shape.
 // Boxes that are completely filled by their piece (walls, blocks) skip the check.
 const MKFILL = {}, _mkHits = [];
+// kit materials the player sees through on the CURRENT map (transparent, opacity < .6: the arena's energy shields, lab glass): a bullet passes
+// them like the eye does (what you see is what you hit; owner 2026-11-11: shots through see-through things must land). Opaque glass (orbital .88) blocks.
+// mkBuild fills it per map; the precise-shape caches below are keyed by it (one piece type can be glassy on one map and solid on another).
+let MK_SEE_THROUGH = new Set(), MK_ST_KEY = '';
 const MK_HITMAT = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
 function mkBoxFilled(name, i) {
-  const k = name + ':' + i; if (k in MKFILL) return MKFILL[k];
+  const k = name + ':' + i + MK_ST_KEY; if (k in MKFILL) return MKFILL[k];
   const T = mkBoxGeo(name, i), bx = MKMETA[name] && MKMETA[name].b[i]; if (!T || !bx) return (MKFILL[k] = !bx);
   const mn = new THREE.Vector3(bx[0], bx[1], bx[2]), mx = new THREE.Vector3(bx[3], bx[4], bx[5]), sz = mx.clone().sub(mn), R = new THREE.Ray(), o = new THREE.Vector3(), d = new THREE.Vector3();
   for (let ax = 0; ax < 3; ax++) { const a1 = (ax + 1) % 3, a2 = (ax + 2) % 3;
@@ -1507,15 +1511,21 @@ function mkBoxFilled(name, i) {
         o.copy(mn); o.setComponent(a1, mn.getComponent(a1) + sz.getComponent(a1) * u); o.setComponent(a2, mn.getComponent(a2) + sz.getComponent(a2) * w); o.setComponent(ax, sd < 0 ? mn.getComponent(ax) - .02 : mx.getComponent(ax) + .02);
         d.set(0, 0, 0).setComponent(ax, -sd); R.set(o, d);
         if (!bvhHit(T, R, 0, .1)) return (MKFILL[k] = false); } } }   // only a box the piece fills face to face skips the precise check
+  // ... and is solid inside: a cage / frame whose bars happen to cover every face probe (the orbital reactor) is hollow: rays from random
+  // points inside must all meet the shape before leaving the box (a solid block: always its far wall; a hollow frame: they escape through gaps)
+  { let rs = 7; const rnd = () => (rs = (rs * 16807) % 2147483647) / 2147483647, far = sz.length() + .1;
+    for (let n = 0; n < 48; n++) { o.set(mn.x + sz.x * (.1 + .8 * rnd()), mn.y + sz.y * (.1 + .8 * rnd()), mn.z + sz.z * (.1 + .8 * rnd())); const th = rnd() * 6.283, ph = Math.acos(2 * rnd() - 1); d.set(Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th)); R.set(o, d);
+      if (!bvhHit(T, R, 0, far)) return (MKFILL[k] = false); } }
   return (MKFILL[k] = true);
 }
 // the piece's triangles that lie inside one of its collision boxes (built once per piece type, shared by every copy),
 // sorted into a small box tree so a bullet only tests the few triangles along its path
 const MKBOXGEO = {}, _tb = new THREE.Box3(), _t0 = new THREE.Vector3(), _t1 = new THREE.Vector3(), _t2 = new THREE.Vector3(), _t3 = new THREE.Vector3();
 function mkBoxGeo(name, i) {
-  const k = name + ':' + i; if (k in MKBOXGEO) return MKBOXGEO[k];
+  const k = name + ':' + i + MK_ST_KEY; if (k in MKBOXGEO) return MKBOXGEO[k];
   const bx = MKMETA[name].b[i], B = new THREE.Box3(new THREE.Vector3(bx[0], bx[1], bx[2]), new THREE.Vector3(bx[3], bx[4], bx[5])).expandByScalar(.05), pos = [];
-  for (const { geo } of MKIT[name]) { const P = geo.attributes.position, I = geo.index, n = I ? I.count : P.count;
+  for (const { m, geo } of MKIT[name]) { if (MK_SEE_THROUGH.has(m)) continue;   // see-through pane: not bullet geometry
+    const P = geo.attributes.position, I = geo.index, n = I ? I.count : P.count;
     for (let t = 0; t < n; t += 3) { const ia = I ? I.getX(t) : t, ib = I ? I.getX(t + 1) : t + 1, ic = I ? I.getX(t + 2) : t + 2;
       _t0.fromBufferAttribute(P, ia); _t1.fromBufferAttribute(P, ib); _t2.fromBufferAttribute(P, ic); _tb.makeEmpty().expandByPoint(_t0).expandByPoint(_t1).expandByPoint(_t2);
       if (_tb.intersectsBox(B)) pos.push(_t0.x, _t0.y, _t0.z, _t1.x, _t1.y, _t1.z, _t2.x, _t2.y, _t2.z); } }
@@ -1610,6 +1620,7 @@ function mkPreciseRaycast(owners) {
 }
 function mkBuild(theme, key, fn) {
   const mats = mapkitMats(theme, key), geos = {}, proxy = [], penProxy = [], owners = [], penOwners = [], v = new THREE.Vector3(), c = new THREE.Vector3(), log = (MKLOG[key] = { theme, pieces: [] });
+  MK_SEE_THROUGH = new Set(Object.keys(mats).filter(mk => mats[mk].transparent && mats[mk].opacity < .6)); MK_ST_KEY = MK_SEE_THROUGH.size ? ':st=' + [...MK_SEE_THROUGH].sort().join('+') : '';
   // owner = which placed piece (and which of its boxes) a collision box belongs to, so a bullet can check the real shape
   const box = (b, opts = {}, owner = null) => { world.colliders.push(b); if (opts.pen) { b.pen = opts.pen; penProxy.push(b); penOwners.push(owner); } else { proxy.push(b); owners.push(owner); } if (opts.walk) b.walk = true; return b; };
   const put = (name, x, z, rq = 0, y = 0) => {
@@ -3117,7 +3128,9 @@ const sfx = {
     nz(d, t, .03, 'highpass', 3800, .7, .6); nz(d, t, .2, 'bandpass', 1050 * p, .8, 1.0, .001, 420); nz(d, t, .38, 'lowpass', 380, .7, .55, .003);
     osc(d, t, .14, 'sine', 150 * p, 40, 1.15); osc(d, t, .018, 'square', 2600, 1600, .05);
     const dc = AU.dry, tc = t + rand(.34, .48); osc(dc, tc, .07, 'sine', rand(5000, 6300), 4800, .035); osc(dc, tc + rand(.09, .15), .05, 'sine', rand(4300, 5600), 4100, .022); },
-  dry() { if (!AU.ctx) return; const t = AU.ctx.currentTime; osc(AU.dry, t, .025, 'square', 1500, 1100, .07); nz(AU.dry, t, .03, 'highpass', 4000, 1, .12); },
+  dry(id) { if (!AU.ctx) return; const b = AU.dryBuf && AU.dryBuf[dryClass(id)];
+    if (b) { const s = AU.ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = rand(.98, 1.02); s.connect(bus({ vol: DRY_FIRE[dryClass(id)].vol })); s.start(0); return; }   // recorded click (yours only: not positional, not sent)
+    const t = AU.ctx.currentTime; osc(AU.dry, t, .025, 'square', 1500, 1100, .07); nz(AU.dry, t, .03, 'highpass', 4000, 1, .12); },
   magOut() { if (!AU.ctx) return; const t = AU.ctx.currentTime; osc(AU.dry, t, .02, 'square', 900, 700, .08); nz(AU.dry, t + .02, .14, 'bandpass', 2200, 3, .22, .01, 900); },
   magIn() { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, .06, 'bandpass', 1600, 4, .4); osc(AU.dry, t, .04, 'square', 420, 260, .12); nz(AU.dry, t + .05, .04, 'highpass', 3000, 1, .2); },
   bolt() { if (!AU.ctx) return; const t = AU.ctx.currentTime; nz(AU.dry, t, .05, 'bandpass', 2600, 5, .35); osc(AU.dry, t + .04, .05, 'square', 1200, 600, .1); nz(AU.dry, t + .05, .08, 'bandpass', 3400, 6, .3); },
@@ -3283,11 +3296,19 @@ function gunVoice(name, pos, vol = 1, delay = 0) {
 function warmGunVoices() { if (!AU.ctx) return; const ks = Object.keys(GUN_VOICE).filter(k => !GSND[k]); if (!ks.length) return; GSND[ks[0]] = gsBuild(GUN_VOICE[ks[0]].dur, GUN_VOICE[ks[0]].fn); setTimeout(warmGunVoices, 30); }
 // recorded gun samples (GUN_VOICE[k].sample): fetched + decoded once in the menu; GSND[k] then holds the recording for your own gun, bots,
 // other online players and the killcam alike (all of them play GSND[k]). ogg where the browser plays it (Chrome/Firefox), else mp3 (Safari)
+// empty-magazine clicks per gun type (owner request 2026-11-11): real 9 mm dry-fire recording shaped per type, assets/audio/guns/dry_<type>.ogg|mp3
+// (credits assets/audio/CREDITS.md; variants on the s9-gunsfx listening page). vol: about -30 LUFS in game: quiet, a gunshot is ~-13
+const DRY_FIRE = { pistol: { vol: .55 }, rifle: { vol: .42 }, sniper: { vol: .4 }, shotgun: { vol: .4 } };
+const DRY_OF = { pistol: 'pistol', wasp: 'pistol', judge: 'pistol', sniper: 'sniper', obelisk: 'sniper', helix: 'sniper', breacher: 'shotgun', poopgun: 'shotgun' };
+const dryClass = id => DRY_OF[id] || 'rifle';
 function loadGunSamples() {
   if (!AU.ctx || AU.samplesAsked) return; AU.samplesAsked = true; let ext = 'mp3'; try { if (new Audio().canPlayType('audio/ogg; codecs="vorbis"')) ext = 'ogg'; } catch (e) {}
   for (const k in GUN_VOICE) { const v = GUN_VOICE[k]; if (!v.sample) continue;
     fetch(v.sample + '.' + ext).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); }).then(b => AU.ctx.decodeAudioData(b)).then(buf => { GSND[k] = buf; v.loaded = true; })
       .catch(e => console.warn('[sound] gun sample ' + k + ' not loaded (the synthesized voice stays):', e && e.message || e)); }
+  AU.dryBuf = AU.dryBuf || {};
+  for (const c in DRY_FIRE) fetch('assets/audio/guns/dry_' + c + '.' + ext).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); }).then(b => AU.ctx.decodeAudioData(b)).then(buf => { AU.dryBuf[c] = buf; })
+    .catch(e => console.warn('[sound] dry-fire click ' + c + ' not loaded (the old click stays):', e && e.message || e));
 }
 for (const k in GUN_VOICE) { const old = sfx[k]; sfx[k] = function (...a) { if (!gunVoice(k, a[0] && a[0].isVector3 ? a[0] : null)) old && old.apply(sfx, a); }; }   // (given a position = someone else's gun, placed in 3D)
 { const oldBot = sfx.botShot, BOTV = { sniper: 'sniper', obelisk: 'obelisk', helix: 'rail', breacher: 'shotgun', wasp: 'smg', pistol: 'pistol', carbine: 'shot', triad: 'burst', judge: 'judge', titan: 'minigun', arc: 'arc', inferno: 'flame', cryo: 'cryo', void: 'voidfire', nova: 'launch', stinger: 'crossbow', ricochet: 'disc', seeker: 'seeker' };
@@ -3516,8 +3537,12 @@ function rifleTP(kind) {
 }
 let HB = null;
 function hitGeometry() {
-  HB = { mat: new THREE.MeshBasicMaterial(), head: new THREE.SphereGeometry(.15, 10, 8), chest: new THREE.BoxGeometry(.46, .46, .32), pelvis: new THREE.BoxGeometry(.38, .26, .28),
-    thigh: new THREE.CapsuleGeometry(.095, .3, 2, 8), shin: new THREE.CapsuleGeometry(.08, .32, 2, 8), arm: new THREE.CapsuleGeometry(.07, .2, 2, 8),
+  // Hitboxes cover the WHOLE drawn soldier with a little slack (CS2 / Valorant convention: what you see is what you hit). Sizes come
+  // from the mesh's extents per bone (qa/qa_hitreg.js coverage part measures them: >= 99% of the rays that land on the drawn body must
+  // hit a hitbox). Before 2026-11-11 the feet, hands, neck and shoulders had no hitbox at all and the limbs were thinner than the model
+  // (75% coverage: a quarter of the shots that visibly landed did nothing, worst from above / below).
+  HB = { mat: new THREE.MeshBasicMaterial(), head: new THREE.CapsuleGeometry(.14, .1, 3, 10), shoulder: new THREE.SphereGeometry(.17, 8, 6), neck: new THREE.CapsuleGeometry(.09, .04, 2, 8), chest: new THREE.CapsuleGeometry(.22, .14, 3, 10).rotateZ(Math.PI / 2), upchest: new THREE.CapsuleGeometry(.19, .16, 3, 10).rotateZ(Math.PI / 2), waist: new THREE.CapsuleGeometry(.18, .12, 3, 10).rotateZ(Math.PI / 2), pelvis: new THREE.CapsuleGeometry(.2, .2, 3, 10).rotateZ(Math.PI / 2),
+    thigh: new THREE.CapsuleGeometry(.14, .3, 2, 8), shin: new THREE.CapsuleGeometry(.115, .3, 2, 8), knee: new THREE.SphereGeometry(.2, 8, 6), foot: new THREE.BoxGeometry(.17, .34, .22), ankle: new THREE.SphereGeometry(.19, 8, 6), toe: new THREE.SphereGeometry(.11, 8, 6), arm: new THREE.CapsuleGeometry(.12, .24, 2, 8), fore: new THREE.CapsuleGeometry(.11, .16, 2, 8), hand: new THREE.CapsuleGeometry(.07, .16, 2, 8),
     blob: new THREE.PlaneGeometry(1.2, 1.2), blobMat: new THREE.MeshBasicMaterial({ alphaMap: tex(T.glow), color: 0x000000, transparent: true, opacity: .55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
     flashMat: new THREE.SpriteMaterial({ map: tex(T.glow), color: new THREE.Color(3, 1.8, .8), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }),
     shieldMat: new THREE.SpriteMaterial({ map: tex(T.glow), color: new THREE.Color(.3, 1.4, 2.4), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: .5 }),
@@ -3546,9 +3571,9 @@ function buildBot(profile) {
   const B = { hips: bone('Hips'), spine: bone('Spine'), spine1: bone('Spine1'), spine2: bone('Spine2'), neck: bone('Neck'), head: bone('Head'), rhand: bone('RightHand') };
   model.updateMatrixWorld(true);
   const meshes = [];
-  const hit = (b, geo, zone, oy, part) => { if (!b) return; const s = b.getWorldScale(_v1).x || 1; const m = new THREE.Mesh(geo, HB.mat); m.visible = false; m.scale.setScalar(1 / s); m.position.set(0, oy / s, 0); m.userData.zone = zone; if (part) m.userData.part = part; b.add(m); meshes.push(m); };
-  hit(B.head, HB.head, 'head', .1); hit(B.spine1, HB.chest, 'body', .1); hit(B.hips, HB.pelvis, 'body', 0);
-  for (const s of ['Left', 'Right']) { hit(bone(s + 'UpLeg'), HB.thigh, 'limb', .22, 'leg'); hit(bone(s + 'Leg'), HB.shin, 'limb', .22, 'leg'); hit(bone(s + 'Arm'), HB.arm, 'limb', .14, 'arm'); hit(bone(s + 'ForeArm'), HB.arm, 'limb', .13, 'arm'); }
+  const hit = (b, geo, zone, oy, part, oz = 0) => { if (!b) return; const s = b.getWorldScale(_v1).x || 1; const m = new THREE.Mesh(geo, HB.mat); m.visible = false; m.scale.setScalar(1 / s); m.position.set(0, oy / s, oz / s); m.userData.zone = zone; if (part) m.userData.part = part; b.add(m); meshes.push(m); };
+  hit(B.head, HB.head, 'head', .105, null, .03); hit(B.neck, HB.neck, 'body', .02); hit(B.spine1, HB.chest, 'body', .12); hit(B.spine2, HB.upchest, 'body', .13); hit(B.spine, HB.waist, 'body', 0); hit(B.hips, HB.pelvis, 'body', -.05);
+  for (const s of ['Left', 'Right']) { hit(bone(s + 'UpLeg'), HB.thigh, 'limb', .22, 'leg'); hit(bone(s + 'Leg'), HB.shin, 'limb', .22, 'leg'); hit(bone(s + 'Leg'), HB.knee, 'limb', -.02, 'leg', .05); hit(bone(s + 'Foot'), HB.foot, 'limb', .08, 'leg', .03); hit(bone(s + 'Foot'), HB.ankle, 'limb', -.07, 'leg', -.04); hit(bone(s + 'ToeBase'), HB.toe, 'limb', .02, 'leg'); hit(bone(s + 'Shoulder'), HB.shoulder, 'limb', .13, 'arm'); hit(bone(s + 'Arm'), HB.arm, 'limb', .11, 'arm'); hit(bone(s + 'ForeArm'), HB.fore, 'limb', .1, 'arm'); hit(bone(s + 'Hand'), HB.hand, 'limb', .065, 'arm'); }
   const gun = new THREE.Group(), gunInner = rifleTP(profile.weapon); gun.add(gunInner); scene.add(gun);
   const muzzle = new THREE.Object3D(); muzzle.position.copy(gunInner.userData.muzzle || new THREE.Vector3(0, .12, .5)); gun.add(muzzle);
   const flash = new THREE.Sprite(HB.flashMat); flash.scale.setScalar(.2); flash.visible = false; muzzle.add(flash);
@@ -4180,7 +4205,9 @@ const WEAPONS = {
   // armK = arm hits count as body (only legs are 'limb' damage); draw = 0.4 s deploy, and a weapon switch cancels the bolt (quick-switch).
   // 2026-11-10 (owner, Cryzen style): the screen does NOT zoom (adsFov = the hip 78); only a round lens in the middle (60 % of the
   // screen height) shows the view magnified `lens` x (modules/w_obelisk.js renders it picture-in-picture inside the post chain).
-  obelisk:  { name: 'BR-6 Obelisk', cls: 'Bolt-action sniper', mag: 5, reserve: 25, maxReserve: 35, rpm: 50, auto: false, dmg: 110, head: 2, bolt: 1.2, armK: 1, draw: .4, scopeSnap: true, lens: 1.75, pierce: true, scope: true, hip: .07, ads: 0, adsFov: 78, adsSpeed: 30, reload: 2.6, reloadEmpty: 2.6, falloff: null, kick: 5, move: .97, heat: 0, skin: 'sniper', glow: [.35, .85, 1], shape: [1, 1, 1], sound: 'obelisk', tracer: [3, 6, 8],
+  // 2026-11-11 (owner): the lens is the gun's REAL scope (gun + hands stay visible, the lens sits in the eyepiece); steady = no spread at
+  // all (hip, moving, jumping): the shot goes exactly where the crosshair is.
+  obelisk:  { name: 'BR-6 Obelisk', cls: 'Bolt-action sniper', mag: 5, reserve: 25, maxReserve: 35, rpm: 50, auto: false, dmg: 110, head: 2, bolt: 1.2, armK: 1, draw: .4, scopeSnap: true, lens: 1.75, steady: true, pierce: true, scope: true, hip: 0, ads: 0, adsFov: 78, adsSpeed: 30, reload: 2.6, reloadEmpty: 2.6, falloff: null, kick: 5, move: .97, heat: 0, skin: 'sniper', glow: [.35, .85, 1], shape: [1, 1, 1], sound: 'obelisk', tracer: [3, 6, 8],
     stats: [100, 12, 100, 50], desc: 'Bolt-action. Head, body or arm shot kills, a leg shot leaves them on a sliver. Instant 1.75x lens scope, 1.2 s bolt (switch weapons to skip it).' },
   nova:     { name: 'Nova', cls: 'Plasma launcher', mag: 2, reserve: 10, maxReserve: 14, rpm: 55, auto: false, projectile: true, hip: .01, ads: .004, adsFov: 55, adsSpeed: 12, reload: 2.6, reloadEmpty: 2.6, kick: 3.5, move: .92, heat: 0, skin: 'nova', glow: [3, 1.2, .3], shape: [1.15, 1.15, .95], sound: 'launch',
     stats: [92, 12, 60, 40], desc: 'Fires plasma rockets that explode on impact. Splash damage.' },
@@ -4576,7 +4603,7 @@ function projBurst(pr) {
 function fireProj() {
   const w = W(), id = P.weapon;
   if (P.reload > 0 || P.switchT > 0) return;
-  if (P.ammo <= 0) { if (P.fireCd <= 0) { sfx.dry(); P.fireCd = .25; } if (P.reserve > 0) startReload(); return; }
+  if (P.ammo <= 0) { dryFire(); return; }
   P.ammo--; G.fired++; P.fireCd = 60 / w.rpm; P.shield = 0; noise(camera.position, 30, PLAYER_ENT);
   camera.getWorldDirection(shotDir); camRight.set(1, 0, 0).applyQuaternion(camera.quaternion); camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
   const spread = lerp(w.hip, w.ads, P.ads), a = Math.random() * 6.283, m = Math.sqrt(Math.random()) * spread;
@@ -4600,7 +4627,7 @@ function zap(a, b, col) { // jagged lightning between two points
 function fireArc() {
   const w = W();
   if (P.reload > 0 || P.switchT > 0) return;
-  if (P.ammo <= 0) { if (P.fireCd <= 0) { sfx.dry(); P.fireCd = .25; } if (P.reserve > 0) startReload(); return; }
+  if (P.ammo <= 0) { dryFire(); return; }
   P.ammo--; G.fired++; P.fireCd = 60 / w.rpm; P.shield = 0; if (Math.random() < .3) noise(camera.position, 25, PLAYER_ENT);
   camera.getWorldDirection(shotDir); muzzleW.set(.13 * (1 - P.ads), -.12 * (1 - P.ads), -.75).applyMatrix4(camera.matrixWorld);
   const col = new THREE.Color(...w.glow).multiplyScalar(1.4);
@@ -4620,7 +4647,7 @@ function fireArc() {
 function fireFlame() {
   const w = W();
   if (P.reload > 0 || P.switchT > 0) return;
-  if (P.ammo <= 0) { if (P.fireCd <= 0) { sfx.dry(); P.fireCd = .25; } if (P.reserve > 0) startReload(); return; }
+  if (P.ammo <= 0) { dryFire(); return; }
   P.ammo--; G.fired++; P.fireCd = 60 / w.rpm; P.shield = 0; if (Math.random() < .3) noise(camera.position, 25, PLAYER_ENT);
   camera.getWorldDirection(shotDir); muzzleW.set(.13 * (1 - P.ads), -.12 * (1 - P.ads), -.75).applyMatrix4(camera.matrixWorld);
   for (let k = 0; k < 4; k++) { const s = rand(10, 15); FX.spawn(muzzleW, shotDir.x * s + rand(-1.2, 1.2) + P.vel.x, shotDir.y * s + rand(-.8, 1.2), shotDir.z * s + rand(-1.2, 1.2) + P.vel.z, 3, rand(.8, 1.4), .2, rand(.08, .16), rand(.45, .7), -1.5, 1.4, .45); }
@@ -4942,11 +4969,11 @@ function setModel(name) {
   $('hWeapon').textContent = WEAPONS[name].label;
   pips.classList.toggle('big', WEAPONS[name].mag <= 10); cache.pip = -1;
 }
-// CS-style switching: a new switch may interrupt a draw (after a short .15 s debounce: one wheel flick is many events); every switch
+// CS-style switching: a new switch may interrupt a draw (keys at once; the wheel after a .15 s debounce: one flick is many events); every switch
 // restarts the full draw of the new weapon (w.draw, default .45 s) and nothing fires during it, so spamming switches never beats the draw.
 // Leaving or drawing a bolt gun cancels its bolt cycle (quick-switch, AWP style): the draw is then the only wait.
-function switchWeapon(name) {
-  if (P.weapon === name || state !== 'play' || !WEAPONS[name] || P.switchT > 0 && G.time - (P.switchAt || -9) < .15) return;
+function switchWeapon(name, wheel) {
+  if (P.weapon === name || state !== 'play' || !WEAPONS[name] || wheel && P.switchT > 0 && G.time - (P.switchAt || -9) < .15) return;   // (debounce: the wheel only; keys always switch)
   P.store[P.weapon] = { ammo: P.ammo, reserve: P.reserve };
   const bolt = WEAPONS[P.weapon].bolt || WEAPONS[name].bolt; P.lastW = P.weapon; P.switchAt = G.time;
   P.weapon = name; P.ammo = P.store[name].ammo; P.reserve = P.store[name].reserve; P.mag = WEAPONS[name].mag;
@@ -4998,7 +5025,7 @@ function fire() {
 // path = metres the bullet travels INSIDE the solid along its own direction (a shallow angle = a longer path = less gets through)
 const PEN = { minMult: .12, alias: { thick: 'drywall', hollow: 'crate' },
   materials: { drywall: { code: 1, cost: .8, max: .6 }, wood: { code: 2, cost: 1.3, max: .5 }, glass: { code: 3, cost: .4, max: .5 }, crate: { code: 4, cost: 1.2, max: .5, flat: .12 }, sheet: { code: 6, cost: 3, max: .3, flat: .1 }, metal: { code: 5, cost: 3, max: .25 } },
-  power: { sniper: 1.3, helix: 1.3, void: .9, titan: .8, triad: .8, carbine: .7, cryo: .5, judge: .3, wasp: .3, breacher: .25, pistol: .2 } };
+  power: { sniper: 1.3, obelisk: 1.4, helix: 1.3, void: .9, titan: .8, triad: .8, carbine: .7, cryo: .5, judge: .3, wasp: .3, breacher: .25, pistol: .2 } };
 function penMatOf(pen) { return PEN.alias[pen] || pen; }
 // damage multiplier for a gun's power through `path` metres of material, or -1 when it cannot go through
 function penCalc(power, mat, path) {
@@ -5029,12 +5056,12 @@ function fireShot() {
   if (P.weapon === 'knife') { knifeAttack(false); return; }
   if (P.reload > 0 || P.switchT > 0) return;
   const id = P.weapon, w = W(), od = P.odT > 0;
-  if (P.ammo <= 0) { if (P.fireCd <= 0) { sfx.dry(); P.fireCd = .25; } if (P.reserve > 0) startReload(); return; }
+  if (P.ammo <= 0) { dryFire(); return; }
   P.ammo--; G.fired++; P.fireCd = 60 / (w.spin ? lerp(w.rpmMin, w.rpm, P.spin || 0) : w.rpm) / (od ? 1.35 : 1); noise(camera.position, 45, PLAYER_ENT);
   const sm = P.shotMult || 1; P.shotMult = 1;
   if (G.time - P.lastShot > .25) P.shotIdx = 0; P.shotIdx++; P.lastShot = G.time;
   const hs = Math.hypot(P.vel.x, P.vel.z), ads = P.ads, scoped = w.scope ? clamp((ads - .7) / .3, 0, 1) : ads;
-  let spread = lerp(w.hip, w.ads, scoped) + (hs > 1 ? lerp(.022, w.scope ? .002 : .006, scoped) * (id === 'wasp' || id === 'pistol' ? .5 : 1) * (P.walk ? .5 : 1) : 0) + P.heat * lerp(.02, .006, scoped);   // no airborne penalty: a mid-air shot is as accurate as on the ground (owner 2026-11-09)
+  let spread = w.steady ? 0 : lerp(w.hip, w.ads, scoped) + (hs > 1 ? lerp(.022, w.scope ? .002 : .006, scoped) * (id === 'wasp' || id === 'pistol' ? .5 : 1) * (P.walk ? .5 : 1) : 0) + P.heat * lerp(.02, .006, scoped);   // no airborne penalty: a mid-air shot is as accurate as on the ground (owner 2026-11-09)
   spread *= 1 - P.crouch * .35; if (w.scope) P.nsT = scoped < .5 ? G.time : 0;   // kill feed: no-scope = fired this shot without the scope up
   P.heat = Math.min(1, P.heat + (w.heat || 0));
   camera.getWorldDirection(shotDir); camRight.set(1, 0, 0).applyQuaternion(camera.quaternion); camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
@@ -5127,6 +5154,13 @@ function ejectCasing() {
   const c = casings[casingIdx]; casingIdx = (casingIdx + 1) % casings.length;
   c.m.position.set(.3, -.2, -.6).applyMatrix4(camera.matrixWorld);
   c.v.set(rand(1.8, 2.8), rand(1.2, 2.2), rand(.2, .8)).applyQuaternion(camera.quaternion).add(P.vel); c.av.set(rand(-20, 20), rand(-20, 20), rand(-20, 20)); c.life = 2.5; c.m.visible = true;
+}
+// Empty magazine + trigger (CS2 / Valorant convention): ONE dry-fire click per trigger press (P.dryDone is cleared when the trigger is
+// released; holding an auto gun does not repeat it), heard only by you. Reserve ammo left -> the reload starts at once (the HUD shows
+// RELOAD while it runs); none left -> 'NO AMMO'. Never a shot, never damage.
+function dryFire() {
+  if (!P.dryDone) { P.dryDone = true; sfx.dry(P.weapon); if (!(P.reserve > 0) && !W().infinite) callout('NO AMMO'); }
+  P.fireCd = Math.max(P.fireCd, .1); if (P.reserve > 0) startReload();
 }
 function startReload() {
   if (W().infinite) return;
@@ -6424,7 +6458,7 @@ function updatePlayer(dt, rdt) {
   if (P.hp < 30) { G.heartT -= dt; if (G.heartT <= 0) { sfx.heart(); G.heartT = .85; } }
   // ADS
   // a bolt gun drops out of the scope while the bolt cycles and comes back by itself if you still hold aim (CS2 style)
-  const adsT = adsHeld && P.reload <= 0 && !sprint && P.switchT <= 0 && P.weapon !== 'knife' && P.weapon !== 'boomerang' && !(W().bolt && P.boltT > 0) ? 1 : 0;
+  const adsT = adsHeld && P.reload <= 0 && !sprint && P.switchT <= dt + 1e-9 && P.weapon !== 'knife' && P.weapon !== 'boomerang' && !(W().bolt && P.boltT > 0) ? 1 : 0;
   { const a0 = P.ads; P.ads = W().scopeSnap ? adsT : damp(P.ads, adsT, W().adsSpeed, rdt); if (W().scopeSnap && P.ads !== a0) P.fovSnap = true; }   // scopeSnap: in / out on this very frame (the camera FOV follows below)
   P.switchT = Math.max(0, P.switchT - dt); P.boltT = Math.max(0, P.boltT - dt);
   updateStation(dt);
@@ -6433,18 +6467,20 @@ function updatePlayer(dt, rdt) {
   knifeTick(dt);
   {
     const w = W();
+    if (!mouseDown) P.dryDone = false;   // trigger released: the next press may click again (dryFire)
     // minigun spin-up
     if (w.spin) { const want = mouseDown && !sprint && P.reload <= 0 && P.switchT <= 0; P.spin = clamp((P.spin || 0) + (want ? dt / w.spin : -dt * 1.4), 0, 1); if (want && P.spinSnd <= 0) { sfx.spinup(P.spin); P.spinSnd = .25; } P.spinSnd = (P.spinSnd || 0) - dt; }
     else P.spin = 0;
     // void lance: hold to charge, release to fire
     if (w.mode === 'charge') {
       if (mouseDown && !sprint && P.reload <= 0 && P.switchT <= 0 && P.ammo > 0) { if (!P.charge) sfx.chargeStart(); P.charge = Math.min(w.charge, (P.charge || 0) + dt); }
+      else if (mouseDown && P.ammo <= 0 && P.reload <= 0 && P.switchT <= 0 && !(P.charge > 0)) dryFire();
       else if ((P.charge || 0) > 0 && P.fireCd <= 0) { const k = P.charge / w.charge; P.shotMult = lerp(.22, 1, k * k); P.charge = 0; fireShot(); }
       else P.charge = 0;
     } else {
       if (P.burstLeft > 0 && w.mode !== 'burst') P.burstLeft = 0;   // switched guns mid-burst: the rest of the burst is cancelled
       if (P.burstLeft > 0) { P.burstT -= dt; if (P.burstT <= 0) { P.burstLeft--; P.burstT = 60 / w.burstRpm; if (P.ammo > 0) fireShot(); else P.burstLeft = 0; if (P.burstLeft === 0) P.fireCd = 60 / w.rpm; } }
-      else if (mouseDown && P.fireCd <= 0 && (!sprint || P.weapon === 'knife') && (w.auto || P.trigReady) && (!w.spin || P.spin > .12)) { P.trigReady = false; fire(); }
+      else if ((mouseDown || P.drawClick && G.time - P.drawClick < .35) && P.fireCd <= 0 && P.switchT <= 0 && (!sprint || P.weapon === 'knife') && (w.auto || P.trigReady) && (!w.spin || P.spin > .12)) { P.trigReady = false; P.drawClick = 0; fire(); }   // (switchT: a click during a draw waits for the draw instead of being used up)
     }
   }
   if (P.reload > 0) {
@@ -6882,14 +6918,20 @@ function updateRobots(dt, menu) {
 function foeSteps(r, dt) {
   if (r.dead) { r.fsAcc = 0; return; }
   const p = r.root.position, hs = Math.hypot(r.vel.x, r.vel.z), ground = r.onGround !== false;
-  if (ground && r.fsAir && (r.fsVy || 0) < -4) sfx.foeStep(p, false, true, false);
-  r.fsAir = !ground; r.fsVy = r.remote ? ((p.y - (r.fsY ?? p.y)) / Math.max(dt, 1e-3)) : r.vy; r.fsY = p.y;
+  const claim = r.remote ? r.netWalk || G.time - (r.walkT ?? -9) < .5 : r.walk;   // silent walk claimed (online: wk:1, kept 0.5 s after it stops)
+  // a landing thump: not while walking off a curb / a stair (a drop under 1 m), a real fall is heard even when walking
+  if (ground && r.fsAir && (r.fsVy || 0) < -4 && !(claim && (r.fsTop || p.y) - p.y < 1)) sfx.foeStep(p, false, true, false);
+  r.fsAir = !ground; r.fsTop = ground ? p.y : Math.max(r.fsTop || p.y, p.y); r.fsVy = r.remote ? ((p.y - (r.fsY ?? p.y)) / Math.max(dt, 1e-3)) : r.vy; r.fsY = p.y;
   if (!ground || hs < 1.2 || r.dashT > 0) return;
   // a walking player (silent walk key) makes no step sound; the speed check means a client that claims walking while running is still heard
   // (online the flag arrives with the newest state while the body is drawn ~100 ms in the past: it stays on for 0.5 s after the
   // player let go of walk, so the last walking strides are not heard; the speed check still catches real running at once)
   if (r.remote && r.netWalk) r.walkT = G.time;
-  if ((r.remote ? r.netWalk || G.time - (r.walkT ?? -9) < .5 : r.walk) && hs < MOVE.run * MOVE.walk * 1.2 + .3) { r.fsAcc = 0; return; }
+  if (claim) {
+    // a claimed walk is silent unless it has been at running speed for 0.2 s: the drawn speed of a remote player spikes for a frame
+    // when a late packet corrects its place (glide), which read as "running while claiming to walk" and let one step through
+    const slow = hs < MOVE.run * MOVE.walk * 1.2 + .3; r.fastT = slow ? 0 : (r.fastT || 0) + dt;
+    if (slow || r.fastT < .2) { r.fsAcc = 0; return; } }
   const sprint = hs > 5, stride = sprint ? 2.4 : 1.85;
   r.fsAcc = (r.fsAcc || 0) + hs * dt; if (r.fsAcc > stride) { r.fsAcc = 0; sfx.foeStep(p, sprint, false, (r.crouch || 0) > .5); }
 }
@@ -7119,12 +7161,15 @@ function look(dx, dy) {
 }
 document.addEventListener('mousemove', e => {
   if (state !== 'play') return;
-  if (document.pointerLockElement === renderer.domElement) look(clamp(e.movementX, -300, 300), clamp(e.movementY, -300, 300));
+  // flick accuracy (owner 2026-11-11): Chrome hands the game ONE mousemove per frame with the whole frame's motion summed, so a
+  // per-event clamp of 300 counts cut every fast flick short (1 m/s hand at 1600 DPI = 600+ counts in a 60 Hz frame: the crosshair
+  // stopped 1-7 m short of where the hand put it; worse at low frame rates). Only an impossible jump (a pointer-lock glitch) is dropped.
+  if (document.pointerLockElement === renderer.domElement) { if (Math.abs(e.movementX) <= 4000 && Math.abs(e.movementY) <= 4000) look(e.movementX, e.movementY); }
   else if (noLock && lookDrag) look(e.movementX, e.movementY);
 });
 renderer.domElement.addEventListener('mousedown', e => {
   if (state !== 'play') return;
-  if (e.button === 0) { mouseDown = true; P.trigReady = true; if (noLock) lookDrag = true; }
+  if (e.button === 0) { mouseDown = true; P.trigReady = true; if (P.switchT > 0) P.drawClick = G.time; if (noLock) lookDrag = true; }   // drawClick: a tap during a weapon draw fires when the draw ends
   if (e.button === 2) { if (P.weapon === 'knife') knifeAttack(true); else if (P.weapon === 'boomerang') { BOOM.rDown = true; BOOM.rT = 0; } else { adsHeld = true; sfx.adsIn(); } }
   if (!document.pointerLockElement) lock();
 });
@@ -7154,7 +7199,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
   if (e.code === 'Escape' && (noLock || !document.pointerLockElement)) { if (state === 'play') setState('paused'); else if (state === 'dead') P.pauseOnRespawn = true; }
 });
-addEventListener('wheel', e => { if (state !== 'play') return; const cyc = [SLOTS()[0], SLOTS()[1], 'knife'], i = cyc.indexOf(P.weapon); switchWeapon(cyc[(i + (e.deltaY > 0 ? 1 : 2)) % 3]); }, { passive: true });
+addEventListener('wheel', e => { if (state !== 'play') return; const cyc = [SLOTS()[0], SLOTS()[1], 'knife'], i = cyc.indexOf(P.weapon); switchWeapon(cyc[(i + (e.deltaY > 0 ? 1 : 2)) % 3], true); }, { passive: true });
 addEventListener('keyup', e => { keys[e.code] = false; HELD[e.code] = false; if (e.code === 'KeyG' && P.nadeHold) { const c = (performance.now() - P.nadeHold) / 1000; P.nadeHold = 0; throwPlayerNade(c); } if (e.code === 'Tab') $('board').hidden = true; });
 addEventListener('blur', () => { for (const k in HELD) HELD[k] = false; if (state === 'play') { for (const k in keys) keys[k] = false; mouseDown = false; adsHeld = false; if (noLock) setState('paused'); } });
 addEventListener('contextmenu', e => { if (state === 'play' || e.target === renderer.domElement) e.preventDefault(); });
@@ -7236,7 +7281,7 @@ function simAim() {
   if (SIM.ay !== null && SIM.camF === frameNo - 1) { camera.rotation.x += P.pitch - SIM.ap; camera.rotation.y += P.yaw - SIM.ay; camera.updateMatrixWorld(); SIM.ap = P.pitch; SIM.ay = P.yaw; }
 }
 function simCamDone() { SIM.ap = P.pitch; SIM.ay = P.yaw; SIM.camF = frameNo; }   // (the aim the camera was just placed with)
-// hit flinch: a short camera roll + nod away from the shooter, drawn only (taken off again right after the frame is drawn)
+// hit flinch: a short camera roll + nod away from the shooter on the camera only (P.pitch/yaw untouched); it stays on the camera until the next updateCamera so the next frame's shot goes through the crosshair that was drawn (flick accuracy, 2026-11-11)
 const hitKick = { p: new Spring(170, 15), r: new Spring(170, 15) };
 function viewKick(rdt) {
   if (state !== 'play' && state !== 'dead') { hitKick.p.reset(); hitKick.r.reset(); return null; }
@@ -7331,8 +7376,8 @@ function frame(now) {
     const gap = (5 + Math.hypot(P.vel.x, P.vel.z) * 1.6 + P.heat * 14) * (1 - P.crouch * .3);
     setStyle(xh.u, 'top', `${(-gap - 9).toFixed(1)}px`); setStyle(xh.d, 'top', `${gap.toFixed(1)}px`); setStyle(xh.l, 'left', `${(-gap - 9).toFixed(1)}px`); setStyle(xh.r, 'left', `${gap.toFixed(1)}px`);
     setStyle($('xh'), 'opacity', P.ads > .4 || P.sprint ? '0' : '1');
-    { const sw = WEAPONS[P.weapon], pl = sw && sw.pellets > 1 && sw.spreadP, ring = $('spreadRing');   // shotgun: ring = the real pellet cone (tan(cone)/tan(fov/2) of half the screen height)
-      if (pl) { const dia = 2 * Math.tan(sw.spreadP * (1 - P.ads * .25)) / Math.tan(camera.fov * Math.PI / 360) * innerHeight / 2; setStyle(ring, 'width', `${dia.toFixed(1)}px`); setStyle(ring, 'height', `${dia.toFixed(1)}px`); ring.dataset.d = dia.toFixed(1); }
+    { const sw = WEAPONS[P.weapon], pl = sw && sw.pellets > 1 && sw.spreadP, ring = $('spreadRing');   // shotgun: ring = the real pellet cone (tan(cone)/tan(fov/2) of half the screen height; fov = the REAL projection, the settings FOV rescales camera.fov's 78-based numbers)
+      if (pl) { const dia = 2 * Math.tan(sw.spreadP * (1 - P.ads * .25)) * camera.projectionMatrix.elements[5] * innerHeight / 2; setStyle(ring, 'width', `${dia.toFixed(1)}px`); setStyle(ring, 'height', `${dia.toFixed(1)}px`); ring.dataset.d = dia.toFixed(1); }
       setStyle(ring, 'opacity', pl && P.ads <= .4 && !P.sprint ? '1' : '0'); }
     const rb = $('reloadbar'); setStyle(rb, 'opacity', P.reload > 0 ? '1' : '0'); if (P.reload > 0) $('reloadfill').style.transform = `scaleX(${1 - P.reload / P.reloadDur})`;
     setStyle($('combo'), 'opacity', G.combo > 0 ? '1' : '0'); setHTML('combo', `x${(1 + G.combo * .5).toFixed(1)}<b>STREAK</b>`);
@@ -7342,7 +7387,7 @@ function frame(now) {
   // world animation
   DUST.uniforms.uTime.value = t; DUST.uniforms.uCam.value.copy(camera.position);
   mapUpdate(t, rdt);
-  const scale = (VH * PR) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+  const scale = (VH * PR) / 2 * camera.projectionMatrix.elements[5];   // = 1/tan(fov/2) of the projection actually drawn (player FOV setting included)
   FX.mat.uniforms.uScale.value = SMOKE.mat.uniforms.uScale.value = DUST.uniforms.uScale.value = scale;
   grade.uniforms.uTime.value = t; grade.uniforms.uHit.value = P.hitFx || 0; grade.uniforms.uAds.value = P.ads || 0;
   grade.uniforms.uHurt.value = state === 'play' && P.hp < 35 ? (1 - P.hp / 35) : 0; if (state !== 'dead') grade.uniforms.uDying.value = 0;
@@ -7351,10 +7396,9 @@ function frame(now) {
   const tR = performance.now(); perf.upd = lerp(perf.upd, tR - now, .05);
   if (window.MODE_preRender) MODE_preRender(rdt);   // game modes: plant/defuse input, beeps, HUD, spectating
   const replaying = state === 'dead' && REC.on && P.dieT > DC.T && applyReplay();
-  const kicked = viewKick(rdt);   // render-only camera offsets (hit flinch): never moves the aim
+  viewKick(rdt);   // hit-flinch camera kick: drawn AND kept on the camera until the next updateCamera, so a shot fired on the next frame goes exactly through the crosshair the player saw (it never moves P.pitch/yaw: the aim itself, the killcam and the network see no kick)
   if (!GL.lost) composer.render(rdt);   // (context lost: the game keeps simulating; drawing resumes when the browser restores it)
   else if (!GL.hinted && now - GL.lostAt > 10000) { GL.hinted = true; banner('GRAPHICS DEVICE LOST', 'Press F5 to reload the game'); }
-  if (kicked) { camera.rotation.x -= kicked[0]; camera.rotation.z -= kicked[1]; camera.updateMatrixWorld(); }
   if (replaying) restoreReplay();
   simRestore();
   if (window.MODE_postRender) MODE_postRender();

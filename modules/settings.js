@@ -24,7 +24,7 @@ const DEFAULTS = {
   },
   mouse: { sens: 1, adsMult: 1, invertY: false },
   crosshair: { style: 'crossdot', color: '#ece6d8', length: 9, thickness: 2, gap: 5, outline: true, outlineThickness: 1, outlineOpacity: .5, dot: 2, opacity: 1, dynamic: true, adsShow: false },
-  video: { fov: 68, quality: 'medium', autoRes: 'auto', fps: true, fpsMode: 'simple', fpsCap: 'off', shake: 1, brightness: 1, gamma: 1, viewBob: 'full', gunSway: true, hitFlinch: true },
+  video: { fov: 60, quality: 'medium', autoRes: 'auto', fps: true, fpsMode: 'simple', fpsCap: 'off', shake: 1, brightness: 1, gamma: 1, viewBob: 'full', gunSway: true, hitFlinch: true },
   audio: { master: .8, effects: 1, ambience: 1, footsteps: 1, voice: 1, muteUnfocused: false }
 };
 // number limits and allowed values (used to clean anything loaded from storage, the server or a share code)
@@ -32,7 +32,7 @@ const NUM = {
   'mouse.sens': [.05, 10], 'mouse.adsMult': [.1, 3],
   'crosshair.length': [0, 30], 'crosshair.thickness': [1, 10], 'crosshair.gap': [-4, 30], 'crosshair.outlineThickness': [1, 4], 'crosshair.outlineOpacity': [0, 1],
   'crosshair.dot': [0, 10], 'crosshair.opacity': [.1, 1],
-  'video.fov': [60, 110], 'video.shake': [0, 1], 'video.brightness': [.6, 1.5], 'video.gamma': [.6, 1.6],
+  'video.fov': [55, 110], 'video.shake': [0, 1], 'video.brightness': [.6, 1.5], 'video.gamma': [.6, 1.6],
   'audio.master': [0, 1], 'audio.effects': [0, 1], 'audio.ambience': [0, 1], 'audio.footsteps': [1, 2], 'audio.voice': [0, 1]
 };
 const ENUM = {
@@ -114,7 +114,7 @@ function sanitize(src) {
     }
   }
   if (typeof src.updatedAt === 'number' && isFinite(src.updatedAt)) out.updatedAt = src.updatedAt;
-  if (src.fovV === 2 || src.fovV === 3) out.fovV = src.fovV;
+  if (src.fovV === 2 || src.fovV === 3 || src.fovV === 4) out.fovV = src.fovV;
   return out;
 }
 
@@ -127,10 +127,12 @@ try {
 } catch (e) {}
 // default field of view 78 -> 72 (r21, 2026-11-09) -> 68 (2026-11-11). Owner: enemies look too small. Measured at 1920x1080: Cryzen = 70 vertical,
 // 1.80 m characters; ours 1.81 m, so at 72 an enemy at 10 m was 134 px vs Cryzen's 139 px; at 68 it is 145 px (+4 % over Cryzen, +8 % over 72).
-// Once per settings copy (fovV mark travels with account sync), only a value that is a previous DEFAULT for that copy moves to 68:
-//   no mark (before r21, default 78): 78 -> 68;  mark 2 (r21, default 72): 72 -> 68.  Any other value is the player's own choice and stays.
-const FOV_V = 3;
-function fovMigrate(o) { if (!o || !o.video || o.fovV === FOV_V) return false; const old = o.fovV === 2 ? 72 : 78, ch = o.video.fov === old; if (ch) o.video.fov = DEFAULTS.video.fov; o.fovV = FOV_V; return ch; }
+// -> 60 (2026-11-11 later, owner: "enemies feel smaller, can see very far... I want things to look bigger and closer"): 60 vertical = ~91 deg
+// horizontal at 16:9, the classic shooter view (CS/Valorant/Cryzen-class sizes); a standing enemy at 10 m is ~166 px tall at 1080p (68: ~145 px).
+// Once per settings copy (fovV mark travels with account sync), only a value that is a previous DEFAULT for that copy moves to 60:
+//   no mark (before r21, default 78): 78 -> 60;  mark 2 (r21, default 72): 72 -> 60;  mark 3 (default 68): 68 -> 60.  Any other value is the player's own choice and stays.
+const FOV_V = 4, FOV_OLD = { 2: 72, 3: 68 };
+function fovMigrate(o) { if (!o || !o.video || o.fovV === FOV_V) return false; const old = FOV_OLD[o.fovV] || 78, ch = o.video.fov === old; if (ch) o.video.fov = DEFAULTS.video.fov; o.fovV = FOV_V; return ch; }
 let fovMigrated = fovMigrate(S); if (!firstRun) { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {} }
 
 let saveT = 0, syncT = 0, syncState = '';
@@ -385,7 +387,12 @@ function hookSfx() {
 /* ============ video: FOV, brightness, gamma, FPS, shake ============ */
 // FOV: the camera keeps the game's own fov numbers (78 base, weapon ADS zooms); we only widen/narrow the projection by
 // the same ratio in tan-space, so every zoom keeps its magnification and the game's ADS sensitivity stays consistent.
-function fovActive() { const s = S9(); return s && (s.state === 'play' || s.state === 'paused'); }
+// also while dead in a FIRST-PERSON view that uses the game's 78-based fovs: the killcam replay through the killer's eyes and spectating
+// (follow / free / chase cam). They used to stay at the raw 78 (~108 deg horizontal), so a killcam looked far wider than the player's own view.
+// The orbit killcam (blasts, fov 62) and the death cam (62 / 45) are fixed cinematic lenses: unchanged.
+function fovActive() { const s = S9(); if (!s) return false; const st = s.state; if (st === 'play' || st === 'paused') return true; if (st !== 'dead') return false;
+  const KC = window.S9KC; if (KC ? KC.inReplay && !(KC.clip && KC.clip.orbit) : typeof REC !== 'undefined' && REC.on) return true;   // eslint-disable-line no-undef
+  return !!(window.SPECTATE && window.SPECTATE.on); }
 function mapFov(f) { const r = Math.tan(S.video.fov * Math.PI / 360) / Math.tan(78 * Math.PI / 360); return 360 / Math.PI * Math.atan(Math.tan(f * Math.PI / 360) * r); }
 function hookCamera() {
   const s = S9(); if (!s || !s.camera || s.camera.__s9fov) return;
@@ -750,7 +757,7 @@ const NOTE = () => `<div class="s9s-note live"${loadNote ? '' : ' hidden'}><span
 // sensitivity equivalents: the game turns .0021 rad per mouse count at 1.0
 const cm360 = s => (2 * Math.PI / (.0021 * s)) / 800 * 2.54;
 const sensExtra = () => `≈ ${cm360(S.mouse.sens).toFixed(1)} cm per 360° at 800 DPI · same feel as CS2 ${(S.mouse.sens * .0021 * 180 / Math.PI / .022).toFixed(2)} · Valorant ${(S.mouse.sens * .0021 * 180 / Math.PI / .07).toFixed(3)}`;
-const fovExtra = () => `${S.video.fov}° vertical ≈ ${Math.round(360 / Math.PI * Math.atan(Math.tan(S.video.fov * Math.PI / 360) * 16 / 9))}° horizontal on a 16:9 screen. Default 68.`;
+const fovExtra = () => `${S.video.fov}° vertical ≈ ${Math.round(360 / Math.PI * Math.atan(Math.tan(S.video.fov * Math.PI / 360) * 16 / 9))}° horizontal on a 16:9 screen. Default 60.`;
 
 function tabHTML(t) {
   if (t === 'gameplay') return NOTE() + sec('Feedback', rToggle('gameplay.damageNumbers', 'Damage numbers', 'Numbers that pop out of an enemy when you hit them.') +
@@ -1027,11 +1034,12 @@ function injectButtons() {
 }
 
 /* ============ per-frame work (runs just before the game's own frame) ============ */
-let lastTrauma = 0, lastState = '';
+let lastTrauma = 0, lastState = '', lastFovOn = false;
 function tick() {
   const s = S9(); if (!s) return;
   const st = s.state;
   if (st !== lastState) { if (st !== 'play' && st !== 'dead') resetHeld(); if (st !== 'play') adsOn = false; lastState = st; if (fovActive() && s.camera) s.camera.updateProjectionMatrix(); }
+  { const on = !!fovActive(); if (on !== lastFovOn) { lastFovOn = on; if (s.camera) s.camera.updateProjectionMatrix(); } }   // killcam / spectate starts or ends inside the dead state
   if (!AUD.wired && s.AU && s.AU.ctx && s.AU.master) wireAudio();
   if (s.P) { const t = s.P.trauma || 0; if (S.video.shake < 1 && t > lastTrauma + 1e-5) s.P.trauma = lastTrauma + (t - lastTrauma) * S.video.shake; lastTrauma = s.P.trauma || 0; }
   if (st === 'play' || st === 'dead' || st === 'paused') { updateColorblind(); updateGameXH(); }

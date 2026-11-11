@@ -43,22 +43,38 @@ function loadState() {
   try { const s = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); if (s && s.eq && typeof s.eq === 'object') for (const [w, id] of Object.entries(s.eq)) if (ID_RE.test(w) && ID_RE.test(String(id)) && (id === 'factory' || BYID.has(id))) state.eq[w] = id; } catch (e) {}
 }
 function saveState() { try { localStorage.setItem(LS_KEY, JSON.stringify({ v: 1, eq: state.eq })); } catch (e) {} syncAccount(); }
-let syncT = 0;
+let syncT = 0, syncPending = false, syncFlying = 0, pulledKey = null;
+// what the server holds for your finishes, as a stable key ({} = all factory)
+const eqKey = g => JSON.stringify(Object.keys(g || {}).sort().map(k => [k, g[k]]));
+const sentLook = () => { const g = {}; for (const [w, id] of Object.entries(state.eq)) if (id && id !== 'factory') g[w] = id; return g; };
 function syncAccount() {
   const A = window.S9Account; if (!A) return;
-  clearTimeout(syncT); syncT = setTimeout(() => {
+  clearTimeout(syncT); syncPending = true;
+  syncT = setTimeout(() => {
+    syncPending = false;
     try {
-      const gunSkins = {}; for (const [w, id] of Object.entries(state.eq)) if (id && id !== 'factory') gunSkins[w] = id;
-      const body = { gunSkins };
-      if (typeof A.api === 'function') { const r = A.api('/api/me/look', { method: 'PUT', body }); if (r && r.catch) r.catch(() => {}); }
-      else if (typeof A.putLook === 'function') A.putLook(body);
+      const gunSkins = sentLook(), body = { gunSkins };
+      // the cached account profile is only re-fetched on account events: keep it in step with what we send, and remember it as
+      // the server state we already have, so the account poll never "restores" the finish you just replaced (owner 2026-11-10:
+      // a new finish flipped back to the old one a few seconds later, then back again after the next XP refresh)
+      pulledKey = eqKey(gunSkins);
+      try { const p = typeof A.getProfile === 'function' ? A.getProfile() : null; if (p && typeof p === 'object' && typeof p.then !== 'function') p.look = Object.assign({}, p.look || {}, { gunSkins: Object.assign({}, gunSkins) }); } catch (e) {}
+      let r = null;
+      if (typeof A.api === 'function') r = A.api('/api/me/look', { method: 'PUT', body });
+      else if (typeof A.putLook === 'function') r = A.putLook(body);
+      if (r && typeof r.then === 'function') { syncFlying++; r.catch(() => {}).then(() => { syncFlying = Math.max(0, syncFlying - 1); }); }
     } catch (e) {}
   }, 500);
 }
+// the server's copy wins only when it really CHANGED since we last saw / sent it (another device, the shop's equip), never
+// while our own change is still on its way; a finish the server dropped (unequipped elsewhere) goes back to factory
 function pullAccount() {
   try { const A = window.S9Account; const p = A && (typeof A.getProfile === 'function' ? A.getProfile() : A.profile); const g = p && p.look && p.look.gunSkins;
     if (!g || typeof g !== 'object' || typeof g.then === 'function') return;
+    if (syncPending || syncFlying) return;
+    const key = eqKey(g); if (key === pulledKey) return; const first = pulledKey === null; pulledKey = key;
     let ch = false; for (const [w, id] of Object.entries(g)) if (BYID.has(id) && fits(BYID.get(id), w) && state.eq[w] !== id) { state.eq[w] = id; ch = true; }
+    if (!first) for (const w of Object.keys(state.eq)) if (state.eq[w] !== 'factory' && !(w in g)) { state.eq[w] = 'factory'; ch = true; }
     if (ch) { try { localStorage.setItem(LS_KEY, JSON.stringify({ v: 1, eq: state.eq })); } catch (e) {} refreshViewmodels(); decorateArsenal(); }
   } catch (e) {}
 }
@@ -466,7 +482,9 @@ function shopItem(s, weapon) {
 function owns(s, weapon) {
   if (!s || s.default) return true;
   if (typeof API.ownsOverride === 'function') return !!API.ownsOverride(s.id, weapon);
-  const it = shopItem(s, weapon); if (it) return !!it.owned;
+  // the shop's list is the truth only when it is YOUR signed-in inventory: its guest / offline copy (server unreachable, cold
+  // start) marks every item not owned, and trusting it put every owned finish back to factory until the shop loaded again
+  const D = window.S9Shop && window.S9Shop.data, it = D && D.signedIn ? shopItem(s, weapon) : null; if (it) return !!it.owned;
   // shop not loaded yet: trust only what the server already accepted on your account look
   try { const A = window.S9Account; const p = A && (typeof A.getProfile === 'function' ? A.getProfile() : A.profile); const g = p && p.look && p.look.gunSkins; if (g && typeof g.then !== 'function' && g[weapon] === s.id) return true; } catch (e) {}
   return false;

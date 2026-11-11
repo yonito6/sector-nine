@@ -1,0 +1,82 @@
+{
+ "about": "Sound occlusion rules shared by the game (index.html OCC / occlude()) and the Unity port. mat: [dB, low-pass Hz] by the blocking solid's material; thick: extra dB per metre beyond ref (capped at max); around: a route round a corner / through a doorway exists -> played from its first visible corner with these numbers (+ perM x extra route metres, low-pass from lp to lpFar over maxExtra m), level kept to the whole route; over: a waist-high obstacle only takes the top off; budget: rays / route searches per frame, answers cached per cell m of source position for ttl s.",
+ "on": true,
+ "ttl": 0.12,
+ "cell": 0.5,
+ "maxDist": 60,
+ "diffractDist": 30,
+ "maxExtra": 14,
+ "mat": {
+  "default": [
+   -13,
+   800
+  ],
+  "concrete": [
+   -14,
+   700
+  ],
+  "stone": [
+   -14,
+   700
+  ],
+  "rock": [
+   -14,
+   700
+  ],
+  "metal": [
+   -12,
+   900
+  ],
+  "sheet": [
+   -11,
+   1100
+  ],
+  "wood": [
+   -10,
+   1300
+  ],
+  "crate": [
+   -10,
+   1300
+  ],
+  "drywall": [
+   -10,
+   1400
+  ],
+  "glass": [
+   -7,
+   2200
+  ],
+  "grate": [
+   -3,
+   5000
+  ],
+  "ice": [
+   -9,
+   1600
+  ],
+  "crystal": [
+   -8,
+   2000
+  ]
+ },
+ "thick": {
+  "ref": 0.3,
+  "perM": -4,
+  "max": -6
+ },
+ "around": {
+  "dB": -4,
+  "perM": -0.6,
+  "lp": 3500,
+  "lpFar": 1500
+ },
+ "over": {
+  "dB": -2,
+  "lp": 5000
+ },
+ "budget": {
+  "rays": 12,
+  "paths": 1
+ }
+}

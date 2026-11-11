@@ -97,23 +97,27 @@
   }
   // full = PBR glove (fabric weave normal map); lite = weak tier (Performance): Lambert, no normal map, same zone colours.
   // Both share ONE uniform set (a skin change updates both) and both programs are compiled at load (warm()).
-  let U = null;
+  let U = null, FLAT = null;
   function makeMat(lite) {
     const m = lite ? new T.MeshLambertMaterial({ color: 0xffffff }) : new T.MeshStandardMaterial({ color: 0xffffff, roughness: .6, metalness: 0, envMapIntensity: .3, normalMap: weave(), normalScale: new T.Vector2(.5, .5) });
     m.name = lite ? 's9_hands_lite' : 's9_hands';
-    if (!U) U = { uZC: { value: ZC.map(c => new T.Vector3(...c)) }, uZRM: { value: ZRM.map(c => new T.Vector2(...c)) }, uGlow: { value: new T.Vector3(...GLOW) } };
+    if (!U) { FLAT = new T.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1); FLAT.needsUpdate = true;
+      U = { uZC: { value: ZC.map(c => new T.Vector3(...c)) }, uZRM: { value: ZRM.map(c => new T.Vector2(...c)) }, uGlow: { value: new T.Vector3(...GLOW) },
+        uPat: { value: FLAT }, uPatK: { value: new T.Vector4(0, 0, 0, 1 / 34) }, uPatCol: { value: new T.Vector3() }, uPatZ: { value: new T.Vector2() } }; }
     m.userData.u = U;
     m.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, U);
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float zone;\nvarying float vZone;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvZone = zone;');
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vZone;\nuniform vec3 uZC[6];\nuniform vec2 uZRM[6];\nuniform vec3 uGlow;')
-        .replace('#include <color_fragment>', '#include <color_fragment>\nint zi = int(vZone + .5);\ndiffuseColor.rgb *= uZC[zi];')
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float zone;\nvarying float vZone;\nvarying vec3 vHP;\nvarying vec3 vHN;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvZone = zone; vHP = position; vHN = normal;');
+      // the skin's surface pattern (camo / pixels / scales / veins...): tri-planar in hand space at the body's scale (cm), mixed
+      // exactly like the soldier body shader does (r = pattern colour, g = darken, b = glow), on the zones the skin's own hands use it
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vZone;\nvarying vec3 vHP;\nvarying vec3 vHN;\nuniform vec3 uZC[6];\nuniform vec2 uZRM[6];\nuniform vec3 uGlow;\nuniform sampler2D uPat;\nuniform vec4 uPatK;\nuniform vec3 uPatCol;\nuniform vec2 uPatZ;')
+        .replace('#include <color_fragment>', '#include <color_fragment>\nint zi = int(vZone + .5);\ndiffuseColor.rgb *= uZC[zi];\nfloat s9pg = 0.;\nfloat pz = (zi == 0 || zi == 2) ? uPatZ.x : (zi == 5 ? uPatZ.y : 0.);\nif (pz > .5 && uPatK.x + uPatK.y + uPatK.z > 0.) { vec3 bp = vHP * 100. * uPatK.w; vec3 an = abs(normalize(vHN)); an /= (an.x + an.y + an.z + 1e-4);\n vec4 pt = texture2D(uPat, bp.yz) * an.x + texture2D(uPat, bp.xz + vec2(.37, .11)) * an.y + texture2D(uPat, bp.xy + vec2(.71, .53)) * an.z;\n diffuseColor.rgb = mix(diffuseColor.rgb, uPatCol, pt.r * uPatK.x) * (1. - pt.g * uPatK.y); s9pg = pt.b * uPatK.z; }')
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = uZRM[zi].x;')
         .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = uZRM[zi].y;')
-        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nif (zi == 4) totalEmissiveRadiance += uGlow;');
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nif (zi == 4) totalEmissiveRadiance += uGlow;\ntotalEmissiveRadiance += uGlow * s9pg;');
     };
-    m.customProgramCacheKey = () => lite ? 's9_hands_lite_v1' : 's9_hands_v1';
+    m.customProgramCacheKey = () => lite ? 's9_hands_lite_v2' : 's9_hands_v2';
     return m;
   }
   let MAT_LITE = null;
@@ -128,11 +132,13 @@
   const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
   function setZones(h) {
     const Z = U.uZC.value, R = U.uZRM.value;
-    if (!h) { ZC.forEach((c, i) => Z[i].set(...c)); ZRM.forEach((c, i) => R[i].set(...c)); U.uGlow.value.set(...GLOW); H.look = h ? h.skin : 'std'; return; }
+    if (!h) { ZC.forEach((c, i) => Z[i].set(...c)); ZRM.forEach((c, i) => R[i].set(...c)); U.uGlow.value.set(...GLOW); U.uPat.value = FLAT; U.uPatK.value.set(0, 0, 0, 1 / 34); U.uPatZ.value.set(0, 0); H.look = 'std'; return; }
     Z[0].set(...h.glove); Z[2].set(...h.glove).multiplyScalar(.55).addScalar(.012); Z[5].set(...h.sleeve);
     Z[1].set(...lerp3(ZC[1], h.plate, .6)); Z[3].set(...lerp3(ZC[3], h.plate, .35));
     R[0].set(...h.gloveRM); R[5].set(...h.sleeveRM);
     const g = h.glow, L = Math.max(.05, g[0] * .2126 + g[1] * .7152 + g[2] * .0722); U.uGlow.value.set(g[0], g[1], g[2]).multiplyScalar(Math.min(1.2, .5 / L));
+    const pt = h.pat; if (pt && pt.tex) { U.uPat.value = pt.tex; U.uPatK.value.set(pt.amt, pt.dark, pt.glow, pt.scale); U.uPatCol.value.set(...pt.col); U.uPatZ.value.set(pt.on[0], pt.on[1]); }
+    else { U.uPat.value = FLAT; U.uPatK.value.set(0, 0, 0, 1 / 34); U.uPatZ.value.set(0, 0); }
     H.look = h.skin;
   }
   function whoseLook() {
@@ -145,7 +151,7 @@
     const SK = window.S9Skins; if (!MAT || !U) return;
     if (!SK || typeof SK.handLook !== 'function') return syncTint();   // older skins.js: follow GLOVE_M / SLEEVE_M
     const w = whoseLook(); if (w.key === lookKey) return; lookKey = w.key;
-    try { setZones(SK.handLook(w.look)); H.killerHands = w.killer; } catch (e) { warn(e); }
+    try { const h = SK.handLook(w.look); setZones(h); H.killerHands = w.killer; if (h && h.pending) lookKey = ''; } catch (e) { warn(e); }
   }
   // skins.js tints the shared glove / sleeve materials: copy that tint onto our fabric + sleeve zones (std skin = neutral)
   let tintKey = '';
@@ -227,6 +233,14 @@
       if (m.geometry !== want) m.geometry = want; }
   }
 
+  /* the core hides the whole right-hand group while aiming (gunRear.visible = ads < .6: the old capsule hand covered the sights);
+     the gloved hand sits on the grip under the line of sight, so it stays in the hands while aiming like in every modern shooter
+     (owner 2026-11-10: the hand popped away on every ADS). The gun group itself still hides for a scope view. Every group that
+     holds one of our hands on the drawn viewmodels is shown (the old primitive hands in it stay on the hidden layer). */
+  function keepTrigger() {
+    const WM = gv('WM'); if (!WM) return;
+    for (const id in WM) { const vm = WM[id], m = vm && vm.s9hands && vm.s9hands.R; if (!m || !vm.group.visible || m.parent !== vm.rear || m.parent.visible) continue; m.parent.visible = true; }
+  }
   /* ------------------------------------------------------------------ hooks */
   let hooked = false;
   function hook() {
@@ -236,7 +250,7 @@
     const sm = gv('setModel');
     if (typeof sm === 'function' && !sm.__s9h) { const f = function (name) { try { const WM = gv('WM'); if (WM && WM[name]) applyVM(name, WM[name]); } catch (e) { warn(e); } return sm.apply(this, arguments); }; f.__s9h = true; f.__orig = sm; assign('setModel', f); }
     const gs = gv('gunScene');
-    if (gs) { const prev = gs.onBeforeRender; gs.onBeforeRender = function () { try { if (H.on && H.ready) { const WM = gv('WM'), P = gv('P'); if (WM && P && WM[P.weapon] && WM[P.weapon].group.userData.s9h !== H.gen) applyVM(P.weapon, WM[P.weapon]); syncLook(); syncTier(); liveSwitch(); } } catch (e) { warn(e); } if (prev) return prev.apply(this, arguments); }; }
+    if (gs) { const prev = gs.onBeforeRender; gs.onBeforeRender = function () { try { if (H.on && H.ready) { const WM = gv('WM'), P = gv('P'); if (WM && P && WM[P.weapon] && WM[P.weapon].group.userData.s9h !== H.gen) applyVM(P.weapon, WM[P.weapon]); syncLook(); syncTier(); liveSwitch(); keepTrigger(); } } catch (e) { warn(e); } if (prev) return prev.apply(this, arguments); }; }
   }
   // shader warm-up: compile our one program now, not on the first equip
   function warm() {
@@ -286,7 +300,7 @@
   H.mat = () => MAT;
   H.matLite = () => MAT_LITE;
   H.curMat = () => curMat();
-  H.zones = () => ({ look: H.look, killer: !!H.killerHands, glove: U.uZC.value[0].toArray(), sleeve: U.uZC.value[5].toArray(), plate: U.uZC.value[1].toArray(), glow: U.uGlow.value.toArray(), gloveRM: U.uZRM.value[0].toArray(), sleeveRM: U.uZRM.value[5].toArray() });
+  H.zones = () => ({ pat: U.uPatK.value.toArray().map(v => +v.toFixed(3)), patOn: U.uPatZ.value.toArray(), look: H.look, killer: !!H.killerHands, glove: U.uZC.value[0].toArray(), sleeve: U.uZC.value[5].toArray(), plate: U.uZC.value[1].toArray(), glow: U.uGlow.value.toArray(), gloveRM: U.uZRM.value[0].toArray(), sleeveRM: U.uZRM.value[5].toArray() });
   H.syncLook = () => { lookKey = ''; syncLook(); syncTier(); return H.zones(); };
   // tooling (render/hands/fit.js): pose the rig and read joint positions in palm space
   H._joints = (bonesP, side) => { setPose(bonesP); const R = RIG, palm = new T.Matrix4().multiplyMatrices(R.handRest, new T.Matrix4().copy(R.by.hand.matrixWorld).invert()), out = {};

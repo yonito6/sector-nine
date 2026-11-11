@@ -6,8 +6,8 @@
      viewmodel (hands, reticle, flash) and the third-person gun (bots, online players, drops);
    - the BOLT: a separate part animated through the cycle (lift, pull back, push, lock) in first person (from P.boltT) and in
      third person (bots: when they fire; online players: on their shot event, so everyone sees the same cycle);
-   - its own scope (Cryzen style): a round 1.75x lens in the middle of an un-zoomed, dimmed screen (picture-in-picture inside the post
-     chain), black ring, posts, mil lines and a bright centre dot inside the lens. The scope snaps in / out on the same frame (WEAPONS.obelisk.scopeSnap,
+   - its scope is REAL: aiming brings the gun's eyepiece to your eye (gun + hands visible) and a 1.75x picture-in-picture lens with the
+     crosshair is drawn inside the eyepiece (moves with the gun); the rest of the screen keeps the normal view. The scope snaps in / out on the same frame (WEAPONS.obelisk.scopeSnap,
      no zoom tween, no sway), drops while the bolt cycles and comes back if you still hold aim (index.html adsT); a weapon switch
      cancels the bolt (draw 0.4 s: quick-switch);
    - bots: half of the sniper bots carry the Obelisk (BOTW.obelisk in index.html).
@@ -76,7 +76,7 @@
   }
   { const _b = buildGunVM; buildGunVM = function (id) {
       const vm = _b.apply(this, arguments);
-      if (id === ID && vm && vm.group && OB.model) { try { vm.obBolt = addBolt(vm.group, false); if (vm.hip) vm.hip.set(.19, -.215, -.52); OB.stats.vmBuilt++; } catch (e) { warn(e); } }   // a little further out: the long receiver + bolt stay in view
+      if (id === ID && vm && vm.group && OB.model) { try { vm.obBolt = addBolt(vm.group, false); if (vm.hip) vm.hip.set(.19, -.215, -.52); if (OB.adsFor) OB.adsFor(vm); OB.stats.vmBuilt++; } catch (e) { warn(e); } }   // a little further out: the long receiver + bolt stay in view
       return vm; }; }
   function rebuild() {   // the viewmodel made at boot (before the model arrived) is the generic fallback: build the real one now
     try {
@@ -114,43 +114,70 @@
       if (profile && profile.weapon === 'sniper' && !OB.noBots && (OB.forceBots || Math.random() < .5)) { profile = Object.assign({}, profile, { weapon: ID }); OB.stats.botSwaps++; }
       return _bb.call(this, profile); }; }
 
-  /* ---------- scope: Cryzen style lens (2026-11-10, owner) ----------
-     The screen keeps the NORMAL view (WEAPONS.obelisk.adsFov = the hip 78: no zoom, slightly dimmed around the scope); only a round lens
-     in the middle (LENS.r = 30 % of the screen height as radius, i.e. 60 % diameter) shows the view magnified LENS.mag (1.75x). The lens
-     is a picture-in-picture: the scene is drawn from the same eye with a narrower FOV into a small render target (LENS.scale = 0.6 of
-     the lens's pixel size), then composited in a circle INSIDE the post chain (after the world + gun pass, before bloom and the colour
-     grade), so the lens gets the same bloom / tone mapping as the rest of the frame for free. The crosshair is the lens centre = the
-     screen centre = where shots go. It opens on the same frame as aim (scopeSnap), no zoom animation; the gun model is hidden. */
-  const LENS = OB.lens = { r: .3, mag: WEAPONS[ID].lens || 1.75, scale: .6, on: false, frames: 0, px: 0, cssR: 0, fov: 0, magNow: 0, probe: false, ms: 0 };
+  /* ---------- scope: the lens IS the gun's scope (2026-11-11, owner) ----------
+     Aiming brings the gun up so its scope's eyepiece sits in front of your eye (adsPos from the model's eyepiece, EP); the gun, hands
+     and rail stay visible around it. Inside the eyepiece a picture-in-picture lens shows the view magnified LENS.mag (1.75x); the rest of
+     the screen keeps the normal un-zoomed view (adsFov = hip 78). Each frame the eyepiece is projected from the real viewmodel (so the
+     lens moves with the gun), the scene is drawn from the same eye with the matching narrow FOV into a small render target (0.6x of
+     the lens's pixels) and composited inside the post chain (after the world + gun, before bloom and the colour grade), with the
+     crosshair (thin lines, posts, bright dot) drawn in the lens; its centre is exactly where the shot goes. Opens on the same frame. */
+  const LENS = OB.lens = { mag: WEAPONS[ID].lens || 1.75, scale: .6, frac: .21, inner: .82, on: false, frames: 0, px: 0, cssR: 0, cx: 0, cy: 0, fov: 0, magNow: 0, probe: false, ms: 0 };
+  const EP = OB.eyepiece = { ok: false, cx: 0, cy: .1, cz: 0, r: .02 };
+  function eyepiece() {   // the rear ring of the scope tube, in the gun's own space (sight parts are added unscaled at the origin)
+    const parts = KIT.g_obelisk_sight || []; let maxZ = -1e9, minZ = 1e9; const v = new THREE.Vector3();
+    for (const p of parts) { const a = p.geo.attributes.position; for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i); if (v.z > maxZ) maxZ = v.z; if (v.z < minZ) minZ = v.z; } }
+    if (!(maxZ > minZ)) return; const cut = maxZ - (maxZ - minZ) * .04; let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const p of parts) { const a = p.geo.attributes.position; for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i); if (v.z < cut) continue; x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); } }
+    Object.assign(EP, { ok: true, cx: (x0 + x1) / 2, cy: y1 - (x1 - x0) / 2, cz: maxZ, r: (x1 - x0) / 2 });   // (round tube: centre one radius below its top, mounts below don't count)
+  }
+  OB.adsFor = vm => {   // eyepiece centred on the screen, near enough that it covers LENS.frac of the screen height as radius (gun camera FOV 50 at aim)
+    if (!EP.ok) eyepiece(); if (!EP.ok || !vm || !vm.group) return;
+    const S = vm.group.scale.x || 1, d = S * EP.r / (2 * Math.tan(25 * Math.PI / 180) * LENS.frac);
+    vm.adsPos = new THREE.Vector3(-S * EP.cx, -S * EP.cy, -d - S * EP.cz); if (vm.reticle) vm.reticle.visible = false;
+  };
   const lensCam = new THREE.PerspectiveCamera(20, 1, camera.near, camera.far);
   const lensRT = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType });
-  const lensMat = new THREE.ShaderMaterial({ uniforms: { tLens: { value: lensRT.texture }, uC: { value: new THREE.Vector2() }, uR: { value: 1 } },
+  const lensMat = new THREE.ShaderMaterial({ uniforms: { tLens: { value: lensRT.texture }, uC: { value: new THREE.Vector2() }, uR: { value: 1 }, uPx: { value: .01 } },
     vertexShader: 'void main(){ gl_Position = vec4(position.xy, 0., 1.); }',
-    fragmentShader: 'uniform sampler2D tLens; uniform vec2 uC; uniform float uR; void main(){ vec2 d = (gl_FragCoord.xy - uC) / uR; if (dot(d, d) > 1.) discard; gl_FragColor = vec4(texture2D(tLens, d * .5 + .5).rgb, 1.); }',
+    fragmentShader: `uniform sampler2D tLens; uniform vec2 uC; uniform float uR, uPx;
+      void main(){ vec2 d = (gl_FragCoord.xy - uC) / uR; float l = length(d); if (l > 1.) discard;
+        vec3 c = texture2D(tLens, d * .5 + .5).rgb;
+        float ax = abs(d.x), ay = abs(d.y);
+        float thin = max(step(ay, uPx * .7) * step(ax, .9), step(ax, uPx * .7) * step(ay, .9));                     // thin centre lines
+        float post = max(step(ay, uPx * 2.4) * step(.5, ax), step(ax, uPx * 2.4) * step(.5, ay));                    // thick posts from the rim
+        float tick = 0.; for (int k = 1; k <= 4; k++) { float t = float(k) * .1; tick = max(tick, step(abs(ax - t), uPx * .7) * step(ay, uPx * 4.) + step(abs(ay - t), uPx * .7) * step(ax, uPx * 4.) * step(d.y, 0.)); }
+        c = mix(c, vec3(0.), clamp(max(max(thin, post), tick), 0., 1.));
+        float dot = 1. - smoothstep(uPx * 1.6, uPx * 2.6, l); c = mix(c, vec3(.85, 2.6, 3.2), dot);                    // bright centre dot (HDR: a soft bloom)
+        c *= smoothstep(1., .84, l) * .85 + .15 * step(l, .84);                                                         // the tube's dark inner rim
+        gl_FragColor = vec4(c, 1.); }`,
     depthTest: false, depthWrite: false });
   const lensQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), lensMat), lensScene = new THREE.Scene(), quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   lensQuad.frustumCulled = false; lensScene.add(lensQuad);
-  const lensWanted = () => typeof P !== 'undefined' && P.weapon === ID && P.ads > .85 && !P.dead && state === 'play' && !(typeof REC !== 'undefined' && REC.on);
+  const lensWanted = () => typeof P !== 'undefined' && P.weapon === ID && P.ads > .85 && !P.dead && state === 'play' && !(typeof REC !== 'undefined' && REC.on) && EP.ok && WM[ID] && WM[ID].group === gun;
+  const _c = new THREE.Vector3(), _e = new THREE.Vector3();
   class LensPass extends THREE.Pass {
     constructor() { super(); this.needsSwap = false; }
     render(r, w, read) {
       LENS.on = lensWanted(); if (!LENS.on) return;
       try {
         const t0 = LENS.probe ? (r.getContext().finish(), performance.now()) : 0;
-        const H = read.height, W = read.width, R = LENS.r * H, px = Math.max(64, Math.round(2 * R * LENS.scale));
-        if (lensRT.width !== px) lensRT.setSize(px, px);
-        // same eye as the game camera (incl. render-only kicks), narrower FOV: tan(lens/2) = (lens diameter / screen height) x tan(main/2) / mag
+        const H = read.height, W = read.width, g = gun;
+        g.updateMatrixWorld(); gunCam.updateMatrixWorld();
+        _c.set(EP.cx, EP.cy, EP.cz).applyMatrix4(g.matrixWorld).project(gunCam); _e.set(EP.cx + EP.r * LENS.inner, EP.cy, EP.cz).applyMatrix4(g.matrixWorld).project(gunCam);
+        const cx = (_c.x * .5 + .5) * W, cy = (_c.y * .5 + .5) * H, R = Math.hypot((_e.x - _c.x) * .5 * W, (_e.y - _c.y) * .5 * H);
+        if (!(R > 8)) return;
+        const px = Math.max(64, Math.round(2 * R * LENS.scale)); if (lensRT.width !== px) lensRT.setSize(px, px);
+        // same eye as the game camera (incl. render-only kicks), FOV matching the lens: tan(lens/2) = (lens radius / half screen height) x tan(main/2) / mag
         camera.updateMatrixWorld(); lensCam.position.setFromMatrixPosition(camera.matrixWorld); lensCam.quaternion.setFromRotationMatrix(camera.matrixWorld);
-        const tanM = 1 / camera.projectionMatrix.elements[5], tanL = 2 * LENS.r * tanM / LENS.mag;
+        const tanM = 1 / camera.projectionMatrix.elements[5], tanL = (R / (H / 2)) * tanM / LENS.mag;
         lensCam.fov = 2 * Math.atan(tanL) * 180 / Math.PI; lensCam.near = camera.near; lensCam.far = camera.far; lensCam.updateProjectionMatrix(); lensCam.updateMatrixWorld();
-        LENS.fov = lensCam.fov; LENS.magNow = 2 * LENS.r * tanM / (1 / lensCam.projectionMatrix.elements[5]); LENS.px = px; LENS.cssR = R * innerHeight / H;
-        // particles size themselves from the camera's pixels-per-radian: give them the lens's for this pass
+        const k = innerHeight / H; Object.assign(LENS, { fov: lensCam.fov, magNow: (R / (H / 2)) * tanM / (1 / lensCam.projectionMatrix.elements[5]), px, cssR: R * k, cx: cx * k, cy: innerHeight - cy * k });
         const sc = px / (2 * tanL), mats = [typeof FX !== 'undefined' && FX.mat, typeof SMOKE !== 'undefined' && SMOKE.mat, typeof DUST !== 'undefined' && DUST].filter(m => m && m.uniforms && m.uniforms.uScale), keep = mats.map(m => m.uniforms.uScale.value);
         mats.forEach(m => { m.uniforms.uScale.value = sc; });
         const au = r.shadowMap.autoUpdate; r.shadowMap.autoUpdate = false;   // the lens reuses this frame's shadow maps
         r.setRenderTarget(lensRT); r.clear(); r.render(scene, lensCam);
         r.shadowMap.autoUpdate = au; mats.forEach((m, i) => { m.uniforms.uScale.value = keep[i]; });
-        lensMat.uniforms.uC.value.set(W / 2, H / 2); lensMat.uniforms.uR.value = R;
+        lensMat.uniforms.uC.value.set(cx, cy); lensMat.uniforms.uR.value = R; lensMat.uniforms.uPx.value = 1 / R;
         r.setRenderTarget(read); r.render(lensScene, quadCam); LENS.frames++;
         if (LENS.probe) { r.getContext().finish(); LENS.ms = performance.now() - t0; }
       } catch (e) { warn(e); }
@@ -159,18 +186,8 @@
   OB.lensWarm = () => { try { renderer.compile(lensScene, quadCam); } catch (e) { warn(e); } };
   try { const gi = composer.passes.findIndex(p => p && p.constructor && p.constructor.name === 'GunPass'); composer.insertPass(new LensPass(), gi >= 0 ? gi + 1 : 2); } catch (e) { warn(e); }
   const css = document.createElement('style');
-  // overlay: dim (not black) outside the lens, a black scope ring at the lens edge with a soft inner shade, posts + mil lines + dot
-  // inside the lens only. .oblens = the lens circle itself (transparent: geometry for tests / layout).
-  css.textContent = '#scope.ob{background:radial-gradient(circle at center,transparent 0 24vh,rgba(0,0,0,.32) calc(30vh - 1px),#000 30vh,#000 31.6vh,rgba(0,0,0,.55) 32.6vh,rgba(0,0,0,.26) 38vh)}' +
-    '#scope .oblens{display:none}#scope.ob .oblens{display:block;left:50%;top:50%;width:60vh;height:60vh;margin:-30vh 0 0 -30vh;border-radius:50%;background:none}' +
-    '#scope.ob .h{left:calc(50% - 30vh);right:auto;width:60vh}#scope.ob .v{top:calc(50% - 30vh);bottom:auto;height:60vh}' +
-    '#scope.ob .tl{left:calc(50% - 30vh);width:22vh;height:6px;margin-top:-3px}#scope.ob .tr{right:calc(50% - 30vh);width:22vh;height:6px;margin-top:-3px}' +
-    '#scope.ob .tb{bottom:calc(50% - 30vh);height:22vh;width:6px;margin-left:-3px}#scope .tt{display:none}#scope.ob .tt{display:block;top:calc(50% - 30vh);height:22vh;left:50%;width:6px;margin-left:-3px}' +
-    '#scope .obx,#scope .oby{display:none}#scope.ob .obx{display:block;left:calc(50% - 8vh);width:16vh;top:50%;height:9px;margin-top:-4.5px;background:repeating-linear-gradient(90deg,#000 0 1px,transparent 1px 1.6vh);background-position:center;-webkit-mask:linear-gradient(90deg,#000 0 47%,transparent 47% 53%,#000 53%);mask:linear-gradient(90deg,#000 0 47%,transparent 47% 53%,#000 53%)}' +
-    '#scope.ob .oby{display:block;top:calc(50% - 8vh);height:16vh;left:50%;width:9px;margin-left:-4.5px;background:repeating-linear-gradient(0deg,#000 0 1px,transparent 1px 1.6vh);background-position:center;-webkit-mask:linear-gradient(0deg,#000 0 47%,transparent 47% 53%,#000 53%);mask:linear-gradient(0deg,#000 0 47%,transparent 47% 53%,#000 53%)}' +
-    '#scope.ob .dot{width:3px;height:3px;margin:-1.5px 0 0 -1.5px;background:#d8fbff;box-shadow:0 0 5px #6fdcff}';
+  css.textContent = '#scope.ob{display:none!important}';   // the crosshair lives in the lens (it moves with the gun's scope)
   document.head.appendChild(css);
-  { const sc = document.getElementById('scope'); if (sc) { const l = document.createElement('i'); l.className = 'oblens'; sc.prepend(l); for (const c of ['tt', 'obx', 'oby']) { const i = document.createElement('i'); i.className = c; sc.appendChild(i); } } }
   let scopeOn = null;
 
   /* ---------- per frame (once): first-person bolt, third-person cycles, scope style ---------- */
@@ -179,6 +196,8 @@
       try {
         const mine = typeof P !== 'undefined' && P.weapon === ID;
         if (mine !== scopeOn) { scopeOn = mine; const sc = document.getElementById('scope'); if (sc) sc.classList.toggle('ob', mine); }
+        // scoped: the gun stays in view (the core hides scoped guns) with both hands; the lens is drawn in its eyepiece (LensPass)
+        { const v = typeof WM !== 'undefined' && WM[ID]; if (mine && v && v.group === gun && P.ads > .5) { gun.visible = true; if (gunRear) gunRear.visible = true; if (reticle) reticle.visible = false; } }
         const vm = typeof WM !== 'undefined' && WM[ID];
         const u = mine && P.boltT > 0 ? 1 - P.boltT / (P.boltDur || WEAPONS[ID].bolt) : 0;
         if (vm && vm.obBolt) poseBolt(vm.obBolt, u, false);

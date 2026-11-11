@@ -2,6 +2,19 @@
   "about": "What's New feed shown in the game (modules/news.js). Newest first is not required: the game sorts by date + version. Fields: id (unique), date YYYY-MM-DD, version, title, items[], big (highlighted card), image (optional, relative path like assets/ui/news/x.jpg). Written by the release manager (qa/release) when a big feature goes live.",
   "entries": [
     {
+      "id": "mod-gfxplus",
+      "date": "2026-11-11",
+      "version": "2026.11.11-r29",
+      "title": "Lighting and atmosphere",
+      "big": true,
+      "items": [
+        "Wet neon streets with glowing reflections",
+        "Sun rays and light shafts on sunny maps",
+        "Floating dust, embers, steam and slow ships in the sky",
+        "Sparks on every bullet hit and a brighter muzzle flash"
+      ]
+    },
+    {
       "id": "mod-skins",
       "date": "2026-11-11",
       "version": "2026.11.11-r27",

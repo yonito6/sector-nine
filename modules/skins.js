@@ -1209,9 +1209,14 @@ function apply(target, skinId, colours) {
   if (visor) { visor.visible = !!geo.userData.s9.visor && visor.userData.s9orig.vis !== false; if (st.vmat) { visor.material = st.vmat; const vm = st.vmat; vm.emissiveIntensity = 1; vm.roughness = .08; vm.metalness = .45; vm.envMapIntensity = 1.6;
     if (!vm.userData.s9fres) { vm.userData.s9fres = 1; vm.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>'+String.fromCharCode(10)+' float s9fr = 1. - abs(dot(normalize(vNormal), normalize(vViewPosition))); totalEmissiveRadiance *= .22 + 1.9 * pow(s9fr, 2.2);'); }; vm.customProgramCacheKey = () => 's9visor-v1'; vm.needsUpdate = true; } } }
   if (r) { r.body = m; if (r.bodyCol) r.bodyCol = m.color.clone(); r.s9look = look; r.s9key = lookCode(look); }
+  // what you see is what you hit: a skin whose head / legs are drawn bigger than the standard soldier gets its hitboxes scaled to
+  // match (qa/qa_hitreg.js measures every skin: >= 99% of the rays that land on the drawn body must hit a hitbox). 'std' = x1.
+  if (r && r.meshes) { const K = HITBOX_K[look.skin] || {}; for (const hb of r.meshes) { const b0 = hb.userData.s9hb0 || (hb.userData.s9hb0 = hb.scale.x); const key = hb.userData.zone === 'limb' ? hb.userData.part : hb.userData.zone; hb.scale.setScalar(b0 * (K[key] || 1)); } }
   body.onBeforeRender = syncFn(body);
   return true;
 }
+// per-skin hitbox scale (zone head / body, part arm / leg); tuned with qa/qa_hitreg.js --coverage-only (skins part)
+const HITBOX_K = { banana: { head: 1.45, leg: 1.15 }, mushroom: { head: 1.45 }, dino: { head: 1.3, leg: 1.55, body: 1.12 }, xeno: { head: 1.4, arm: 1.45, leg: 1.1 }, jugg: { head: 1.15, leg: 1.25, arm: 1.3, body: 1.18 }, skeleton: { leg: 1.3, arm: 1.25, body: 1.18 }, mecha: { arm: 1.8, body: 1.3, leg: 1.15 } };
 // keeps glow/visor in step with what the game does to r.visor (team colour on spawn, dim on death, flash on vaporise)
 function syncFn(body) {
   return function () {
@@ -1265,18 +1270,32 @@ function playerLevel() {
   return 1;
 }
 const unlocked = (item, L = playerLevel()) => !item.level || L >= item.level;
-let syncT = 0;
+let syncT = 0, syncPending = false, syncFlying = 0, pulledKey = null;
+const accKey = a => a ? JSON.stringify([a.skin || null, a.color || null, a.emblem || null]) : '';
 function syncAccount() {
   const A = account(); if (!A) return;
-  clearTimeout(syncT); syncT = setTimeout(() => {
+  clearTimeout(syncT); syncPending = true;
+  syncT = setTimeout(() => {
+    syncPending = false;
     try {
       const body = toAccount(state.look); if (!owns(state.look.skin) || !signedIn()) return;
-      if (typeof A.api === 'function') serverEquip(state.look.skin).then(() => { const r = A.api('/api/me/look', { method: 'PUT', body }); if (r && r.catch) r.catch(() => {}); });
+      // the cached profile is re-fetched on account events (XP after a kill...): while our change is on its way, or if that fetch
+      // still carries the old look, it must not put the old skin (and gloves) back on you
+      pulledKey = accKey(body); try { const p = profile(); if (p) p.look = Object.assign({}, p.look || {}, body); } catch (e) {}
+      const done = () => { syncFlying = Math.max(0, syncFlying - 1); };
+      if (typeof A.api === 'function') { syncFlying++; serverEquip(state.look.skin).then(() => { const r = A.api('/api/me/look', { method: 'PUT', body }); return r && r.then ? r : null; }).catch(() => {}).then(done); }
       else if (typeof A.putLook === 'function') A.putLook(body);
     } catch (e) {}
   }, 400);
 }
-function pullAccount() { const p = profile(); const l = p && fromAccount(p.look); if (l && owns(l.skin)) { state.look = l; state.per[l.skin] = { p: l.p, s: l.s, v: l.v, h: l.h }; saveState(false); refreshAll(); } }
+// the account's look wins only when it really changed since we last saw / sent it (another device, the shop), never while our
+// own change is on its way
+function pullAccount() {
+  if (syncPending || syncFlying) return;
+  const p = profile(), a = p && p.look, k = accKey(a); if (!a || k === pulledKey) return;
+  const l = fromAccount(a); if (!l) { pulledKey = k; return; }
+  if (owns(l.skin)) { pulledKey = k; state.look = l; state.per[l.skin] = { p: l.p, s: l.s, v: l.v, h: l.h }; saveState(false); refreshAll(); }
+}
 
 /* ======================================================================================= ownership: skins are shop items (Nine Shards)
    A soldier skin can be worn when it is OWNED: the default item (Standard Trooper) always; others when GET /api/me/inventory lists
@@ -1353,13 +1372,63 @@ function refreshAll() {
 // Same palette as the third-person soldier: the slot the soldier's own gloves use (HANDS), dark-tactical graded, linear.
 // { skin, std, slots: [glove, sleeve], glove, sleeve, plate, glow: [r,g,b] linear, gloveRM, sleeveRM: [rough, metal] }
 const HL_CACHE = new Map();
+/* which palette slot the third-person soldier's OWN hands (and forearms) are drawn with, read from that skin's built body:
+   every vertex skinned mostly to a hand / finger bone (forearm bone for the sleeve) votes with its material slot; base-body
+   vertices (slot -1) take the soldier texture's material class there, mapped through the skin's base slots exactly like the
+   body shader. Owner 2026-11-11 (live r28): "my gloves and hands still don't match my skin character" - the hand table
+   (HANDS) was hand-written and disagreed with many bodies (e.g. skeleton / mecha / mushroom / butler hands are another colour
+   than the table's slot). The table stays only as a fallback (body not built yet / a skin without a body). */
+const HSLOT = new Map(); let TEXPX = null;
+function texSampler(map) {
+  if (TEXPX !== null) return TEXPX; TEXPX = false;
+  try { const im = map && map.image; if (!im || !im.width) { TEXPX = null; return false; } const c = document.createElement('canvas'), w = Math.min(512, im.width), h = Math.min(512, im.height); c.width = w; c.height = h;
+    const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(im, 0, 0, w, h); const d = x.getImageData(0, 0, w, h).data; TEXPX = { w, h, d, flipY: map.flipY !== false }; } catch (e) { TEXPX = false; }
+  return TEXPX;
+}
+const sl2lin = v => v <= .04045 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4);
+const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+function handSlots(skinId) {
+  if (HSLOT.has(skinId)) return HSLOT.get(skinId);
+  let res = null;
+  try {
+    const base = baseInit(), g = base && buildSkinGeo(skinId, 0); if (!base || !g || !g.attributes.aMat) return null;   // not cached: retried when the body exists
+    const md = MATDEF[skinId] || MATDEF.std, am = g.attributes.aMat.array, si = g.attributes.skinIndex.array, sw = g.attributes.skinWeight.array, uv = g.attributes.uv && g.attributes.uv.array;
+    const tx = texSampler(base.map), used = new Uint8Array(g.attributes.position.count), ix = g.index ? g.index.array : null;
+    if (ix) for (let i = 0; i < ix.length; i++) used[ix[i]] = 1; else used.fill(1);
+    const H = { g: new Float64Array(9), s: new Float64Array(9) }, RM = { g: [0, 0, 0], s: [0, 0, 0] }, P = { g: [0, 0], s: [0, 0] };
+    for (let v = 0; v < used.length; v++) {
+      if (!used[v]) continue;
+      let b = 0, w = -1; for (let k = 0; k < 4; k++) if (sw[v * 4 + k] > w) { w = sw[v * 4 + k]; b = si[v * 4 + k]; }
+      const nm = base.names[b] || '', part = /Hand/.test(nm) ? 'g' : /ForeArm/.test(nm) ? 's' : null; if (!part) continue;
+      const slot = am[v * 4]; P[part][1]++; if (Math.round(am[v * 4 + 3]) & 2) P[part][0]++;
+      if (slot > -.5) { H[part][Math.round(slot)] += 1; if (am[v * 4 + 1] >= 0) { RM[part][0] += am[v * 4 + 1]; RM[part][1] += Math.max(0, am[v * 4 + 2]); RM[part][2]++; } continue; }
+      // base body: the texture class weights of the body shader (primary / other / dark / metal / red) -> the skin's base slots
+      let wt = [0, 0, 1, 0, 0];
+      if (tx && uv) { const u = uv[v * 2] - Math.floor(uv[v * 2]), q = uv[v * 2 + 1] - Math.floor(uv[v * 2 + 1]); const X = Math.min(tx.w - 1, Math.floor(u * tx.w)), Y = Math.min(tx.h - 1, Math.floor((tx.flipY ? 1 - q : q) * tx.h)), o = (Y * tx.w + X) * 4;
+        const r = sl2lin(tx.d[o] / 255), gg = sl2lin(tx.d[o + 1] / 255), bb = sl2lin(tx.d[o + 2] / 255), L = .2126 * r + .7152 * gg + .0722 * bb, mx = Math.max(r, gg, bb) + .004;
+        const wR = sstep(.55, .8, (r - gg) / mx), wM = sstep(-.01, .09, (bb - gg) / mx) * (1 - wR), wO = sstep(-.03, .07, (gg - r) / mx) * (1 - wM) * (1 - wR), wD = 1 - sstep(.012, .05, L), wP = (1 - wR) * (1 - wM) * (1 - wO);
+        wt = [wP * (1 - wD), wO * (1 - wD), wD, wM * (1 - wD), wR * (1 - wD)]; }
+      for (let k = 0; k < 5; k++) if (wt[k] > 0) { H[part][md.base[k]] += wt[k]; const c = md.crm[k] || [.6, .05]; RM[part][0] += c[0] * wt[k]; RM[part][1] += c[1] * wt[k]; RM[part][2] += wt[k]; }
+    }
+    const pick = h => { let best = -1, bw = 0, tot = 0; for (let i = 0; i < 9; i++) tot += h[i]; for (let i = 0; i < 9; i++) { if (i === 4 || i === 8) continue; if (h[i] > bw) { bw = h[i]; best = i; } } return tot > 4 && best >= 0 ? best : null; };
+    const gS = pick(H.g), sS = pick(H.s) ?? gS;
+    if (gS !== null) res = { pat: [P.g[1] ? P.g[0] / P.g[1] : 0, P.s[1] ? P.s[0] / P.s[1] : 0], slots: [gS, sS], gloveRM: RM.g[2] ? [RM.g[0] / RM.g[2], RM.g[1] / RM.g[2]] : null, sleeveRM: RM.s[2] ? [RM.s[0] / RM.s[2], RM.s[1] / RM.s[2]] : null };
+  } catch (e) { res = null; }
+  HSLOT.set(skinId, res); return res;
+}
 function handLook(l) {
   const n = normLook(l || wornLook()), k = lookCode(n); let h = HL_CACHE.get(k); if (h) return h;
-  const d = SKIN[n.skin] || SKIN.std, md = MATDEF[n.skin] || MATDEF.std, [gs, ss] = HANDS[n.skin] || [2, 1];
+  const hs = handSlots(n.skin);
+  const d = SKIN[n.skin] || SKIN.std, md = MATDEF[n.skin] || MATDEF.std, [gs, ss] = hs ? hs.slots : HANDS[n.skin] || [2, 1];
   const lin = i => { const c = new T.Color(i === 0 ? '#' + n.p : i === 1 ? '#' + n.s : i === 4 ? '#' + n.v : d.pal[i]); if (i !== 4) grimTone(c, i); c.convertSRGBToLinear(); return [c.r, c.g, c.b]; };
   const cl = md.crm[1] || [.6, 0];
-  h = { skin: n.skin, std: n.skin === 'std', slots: [gs, ss], glove: lin(gs), sleeve: lin(ss), plate: lin(7), glow: lin(4), gloveRM: [.6, .05], sleeveRM: [Math.min(.95, cl[0] + .12), Math.min(.5, cl[1])] };
-  if (HL_CACHE.size > 64) HL_CACHE.clear(); HL_CACHE.set(k, h); return h;
+  const rmOf = (v, d0) => v ? [Math.min(.95, Math.max(.2, v[0])), Math.min(.9, Math.max(0, v[1]))] : d0;
+  h = { skin: n.skin, std: n.skin === 'std', slots: [gs, ss], glove: lin(gs), sleeve: lin(ss), plate: lin(7), glow: lin(4), gloveRM: rmOf(hs && hs.gloveRM, [.6, .05]), sleeveRM: rmOf(hs && hs.sleeveRM, [Math.min(.95, cl[0] + .12), Math.min(.5, cl[1])]), src: hs ? 'body' : 'table' };
+  // the skin's surface pattern (camo, pixels, scales, veins...) where its own hands / forearms wear it
+  if (hs && (hs.pat[0] > .5 || hs.pat[1] > .5)) { const [pk, amt, dark, glow] = md.pat; if (amt > 0 || dark > 0 || glow > 0) { try { h.pat = { tex: patTex(pk, hashStr(n.skin) % 997 + 1), amt, dark, glow, col: lin(md.patCol), scale: md.patS || 1 / 34, on: [hs.pat[0] > .5 ? 1 : 0, hs.pat[1] > .5 ? 1 : 0] }; } catch (e) {} } }
+  if (!hs && !baseInit()) h.pending = true;   // the soldier body is not loaded yet: asked again (and not cached) until it is
+  else { if (HL_CACHE.size > 64) HL_CACHE.clear(); HL_CACHE.set(k, h); }
+  return h;
 }
 let HAND0 = null, handsGen = 0;
 function applyHands(look) {   // look: another player's look (killcam shows the KILLER's gloves); omitted = what you wear
@@ -1896,7 +1965,7 @@ function registerExternal(e) {
   MATDEF[e.id] = Object.assign({}, MATDEF[e.id] || MATDEF.std, M && Array.isArray(M.pat) ? { pat: M.pat.slice(0, 5), patCol: M.patCol ?? 5, patS: M.patS } : {}, M && Array.isArray(M.base) ? { base: M.base.slice(0, 5) } : {}, M && Array.isArray(M.crm) ? { crm: M.crm.slice(0, 5) } : {},
     Array.isArray(e.pattern) ? { pat: [String(e.pattern[0]), +e.pattern[1] || 0, +e.pattern[2] || 0, +e.pattern[3] || 0, +e.pattern[4] || 0] } : {});
   if (Array.isArray(e.hands)) HANDS[e.id] = e.hands.slice(0, 2).map(v => clamp(v | 0, 0, 7));
-  HL_CACHE.clear(); handsGen++;
+  HL_CACHE.clear(); HSLOT.delete(e.id); handsGen++;
   if (typeof e.thumbnail === 'string' && /^[\w./-]+$/.test(e.thumbnail)) THUMB[e.id] = e.thumbnail;
   const x = EXT[e.id] = { e, data: {}, ready: false };
   const getText = url => fetch(url, { cache: 'no-store' }).then(r => r.ok ? r.text() : Promise.reject(new Error(url + ' ' + r.status)));

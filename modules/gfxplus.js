@@ -527,7 +527,7 @@ void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb; vec2 dl = uSun - vUv; float 
     const L = lvl(); const t = nowMs / 1000; const dt = Math.min(.1, lastT ? t - lastT : .016); lastT = t;
     if (!L.on) { glare.visible = false; GR.enabled = false; return; }
     U.uT.value = t; U.uCam.value.copy(camera.position);
-    const th = Math.tan(camera.fov * Math.PI / 360); const rtH = (typeof composer !== 'undefined' && composer.renderTarget1) ? composer.renderTarget1.height : renderer.domElement.height;
+    const th = 1 / camera.projectionMatrix.elements[5]; /* the projection actually drawn (player FOV setting) */ const rtH = (typeof composer !== 'undefined' && composer.renderTarget1) ? composer.renderTarget1.height : renderer.domElement.height;
     U.uPx.value = rtH / (2 * th);
     camera.getWorldDirection(_v); const sd = st.hasSun ? Math.max(0, _v.dot(st.sunDir)) : 0; U.uSunDot.value = sd * sd * sd;
     // flicker
